@@ -33,9 +33,7 @@
   (-transformer [this transformer method options]
     "returns a function to transform the value for the given schema and method.
     Can also return nil instead of `identity` so that more no-op transforms can be elided.")
-  (-walk [this walker path options] "walks the schema and its children, ::m/walk-entry-vals, ::m/walk-refs, ::m/walk-schema-refs options effect how walking is done.")
-  (-simplify [this] "returns a new simplified schema based on eg., whether its children are reachable.")
-  (-unreachable? [this] "returns true if this schema never validates or generates values, otherwise false. false-negatives allowed.")
+  (-walk [this walker path options] "walks the schema and it's children, ::m/walk-entry-vals, ::m/walk-refs, ::m/walk-schema-refs options effect how walking is done.")
   (-properties [this] "returns original schema properties")
   (-options [this] "returns original options")
   (-children [this] "returns schema children")
@@ -340,11 +338,8 @@
   (if (-equals properties (-properties schema))
     schema (-into-schema (-parent schema) properties (or (and (-entry-schema? schema) (-entry-parser schema)) (-children schema)) (-options schema))))
 
-(defn -update-options [schema f & args]
-  (-into-schema (-parent schema) (-properties schema) (-children schema) (apply f (-options schema) args)))
-
-(defn -update-properties [schema f & args]
-  (-into-schema (-parent schema) (apply f (-properties schema) args) (-children schema) (-options schema)))
+(defn -update-options [schema f]
+  (-into-schema (-parent schema) (-properties schema) (-children schema) (f (-options schema))))
 
 (defn -set-assoc-children [schema key value]
   (-set-children schema (assoc (-children schema) key value)))
@@ -639,8 +634,6 @@
               (-transformer [this transformer method options]
                 (-intercepting (-value-transformer transformer this method options)))
               (-walk [this walker path options] (-walk-leaf this walker path options))
-              (-simplify [this] this)
-              (-unreachable? [this] (= :never type))
               (-properties [_] properties)
               (-options [_] options)
               (-children [_] children)
@@ -655,7 +648,6 @@
 
 (defn -nil-schema [] (-simple-schema {:type :nil, :pred nil?}))
 (defn -any-schema [] (-simple-schema {:type :any, :pred any?}))
-(defn -never-schema [] (-simple-schema {:type :never :pred (fn [_] false)}))
 (defn -string-schema [] (-simple-schema {:type :string, :pred string?, :property-pred (-min-max-pred count)}))
 (defn -int-schema [] (-simple-schema {:type :int, :pred int?, :property-pred (-min-max-pred nil)}))
 (defn -double-schema [] (-simple-schema {:type :double, :pred double?, :property-pred (-min-max-pred nil)}))
@@ -693,10 +685,6 @@
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
-          (-simplify [this] (if (-unreachable? this)
-                              (schema :never)
-                              this))
-          (-unreachable? [this] (boolean (some -unreachable? children)))
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -757,12 +745,6 @@
                                       x validators)))))
                 (-intercepting this-transformer))))
           (-walk [this walker path options] (-walk-indexed this walker path options))
-          (-simplify [this] (let [children (into [] (remove -unreachable?) children)]
-                              (case (count children)
-                                0 (schema :never)
-                                1 (first children)
-                                (-set-children this children))))
-          (-unreachable? [this] (every? -unreachable? children))
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -838,11 +820,6 @@
                                       x validators)))))
                 (-intercepting this-transformer))))
           (-walk [this walker path options] (-walk-entries this walker path options))
-          (-simplify [this] (if (-unreachable? this)
-                              (schema :never)
-                              ;; TODO remove unreachable children
-                              this))
-          (-unreachable? [this] (every? -unreachable? (-entry-children entry-parser)))
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] (-entry-children entry-parser))
@@ -890,13 +867,6 @@
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
-          (-simplify [this] (cond
-                              ; [:not :any] => :never
-                              (-unreachable? this) (schema :never)
-                              ; [:not :never] => :any
-                              (-unreachable? schema) (schema :any)
-                              :else this))
-          (-unreachable? [this] (= :any (-type schema)))
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -944,8 +914,6 @@
                (when (-accept walker this path options)
                  (-outer walker this path (list (-inner walker schema path options)) options))
                (-walk schema walker path options)))
-           (-simplify [this] this)
-           (-unreachable? [this] false)
            (-properties [_] properties)
            (-options [_] (-options schema))
            (-children [_] [schema])
@@ -1051,23 +1019,6 @@
                    apply->children (-guard map? apply->children)]
                (-intercepting this-transformer apply->children)))
            (-walk [this walker path options] (-walk-entries this walker path options))
-           (-simplify [this] (if (-unreachable? this)
-                               (schema :never)
-                               (let [new-children (into []
-                                                        (remove (fn [[_ {:keys [optional]} schema]]
-                                                                  (and optional
-                                                                       (-unreachable? schema))))
-                                                        (-entry-children entry-parser))]
-                                 (cond-> this
-                                   (not= (count new-children)
-                                         (count children))
-                                   (-> (-set-children new-children)
-                                       (-update-properties assoc :closed true))))))
-           (-unreachable? [this] (boolean
-                                   (some (fn [[_ {:keys [optional]} schema]]
-                                           (and (not optional)
-                                                (-unreachable? schema)))
-                                         (-entry-children entry-parser))))
            (-properties [_] properties)
            (-options [_] options)
            (-children [_] (-entry-children entry-parser))
@@ -1158,8 +1109,6 @@
                   apply->key-child (-guard map? apply->key-child)]
               (-intercepting this-transformer apply->key-child)))
           (-walk [this walker path options] (-walk-indexed this walker path options))
-          (-simplify [this] this)
-          (-unreachable? [this] false)
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -1244,15 +1193,6 @@
                 (-walk [this walker path options]
                   (when (-accept walker this path options)
                     (-outer walker this path [(-inner walker schema (conj path ::in) options)] options)))
-                (-simplify [this]
-                  (if (-unreachable? schema)
-                    (if (some-> min pos?)
-                      (malli.core/schema :never)
-                      (-> this
-                          (-set-children [(malli.core/schema :any)])
-                          (-update-properties (constantly {:max 0}))))
-                    this))
-                (-unreachable? [this] false)
                 (-properties [_] properties)
                 (-options [_] options)
                 (-children [_] children)
@@ -1320,10 +1260,6 @@
                   apply->children (-guard vector? apply->children)]
               (-intercepting this-transformer apply->children)))
           (-walk [this walker path options] (-walk-indexed this walker path options))
-          (-simplify [this] (if (-unreachable? this)
-                              (schema :never)
-                              this))
-          (-unreachable? [this] (boolean (some -unreachable? children)))
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -1367,8 +1303,6 @@
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
           (-walk [this walker path options] (-walk-leaf this walker path options))
-          (-simplify [this] this)
-          (-unreachable? [this] false)
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -1419,8 +1353,6 @@
               (fn [x] (if (valid? x) x ::invalid))))
           (-unparser [this] (-parser this))
           (-walk [this walker path options] (-walk-leaf this walker path options))
-          (-simplify [this] this)
-          (-unreachable? [this] false)
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -1468,8 +1400,6 @@
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
           (-walk [this walker path options] (-walk-leaf this walker path options))
-          (-simplify [this] this)
-          (-unreachable? [this] false)
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -1515,13 +1445,6 @@
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
-          (-simplify [this]
-            (if (-unreachable? schema)
-              (malli.core/schema :nil) ;; same as simplifying [:or :nil :never]
-              (if (= :maybe (type schema))
-                schema ;; [:maybe [:maybe s]] => [:maybe s]
-                this)))
-          (-unreachable? [this] false)
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -1550,8 +1473,6 @@
      (-properties-schema [_ _])
      (-children-schema [_ _])
      (-into-schema [parent properties children options]
-       ;;TODO we probably want to assert children are non-empty like :or,
-       ;;     since :multi is also a disjunction.
        (let [opts' (merge opts (select-keys properties [:lazy-refs]))
              entry-parser (-create-entry-parser children opts' options)
              form (delay (-create-entry-form parent properties entry-parser options))
@@ -1593,20 +1514,6 @@
                    child-transformer (when (seq ->children) (fn [x] (if-some [t (find (dispatch x))] (t x) x)))]
                (-intercepting this-transformer child-transformer)))
            (-walk [this walker path options] (-walk-entries this walker path options))
-           (-simplify [this] (if-some [new-children (not-empty
-                                                      (into []
-                                                            (remove (fn [[_ _ schema]]
-                                                                      (-unreachable? schema)))
-                                                            (-entry-children entry-parser)))]
-                               (cond-> this
-                                 (not= (count children)
-                                       (count new-children))
-                                 (-set-children new-children))
-                               (schema :never)))
-           (-unreachable? [this]
-             (every? (fn [[_ _ schema]]
-                       (-unreachable? schema))
-                     (-entry-children entry-parser)))
            (-properties [_] properties)
            (-options [_] options)
            (-children [_] (-entry-children entry-parser))
@@ -1671,8 +1578,6 @@
                          (contains? (::walked-refs options) ref))
                    (-outer walker this path [ref] options)
                    (-outer walker this path [(accept)] options)))))
-           (-simplify [this] this)
-           (-unreachable? [this] false)
            (-properties [_] properties)
            (-options [_] options)
            (-children [_] children)
@@ -1736,10 +1641,6 @@
                 (if (or (not id) ((-boolean-fn (::walk-schema-refs options false)) id))
                   (-outer walker this path (-inner-indexed walker path children options) options)
                   (-outer walker this path [id] options))))
-            (-simplify [this] (if (-unreachable? this)
-                                (schema :never)
-                                this))
-            (-unreachable? [this] (-unreachable? child))
             (-properties [_] properties)
             (-options [_] options)
             (-children [_] children)
@@ -1825,8 +1726,6 @@
           (-unparser [this] (-parser this))
           (-transformer [_ _ _ _])
           (-walk [this walker path options] (-walk-indexed this walker path options))
-          (-simplify [this] this)
-          (-unreachable? [this] false)
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -1879,8 +1778,6 @@
           (-unparser [this] (-parser this))
           (-transformer [_ _ _ _])
           (-walk [this walker path options] (-walk-indexed this walker path options))
-          (-simplify [this] this)
-          (-unreachable? [this] false)
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -1926,8 +1823,6 @@
           (-unparser [this] (-regex-unparser this))
           (-transformer [this transformer method options] (regex-transformer this transformer method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
-          (-simplify [this] this)
-          (-unreachable? [this] false)
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -1977,8 +1872,6 @@
           (-unparser [this] (-regex-unparser this))
           (-transformer [this transformer method options] (regex-transformer this transformer method options))
           (-walk [this walker path options] (-walk-entries this walker path options))
-          (-simplify [this] this) ;;TODO ?
-          (-unreachable? [this] false)
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] (-entry-children entry-parser))
@@ -2129,9 +2022,9 @@
    (-parent (schema ?schema options))))
 
 (defn walk
-  "Postwalks recursively over the Schema and its children.
+  "Postwalks recursively over the Schema and it's children.
    The walker callback is a arity4 function with the following
-   arguments: schema, path, (walked) children, and options."
+   arguments: schema, path, (walked) children and options."
   ([?schema f]
    (walk ?schema f nil))
   ([?schema f options]
@@ -2384,7 +2277,6 @@
 
 (defn type-schemas []
   {:any (-any-schema)
-   :never (-never-schema)
    :nil (-nil-schema)
    :string (-string-schema)
    :int (-int-schema)

@@ -8,54 +8,7 @@
             [clojure.test.check.rose-tree :as rose]
             [clojure.spec.gen.alpha :as ga]
             [malli.core :as m]
-            #?(:clj [borkdude.dynaload :as dynaload])
-            [malli.util :as mu]))
-
-(declare generator generate -create)
-
-(defn schema->scalar-schema
-  "Replace recursive aliases with :never and simplify."
-  [schema options]
-  (mu/walk* schema ;; FIXME alpha renaming needed?
-            (fn inner [schema path {::keys [seen-refs] :as options}]
-              (cond
-                (and (satisfies? m/RefSchema schema)
-                     (some? (m/-ref schema)))
-                (let [options (update options ::seen-refs (fnil conj #{}) (m/-ref schema))]
-                  ;; FIXME does this handle ref shadowing correctly?
-                  (if (contains? seen-refs (m/-ref schema))
-                    [(m/schema :never) options]
-                    (inner (m/deref schema) path options)))
-
-                :else (let [dschema (m/deref schema)]
-                        (if (= schema dschema)
-                          [schema options]
-                          (inner dschema path options)))))
-            (fn [schema _path _children options]
-              (m/-simplify schema))
-            options))
-
-(defn schema->container-schema
-  "Return a schema with free variables for recursive refs."
-  [schema options]
-  (mu/walk*
-    schema ;; FIXME alpha renaming needed?
-    (fn inner [schema path {::keys [seen-refs] :as options}]
-      (cond
-        (and (satisfies? m/RefSchema schema)
-             (not (seen-refs (m/-ref schema))))
-        (let [options (cond-> options
-                        (m/-ref schema) (update ::seen-refs conj (m/-ref schema)))]
-          (inner (m/deref schema) path options))
-
-        :else [schema options]))
-    (fn [schema _path _children options]
-      (m/-simplify schema))
-    (assoc options
-           ;; do not expand free variables that have already been identified as recursive
-           ::seen-refs (set (keys (::rec-gen options)))
-           ::m/walk-entry-vals true
-           ::m/allow-invalid-refs false)))
+            #?(:clj [borkdude.dynaload :as dynaload])))
 
 (defprotocol Generator
   (-generator [this options] "returns generator for schema"))
@@ -193,23 +146,19 @@
 (defn -ref-gen [schema options]
   (let [ref-name (m/-ref schema)]
     (assert ref-name)
-    (or 
-      ;; already seen this :ref, the generator is handy and we're done
-      (get-in options [::rec-gen ref-name])
-      ;; otherwise, continue to unroll but save the generator for this ref for later
-      (let [container-schema (schema->container-schema schema options)
-            fvs (mu/schema-fvs container-schema)]
-        ;(prn container-schema fvs)
-        (if-not (contains? fvs ref-name)
-          ;; this ref is not recursive, does not need special handling
-          (generator (m/deref schema) options)
-          (gen/recursive-gen
-            (fn [ref-gen]
-              (generator container-schema
-                         (-> options
-                             (assoc-in [::rec-gen ref-name] ref-gen)
-                             (update ::seen-refs (fnil conj #{}) ref-name))))
-            (generator (schema->scalar-schema schema options) options)))))))
+    (or ;; already seen this :ref, the generator is handy and we're done
+        (force (get-in options [::rec-gen ref-name]))
+        ;; otherwise, continue to unroll but save the generator for this ref for later
+        (let [scalar-ref-gen (delay never-gen)
+              dschema (m/deref schema)
+              scalar-gen (generator dschema (assoc-in options [::rec-gen ref-name] scalar-ref-gen))
+              recursive? (realized? scalar-ref-gen)]
+          (cond->> scalar-gen
+            recursive? (gen/recursive-gen
+                         (fn [ref-gen]
+                           (generator dschema
+                                      (-> options
+                                          (assoc-in [::rec-gen ref-name] ref-gen))))))))))
 
 (defn -=>-gen [schema options]
   (let [output-generator (generator (:output (m/-function-info schema)) options)]
@@ -293,7 +242,10 @@
 (defmethod -schema-generator 'pos? [_ _] (gen/one-of [(-double-gen {:min 0.00001}) gen/s-pos-int]))
 (defmethod -schema-generator 'neg? [_ _] (gen/one-of [(-double-gen {:max -0.0001}) gen/s-neg-int]))
 
-(defmethod -schema-generator :not [schema options] (gen/such-that (m/validator schema options) (ga/gen-for-pred any?) 100))
+(defmethod -schema-generator :not [schema options]
+  (if (= :any (m/type schema))
+    never-gen
+    (gen/such-that (m/validator schema options) (ga/gen-for-pred any?) 100)))
 (defmethod -schema-generator :and [schema options] (-and-gen schema options))
 (defmethod -schema-generator :or [schema options] (-or-gen schema options))
 (defmethod -schema-generator :orn [schema options] (-or-gen (m/into-schema :or (m/properties schema) (map last (m/children schema)) (m/options schema)) options))

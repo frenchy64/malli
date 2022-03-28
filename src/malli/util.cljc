@@ -1,7 +1,6 @@
 (ns malli.util
   (:refer-clojure :exclude [merge select-keys find get get-in dissoc assoc update assoc-in update-in])
   (:require [clojure.core :as c]
-            [clojure.string :as str]
             [malli.core :as m]))
 
 (declare path->in)
@@ -34,116 +33,6 @@
 ;;
 ;; public api
 ;;
-
-
-;; pre+post walking with state map
-
-(defn walk*
-  "Prewalk recursively over the Schema with inner and its children then postwalk with outer.
-  The inner (prewalk) callback is a arity-3 function. It takes schema, path, and options.
-  It returns a vector of [schema options]--the new options are passed to children prewalks.
-  The outer (postwalk) callback is a arity4 function with the following
-  arguments: schema, path, (walked) children, and options. By default, returns its schema
-  argument."
-  ([?schema inner]
-   (walk* ?schema inner nil))
-  ([?schema inner options]
-   (walk* ?schema inner (fn [s _p _c _options] s) options))
-  ([?schema inner outer options]
-   (let [[s options] (inner (m/schema ?schema options) [] options)]
-     (m/-walk
-       s
-       (reify m/Walker
-         (-accept [_ s _ _] s)
-         (-inner [this s p options] (let [[s options] (inner s p options)]
-                                      (m/-walk s this p options)))
-         (-outer [_ s p c options] (outer (m/-set-children s c) p c options)))
-       [] options))))
-
-;; free variables
-
-(defn schema-fvs 
-  "Returns the free variables in the schema."
-  [schema]
-  (let [fvs-atom (atom #{})
-        rec! (fn rec! [schema options]
-               (walk* schema
-                      (fn [schema _path {::keys [ref-scope] :as options}]
-                        (assert (set? ref-scope))
-                        (let [_ (when (and (satisfies? m/RefSchema schema)
-                                           (m/-ref schema)
-                                           (not (ref-scope (m/-ref schema))))
-                                  (swap! fvs-atom conj (m/-ref schema)))
-                              registry (-> schema m/properties :registry)
-                              ref-scope (into ref-scope (keys registry))
-                              _ (run! #(rec! % options)
-                                      (vals registry))]
-                          [schema (c/assoc options ::ref-scope ref-scope)]))
-                      options)
-               nil)]
-    (rec! schema {::ref-scope #{}
-                  ::m/walk-entry-vals true})
-    @fvs-atom))
-
-(comment
-  (alpha-rename-schema [:schema {:registry {::foo :int}}
-                        ::foo]
-                       {})
-  ((requiring-resolve 'clojure.repl/pst) 100)
-  )
-
-(defn alpha-rename-schema [schema options]
-  (-> (walk* schema
-             (fn [schema _path options]
-               ;(prn "pre" schema)
-               (let [registry (-> schema m/properties :registry not-empty)
-                     alpha-renames (into (::alpha-renames options)
-                                         (map (fn [k]
-                                                (let [genstr #(str (gensym (str (first (str/split % #"__")) "__")))]
-                                                  [k
-                                                   (cond
-                                                     (keyword? k) (keyword (namespace k)
-                                                                           (genstr (name k)))
-                                                     (symbol? k) (symbol (namespace k)
-                                                                         (genstr (name k)))
-                                                     (string? k) (genstr k)
-                                                     :else (throw (ex-info (str "Cannot alpha rename: " (pr-str k) " " (class k))
-                                                                           {:k k})))])))
-                                         (keys registry))
-                     _ (assert (map? alpha-renames))
-                     options (c/assoc options
-                                      ::alpha-renames alpha-renames)
-                     new-registry (not-empty (into {}
-                                                   (map (fn [[k s]]
-                                                          (let [kr (alpha-renames k)]
-                                                            (assert kr (str "No rename for " k " in registry of " (m/form schema)
-                                                                            " " alpha-renames))
-                                                            [kr
-                                                             (alpha-rename-schema s options)])))
-                                                   registry))
-                     schema (cond-> schema
-                              registry (m/-update-properties c/assoc :registry new-registry))
-                     options (cond-> options
-                               new-registry (c/assoc ::new-registry new-registry))]
-                 [schema options]))
-             (fn [schema _path _children {::keys [alpha-renames new-registry] :as options}]
-               ;(prn "post" schema alpha-renames new-registry)
-               (m/-simplify
-                 (cond
-                   (and (satisfies? m/RefSchema schema)
-                        ;; skip free variables
-                        (alpha-renames (m/-ref schema)))
-                   (do (assert (seq new-registry))
-                       ;(prn "substituting" (m/-ref schema) (alpha-renames (m/-ref schema)))
-                       (m/schema [:ref {:registry new-registry} (alpha-renames (m/-ref schema))]
-                                 ;; this is the critical part--it must correspond to the new scope
-                                 (-> schema
-                                     m/options
-                                     (c/assoc :registry new-registry))))
-
-                   :else schema)))
-             (c/assoc options
-                      ::alpha-renames {}))))
 
 (defn find-first
   "Prewalks the Schema recursively with a 3-arity fn [schema path options], returns with
