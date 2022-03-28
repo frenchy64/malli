@@ -256,10 +256,10 @@
 (defn -*-gen [schema options]
   (let [child (m/-get schema 0 nil)]
     (if-some [g (not-unreachable (generator child options))]
-      (if (m/-regex-op? child)
-        (gen/fmap #(apply concat %) (gen/vector g))
-        (gen/vector g))
-      never-gen)))
+      (cond->> (gen/vector g)
+        (m/-regex-op? child)
+        (gen/fmap #(apply concat %)))
+      (gen/return ()))))
 
 (defn -repeat-gen [schema options]
   (let [child (m/-get schema 0 nil)]
@@ -267,7 +267,7 @@
       (cond->> g
         (m/-regex-op? child)
         (gen/fmap #(apply concat %)))
-      never-gen)))
+      (gen/return ()))))
 
 (defn -qualified-ident-gen [schema mk-value-with-ns value-with-ns-gen-size pred gen]
   (if-let [namespace-unparsed (:namespace (m/properties schema))]
