@@ -64,6 +64,11 @@
 ;; generators
 ;;
 
+(defonce ^:private never-gen (gen/such-that (fn [_] (do (println `never-gen "BUG! Should never attempt to generate!") false))
+                                            gen/any))
+(defn- unreachable-gen? [g] (identical? never-gen g))
+(defn- not-unreachable [g] (when-not (unreachable-gen? g) g))
+
 (defn- -random [seed] (if seed (random/make-random seed) (random/make-random)))
 
 (defn -recur [schema {::keys [recursion recursion-limit] :or {recursion-limit 4} :as options}]
@@ -101,7 +106,7 @@
         child (-> schema m/children first)
         gen (when continue (generator child options))]
     (gen/fmap f (cond
-                  (not gen) (gen/vector gen/any 0 0)
+                  ((some-fn not unreachable-gen?) gen) (gen/vector gen/any 0 0)
                   (and min (= min max)) (gen/vector gen min)
                   (and min max) (gen/vector gen min max)
                   min (gen/vector gen min (* 2 min))
@@ -112,30 +117,40 @@
   (let [{:keys [min max]} (-min-max schema options)
         [continue options] (-recur schema options)
         child (-> schema m/children first)
-        gen (when continue (generator child options))]
+        gen (not-unreachable (when continue (generator child options)))]
     (gen/fmap f (if gen
                   (gen/vector-distinct gen {:min-elements min, :max-elements max, :max-tries 100})
                   (gen/vector gen/any 0 0)))))
 
 (defn -or-gen [schema options]
-  (gen/one-of (keep #(some->> (-maybe-recur % options) (generator %)) (m/children schema options))))
+  (if-some [gs (seq (keep #(some->> (-maybe-recur % options) (generator %) not-unreachable) (m/children schema options)))]
+    (gen/one-of gs)
+    never-gen))
 
 (defn -multi-gen [schema options]
-  (gen/one-of (keep #(some->> (-maybe-recur (last %) options) (generator (last %))) (m/entries schema options))))
+  (if-some [gs (seq (keep #(some->> (-maybe-recur (last %) options) (generator (last %)) not-unreachable) (m/entries schema options)))]
+    (gen/one-of gs)
+    never-gen))
 
 (defn -map-gen [schema options]
   (let [entries (m/entries schema)
         [continue options] (-recur schema options)
-        value-gen (fn [k s] (gen/fmap (fn [v] [k v]) (generator s options)))
-        gen-req (->> entries
-                     (remove #(-> % last m/properties :optional))
-                     (map (fn [[k s]] (value-gen k s)))
-                     (apply gen/tuple))
+        value-gen (fn [k s] (let [g (generator s options)]
+                              (cond->> g
+                                (not-unreachable g)
+                                (gen/fmap (fn [v] [k v])))))
+        gens-req (->> entries
+                      (remove #(-> % last m/properties :optional))
+                      (map (fn [[k s]] (value-gen k s))))
         gen-opt (->> entries
                      (filter #(-> % last m/properties :optional))
-                     (map (fn [[k s]] (gen/one-of (into [(gen/return nil)] (when continue [(value-gen k s)])))))
+                     (map (fn [[k s]] (let [g (not-unreachable (when continue (value-gen k s)))]
+                                        (gen/one-of (cond-> [(gen/return nil)]
+                                                      g (conj g))))))
                      (apply gen/tuple))]
-    (gen/fmap (fn [[req opt]] (into {} (concat req opt))) (gen/tuple gen-req gen-opt))))
+    (if (not-any? unreachable-gen? gens-req)
+      (gen/fmap (fn [[req opt]] (into {} (concat req opt))) (gen/tuple (apply gen/tuple gens-req) gen-opt))
+      never-gen)))
 
 (defn -map-of-gen [schema options]
   (let [{:keys [min max]} (-min-max schema options)
@@ -146,7 +161,11 @@
                min {:min-elements min}
                max {:max-elements max}
                :else {})]
-    (gen/fmap #(into {} %) (gen/vector-distinct (gen/tuple k-gen v-gen) opts))))
+    (if ((some-fn unreachable-gen?) k-gen v-gen)
+      (if (= 0 (or min 0) (or max 0))
+        (gen/return {})
+        never-gen)
+      (gen/fmap #(into {} %) (gen/vector-distinct (gen/tuple k-gen v-gen) opts)))))
 
 #?(:clj
    (defn -re-gen [schema options]
