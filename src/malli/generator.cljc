@@ -106,7 +106,11 @@
         child (-> schema m/children first)
         gen (when continue (generator child options))]
     (gen/fmap f (cond
-                  ((some-fn not unreachable-gen?) gen) (gen/vector gen/any 0 0)
+                  ;;hmm what if min or max != 0 ?
+                  (not gen) (gen/vector gen/any 0 0)
+                  (unreachable-gen? gen) (if (= 0 (or min 0) (or max 0))
+                                           (gen/return [])
+                                           never-gen)
                   (and min (= min max)) (gen/vector gen min)
                   (and min max) (gen/vector gen min max)
                   min (gen/vector gen min (* 2 min))
@@ -117,10 +121,21 @@
   (let [{:keys [min max]} (-min-max schema options)
         [continue options] (-recur schema options)
         child (-> schema m/children first)
-        gen (not-unreachable (when continue (generator child options)))]
+        gen (when continue (generator child options))]
     (gen/fmap f (if gen
-                  (gen/vector-distinct gen {:min-elements min, :max-elements max, :max-tries 100})
+                  (if (unreachable-gen? gen)
+                    (if (= 0 (or min 0) (or max 0))
+                      (gen/return [])
+                      never-gen)
+                    (gen/vector-distinct gen {:min-elements min, :max-elements max, :max-tries 100}))
+                  ;;hmm what if min or max != 0 ?
                   (gen/vector gen/any 0 0)))))
+
+(defn -and-gen [schema options]
+  (let [gs (map #(generator % options) (m/children schema options))]
+    (if (not-any? unreachable-gen? gs)
+      (gen/such-that (m/validator schema options) (first gs) 100)
+      never-gen)))
 
 (defn -or-gen [schema options]
   (if-some [gs (seq (keep #(some->> (-maybe-recur % options) (generator %) not-unreachable) (m/children schema options)))]
@@ -241,18 +256,20 @@
           (gen/vector (generator child options) 0 1))))))
 
 (defn -*-gen [schema options]
-  (let [child (m/-get schema 0 nil)
-        g (generator child options)]
-    ;;TODO
-    (if (m/-regex-op? child)
-      (gen/fmap #(apply concat %) (gen/vector g))
-      (gen/vector g))))
+  (let [child (m/-get schema 0 nil)]
+    (if-some [g (not-unreachable (generator child options))]
+      (if (m/-regex-op? child)
+        (gen/fmap #(apply concat %) (gen/vector g))
+        (gen/vector g))
+      never-gen)))
 
 (defn -repeat-gen [schema options]
   (let [child (m/-get schema 0 nil)]
-    (if (m/-regex-op? child)
-      (gen/fmap #(apply concat %) (-coll-gen schema identity options))
-      (-coll-gen schema identity options))))
+    (if-some [g (not-unreachable (-coll-gen schema identity options))]
+      (cond->> g
+        (m/-regex-op? child)
+        (gen/fmap #(apply concat %)))
+      never-gen)))
 
 (defn -qualified-ident-gen [schema mk-value-with-ns value-with-ns-gen-size pred gen]
   (if-let [namespace-unparsed (:namespace (m/properties schema))]
@@ -279,7 +296,7 @@
 (defmethod -schema-generator 'neg? [_ _] (gen/one-of [(-double-gen {:max -0.0001}) gen/s-neg-int]))
 
 (defmethod -schema-generator :not [schema options] (gen/such-that (m/validator schema options) (ga/gen-for-pred any?) 100))
-(defmethod -schema-generator :and [schema options] (gen/such-that (m/validator schema options) (-> schema (m/children options) first (generator options)) 100))
+(defmethod -schema-generator :and [schema options] (-and-gen schema options))
 (defmethod -schema-generator :or [schema options] (-or-gen schema options))
 (defmethod -schema-generator :orn [schema options] (-or-gen (m/into-schema :or (m/properties schema) (map last (m/children schema)) (m/options schema)) options))
 (defmethod -schema-generator ::m/val [schema options] (generator (first (m/children schema)) options))
@@ -292,10 +309,16 @@
 (defmethod -schema-generator :enum [schema options] (gen/elements (m/children schema options)))
 
 (defmethod -schema-generator :maybe [schema options]
-  (let [[continue options] (-recur schema options)]
-    (gen/one-of (into [(gen/return nil)] (when continue [(-> schema (m/children options) first (generator options))])))))
+  (let [[continue options] (-recur schema options)
+        g (when continue (-> schema (m/children options) first (generator options) not-unreachable))]
+    (gen/one-of (cond-> [(gen/return nil)]
+                  g (conj g)))))
 
-(defmethod -schema-generator :tuple [schema options] (apply gen/tuple (mapv #(generator % options) (m/children schema options))))
+(defmethod -schema-generator :tuple [schema options]
+  (let [gs (map #(generator % options) (m/children schema options))]
+    (if (not-any? unreachable-gen? gs)
+      (apply gen/tuple gs)
+      never-gen)))
 #?(:clj (defmethod -schema-generator :re [schema options] (-re-gen schema options)))
 (defmethod -schema-generator :any [_ _] (ga/gen-for-pred any?))
 (defmethod -schema-generator :nil [_ _] (gen/return nil))
