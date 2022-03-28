@@ -64,10 +64,10 @@
 ;; generators
 ;;
 
-(defonce ^:private never-gen (gen/such-that (fn [_] (do (println `never-gen "BUG! Should never attempt to generate!") false))
+(defonce never-gen (gen/such-that (fn [_] (do (println `never-gen "BUG! Should never attempt to generate!") false))
                                             gen/any))
-(defn- unreachable-gen? [g] (identical? never-gen g))
-(defn- not-unreachable [g] (when-not (unreachable-gen? g) g))
+(defn unreachable-gen? [g] (identical? never-gen g))
+(defn not-unreachable [g] (when-not (unreachable-gen? g) g))
 
 (defn- -random [seed] (if seed (random/make-random seed) (random/make-random)))
 
@@ -206,33 +206,47 @@
 (defn -regex-generator [schema options]
   (if (m/-regex-op? schema)
     (generator schema options)
-    (gen/tuple (generator schema options))))
+    (let [g (generator schema options)]
+      (cond-> g
+        (not-unreachable g) gen/tuple))))
 
 (defn- entry->schema [e] (if (vector? e) (get e 2) e))
 
 (defn -cat-gen [schema options]
-  (->> (m/children schema options)
-       (map #(-regex-generator (entry->schema %) options))
-       (apply gen/tuple)
-       (gen/fmap #(apply concat %))))
+  (let [gs (->> (m/children schema options)
+                (map #(-regex-generator (entry->schema %) options)))]
+    (if (some unreachable-gen? gs)
+      never-gen
+      (->> gs
+           (keep not-unreachable)
+           (apply gen/tuple)
+           (gen/fmap #(apply concat %))))))
 
 (defn -alt-gen [schema options]
-  (gen/one-of (keep (fn [e]
-                      (let [child (entry->schema e)]
-                        (some->> (-maybe-recur child options) (-regex-generator child))))
-                    (m/children schema options))))
+  (let [gs (keep (fn [e]
+                   (let [child (entry->schema e)]
+                     (some->> (-maybe-recur child options) (-regex-generator child))))
+                 (m/children schema options))]
+    (if (every? unreachable-gen? gs)
+      never-gen
+      (gen/one-of (keep not-unreachable gs)))))
 
 (defn -?-gen [schema options]
   (let [child (m/-get schema 0 nil)]
     (if (m/-regex-op? child)
-      (gen/one-of [(generator child options) (gen/return ())])
-      (gen/vector (generator child options) 0 1))))
+      (gen/one-of (keep identity [(not-unreachable (generator child options)) (gen/return ())]))
+      (let [g (generator child options)]
+        (if (unreachable-gen? g)
+          (gen/vector gen/any 0 0)
+          (gen/vector (generator child options) 0 1))))))
 
 (defn -*-gen [schema options]
-  (let [child (m/-get schema 0 nil)]
+  (let [child (m/-get schema 0 nil)
+        g (generator child options)]
+    ;;TODO
     (if (m/-regex-op? child)
-      (gen/fmap #(apply concat %) (gen/vector (generator child options)))
-      (gen/vector (generator child options)))))
+      (gen/fmap #(apply concat %) (gen/vector g))
+      (gen/vector g))))
 
 (defn -repeat-gen [schema options]
   (let [child (m/-get schema 0 nil)]
