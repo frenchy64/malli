@@ -10,6 +10,8 @@
             [malli.core :as m]
             #?(:clj [borkdude.dynaload :as dynaload])))
 
+(declare generator generate -create)
+
 (defprotocol Generator
   (-generator [this options] "returns generator for schema"))
 

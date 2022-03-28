@@ -2558,11 +2558,11 @@
       (is (true? (f (range 8))))))
   (testing "No bounds"
     (let [f (m/-validate-limits nil nil)]
-      (is (true?  (f (range 2))))
-      (is (true?  (f (range 3))))
-      (is (true?  (f (range 4))))
-      (is (true?  (f (range 7))))
-      (is (true?  (f (range 8)))))))
+      (is (true? (f (range 2))))
+      (is (true? (f (range 3))))
+      (is (true? (f (range 4))))
+      (is (true? (f (range 7))))
+      (is (true? (f (range 8)))))))
 
 (deftest ast-test
   (doseq [{:keys [name hiccup ast]}
@@ -2634,44 +2634,6 @@
   (is (= ["1"] (m/-vmap str (subvec [1 2] 0 1))))
   (is (= ["1"] (m/-vmap str (lazy-seq [1]))))
   (is (= ["1" "2"] (m/-vmap str [1 2]))))
-
-(deftest unreachable-test
-  (is (false? (m/-unreachable? (m/schema [:or :nil :never]))))
-  (is (true? (m/-unreachable? (m/schema [:and :nil :never]))))
-  (is (true? (m/-unreachable? (m/schema :never)))))
-
-(defn do-simp [frm]
-  (m/form
-    (m/-simplify (m/schema frm))))
-
-(deftest simplify-test
-  (are [simp s] (= simp (do-simp s))
-                :any :any
-                :nil :nil
-                :nil [:or :nil :never]
-                :never [:and :nil :never]
-                :nil [:maybe :never]
-                [:maybe :never] [:maybe [:maybe :never]]
-                [:maybe :int] [:maybe [:maybe :int]]
-                :never :never
-                [:set {:max 0} :any] [:set :never]
-                :never [:set {:min 1} :never]
-                :map :map
-                [:map {:closed true}] [:map [:rec {:optional true} :never]]
-                [:map {:closed true} [:req :int]] [:map [:req :int] [:rec {:optional true} :never]]
-                [:map {:closed true}] [:map {:closed true} [:rec {:optional true} :never]]
-                [:map {:closed true} [:req :int]] [:map [:req :int] [:rec {:optional true} :never]]
-                [:map {:closed true} [:req :int]] [:map {:closed true} [:req :int] [:rec {:optional true} :never]]
-                :never [:map [:req :never]]
-                :never [:map [:req :never] [:opt {:optional true} :any]]
-                :never [:map {:closed true} [:req :never]]
-                :never [:map {:closed true} [:req :never] [:opt {:optional true} :any]]
-                [:vector {:max 0} :any] [:vector :never]
-                [:vector {:max 0} :any] [:vector {:gen/max 2, :gen/min 2} :never]
-
-                :never [:multi {:dispatch :type} [:int :never]]
-                [:multi {:dispatch :type} [:bool :boolean]] [:multi {:dispatch :type} [:bool :boolean] [:int :never]]
-                ))
 
 (deftest issue-626-test
   (testing "m/from-ast does not work with symbols or unamespaced keywords"
