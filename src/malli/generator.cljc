@@ -169,14 +169,14 @@
 
 (defn -map-of-gen [schema options]
   (let [{:keys [min max]} (-min-max schema options)
-        [k-gen v-gen] (map #(generator % options) (m/children schema options))
+        [k-gen v-gen :as gs] (map #(generator % options) (m/children schema options))
         opts (cond
                (and min (= min max)) {:num-elements min}
                (and min max) {:min-elements min :max-elements max}
                min {:min-elements min}
                max {:max-elements max}
                :else {})]
-    (if ((some-fn unreachable-gen?) k-gen v-gen)
+    (if (some unreachable-gen? gs)
       (if (= 0 (or min 0) (or max 0))
         (gen/return {})
         never-gen)
@@ -233,7 +233,6 @@
     (if (some unreachable-gen? gs)
       never-gen
       (->> gs
-           (keep not-unreachable)
            (apply gen/tuple)
            (gen/fmap #(apply concat %))))))
 
@@ -248,12 +247,11 @@
 
 (defn -?-gen [schema options]
   (let [child (m/-get schema 0 nil)]
-    (if (m/-regex-op? child)
-      (gen/one-of (keep identity [(not-unreachable (generator child options)) (gen/return ())]))
-      (let [g (generator child options)]
-        (if (unreachable-gen? g)
-          (gen/vector gen/any 0 0)
-          (gen/vector (generator child options) 0 1))))))
+    (if-some [g (not-unreachable (generator child options))]
+      (if (m/-regex-op? child)
+        (gen/one-of [g (gen/return ())])
+        (gen/vector g 0 1))
+      (gen/return ()))))
 
 (defn -*-gen [schema options]
   (let [child (m/-get schema 0 nil)]
