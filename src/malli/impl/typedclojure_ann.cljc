@@ -1,6 +1,7 @@
 (ns malli.impl.typedclojure-ann
   (:require [typed.clojure :as t]
-            [malli.core :as m]))
+            [malli.core :as m]
+            [malli.impl.regex :as mir]))
 ;;TODO support namespace aliases in ann-protocol first arg
 
 (t/ann-protocol malli.core/IntoSchema
@@ -10,8 +11,10 @@
                 -children-schema [m/IntoSchema t/Any :-> (t/Nilable (t/SequentialColl t/Any))]
                 -into-schema [m/IntoSchema t/Any t/Any t/Any :-> m/Schema])
 
+(t/defalias Validator [t/Any :-> t/Bool])
+
 (t/ann-protocol malli.core/Schema
-                -validator [m/Schema :-> [t/Any :-> t/Bool]]
+                -validator [m/Schema :-> Validator]
                 -explainer [m/Schema (t/Vec t/Any) :-> [t/Any t/Any t/Any :-> t/Any]]
                 -parser [m/Schema :-> [t/Any :-> t/Any]]
                 -unparser [m/Schema :-> [t/Any :-> t/Any]]
@@ -47,7 +50,8 @@
 
 (t/ann-protocol malli.core/RefSchema
                 -ref [m/RefSchema :-> (t/Nilable (t/U t/Sym t/Kw))]
-                -deref [m/RefSchema :-> m/Schema])
+                -deref (t/IFn [(t/I m/RefSchema m/RegexSchema) :-> (t/I m/Schema m/RegexSchema)]
+                              [m/RefSchema :-> m/Schema]))
 
 (t/ann-protocol malli.core/Walker
                 -accept [m/Walker m/Schema (t/Vec t/Any) (t/Map t/Any t/Any) :-> t/Any]
@@ -60,16 +64,21 @@
 
 (t/ann-protocol malli.core/RegexSchema
                 -regex-op? [m/RegexSchema :-> t/Bool]
-                -regex-validator [m/RegexSchema :-> t/Any]
+                -regex-validator (t/IFn 
+                                        [m/RegexSchema :-> t/Any])
                 -regex-explainer [m/RegexSchema (t/Vec t/Any) :-> t/Any]
                 -regex-unparser [m/RegexSchema :-> t/Any]
                 -regex-parser [m/RegexSchema :-> t/Any]
                 -regex-transformer [m/RegexSchema t/Any t/Any t/Any :-> t/Any]
                 -regex-min-max [m/RegexSchema :-> '[(t/Nilable t/Int) (t/Nilable t/Int)]])
 
+;; TODO add assymetric instance?/implements? filters to checker
 (t/ann ^:no-check m/-ref-schema? [t/Any :-> t/Bool :filters {:then (is m/RefSchema 0)}])
 (t/ann ^:no-check m/-entry-parser? [t/Any :-> t/Bool :filters {:then (is m/EntryParser 0)}])
 (t/ann ^:no-check m/-entry-schema? [t/Any :-> t/Bool :filters {:then (is m/EntrySchema 0)}])
 (t/ann ^:no-check m/-cached? [t/Any :-> t/Bool :filters {:then (is m/Cached 0)}])
 (t/ann ^:no-check m/-ast? [t/Any :-> t/Bool :filters {:then (is m/AST 0)}])
 (t/ann ^:no-check m/-transformer? [t/Any :-> t/Bool :filters {:then (is m/Transformer 0)}])
+
+;; malli.impl.regex
+(t/ann mir/item-validator [Validator :-> t/Any])

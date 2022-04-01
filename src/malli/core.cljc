@@ -91,6 +91,7 @@
 (defn -ast? [x] (#?(:clj instance?, :cljs implements?) malli.core.AST x))
 (defn -transformer? [x] (#?(:clj instance?, :cljs implements?) malli.core.Transformer x))
 
+;; TODO support extend-type in clj/cljs checkers
 (extend-type #?(:clj Object, :cljs default)
   RegexSchema
   (-regex-op? [_] false)
