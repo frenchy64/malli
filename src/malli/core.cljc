@@ -44,8 +44,7 @@
                 -options [Schema :-> t/Any]
                 -children [Schema :-> (t/Nilable (t/SequentialColl t/Any))]
                 -parent [Schema :-> IntoSchema]
-                -form [Schema :-> t/Any]
-                )
+                -form [Schema :-> t/Any])
 
 (defprotocol Schema
   (-validator [this] "returns a predicate function that checks if the schema is valid")
@@ -62,9 +61,19 @@
   (-parent [this] "returns the IntoSchema instance")
   (-form [this] "returns original form of the schema"))
 
+(t/ann-protocol AST
+                -to-ast [AST (t/Map t/Any t/Any) :-> (t/Map t/Kw t/Any)]
+                -from-ast [AST (t/Map t/Any t/Any) :-> Schema])
+
 (defprotocol AST
   (-to-ast [this options] "schema to ast")
   (-from-ast [this ast options] "ast to schema"))
+
+(t/ann-protocol EntryParser
+                -entry-keyset [EntryParser :-> (t/Set t/Any)]
+                -entry-children [EntryParser :-> (t/Nilable (t/SequentialColl t/Any))]
+                -entry-entries [EntryParser :-> (t/Nilable (t/SequentialColl t/Any))]
+                -entry-forms [EntryParser :-> (t/Nilable (t/SequentialColl t/Any))])
 
 (defprotocol EntryParser
   (-entry-keyset [this])
@@ -72,30 +81,64 @@
   (-entry-entries [this])
   (-entry-forms [this]))
 
+(t/ann-protocol EntrySchema
+                -entries [EntrySchema :-> (t/SeqentialColl t/Any)]
+                -entry-parser [EntrySchema :-> EntryParser])
+
 (defprotocol EntrySchema
   (-entries [this] "returns sequence of `key -val-schema` entries")
   (-entry-parser [this]))
 
+(t/ann-protocol Cached
+                -cache [Cached :-> (t/Atom1 (t/Map t/Any t/Any))])
+
 (defprotocol Cached
   (-cache [this]))
+
+(t/ann-protocol LensSchema
+                -keep [LensSchema :-> t/Any]
+                -get (t/All [x] [LensSchema t/Any x :-> (t/U Schema x)])
+                -set [LensSchema t/Any Schema :-> LensSchema])
 
 (defprotocol LensSchema
   (-keep [this] "returns truthy if schema contributes to value path")
   (-get [this key default] "returns schema at key")
   (-set [this key value] "returns a copy with key having new value"))
 
+(t/ann-protocol RefSchema
+                -ref [RefSchema :-> (t/Nilable (t/U t/Sym t/Kw))]
+                -deref [RefSchema :-> Schema])
+
 (defprotocol RefSchema
   (-ref [this] "returns the reference name")
   (-deref [this] "returns the referenced schema"))
+
+(t/ann-protocol Walker
+                -accept [Walker Schema (t/Vec t/Any) (t/Map t/Any t/Any) :-> t/Any]
+                -inner [Walker Schema (t/Vec t/Any) (t/Map t/Any t/Any) :-> t/Any]
+                -outer [Walker Schema (t/Vec t/Any) (t/Seqable Schema) (t/Map t/Any t/Any) :-> t/Any])
 
 (defprotocol Walker
   (-accept [this schema path options])
   (-inner [this schema path options])
   (-outer [this schema path children options]))
 
+(t/ann-protocol Transformer
+                -transformer-chain [Transformer :-> (t/Vec '{:name t/Any :encoders t/Any :decoders t/Any :options t/Any})]
+                -value-transformer [Transformer Schema t/Any (t/Map t/Any t/Any) :-> t/Any])
+
 (defprotocol Transformer
   (-transformer-chain [this] "returns transformer chain as a vector of maps with :name, :encoders, :decoders and :options")
   (-value-transformer [this schema method options] "returns an value transforming interceptor for the given schema and method"))
+
+(t/ann-protocol RegexSchema
+                -regex-op? [RegexSchema :-> t/Bool]
+                -regex-validator [RegexSchema :-> t/Any]
+                -regex-explainer [RegexSchema (t/Vec t/Any) :-> t/Any]
+                -regex-unparser [RegexSchema :-> t/Any]
+                -regex-parser [RegexSchema :-> t/Any]
+                -regex-transformer [RegexSchema t/Any t/Any t/Any :-> t/Any]
+                -regex-min-max [RegexSchema :-> '[(t/Nilable t/Int) (t/Nilable t/Int)]])
 
 (defprotocol RegexSchema
   (-regex-op? [this] "is this a regex operator (e.g. :cat, :*...)")
@@ -104,7 +147,7 @@
   (-regex-unparser [this] "returns the raw internal regex unparser implementation")
   (-regex-parser [this] "returns the raw internal regex parser implementation")
   (-regex-transformer [this transformer method options] "returns the raw internal regex transformer implementation")
-  (-regex-min-max [this] "returns size of the sequence as [min max] vector. nil max means unbuond."))
+  (-regex-min-max [this] "returns size of the sequence as [min max] vector. nil max means unbound."))
 
 (t/ann ^:no-check -ref-schema? [t/Any :-> t/Bool :filters {:then (is RefSchema 0)}])
 (defn -ref-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.RefSchema x))
