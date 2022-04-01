@@ -63,4 +63,7 @@
         org.clojure/test.check {:mvn/version "1.1.1"}
         ;; pretty errors, optional deps
         fipp/fipp {:mvn/version "0.6.25"}
-        mvxcvi/arrangement {:mvn/version "2.0.0"}}}
+        mvxcvi/arrangement {:mvn/version "2.0.0"}
+        org.typedclojure/typed.clojure {:git/url "https://github.com/typedclojure/typedclojure.git"
+                                        :git/sha "6ffa6d7a2e1b5ae207b879dc743fe5af16794309"
+                                        }}}

@@ -5,7 +5,8 @@
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
-            [malli.sci :as ms])
+            [malli.sci :as ms]
+            [typed.clojure :as t])
   #?(:clj (:import (clojure.lang Associative IPersistentCollection MapEntry IPersistentVector LazilyPersistentVector PersistentArrayMap)
                    (java.util.concurrent.atomic AtomicReference)
                    (java.util.regex Pattern))))
@@ -18,12 +19,33 @@
 ;; protocols and records
 ;;
 
+(t/ann-protocol IntoSchema
+                -type [IntoSchema :-> (t/U t/Sym t/Kw)]
+                -type-properties [IntoSchema :-> (t/Nilable (t/Map t/Any t/Any))]
+                -properties-schema [IntoSchema t/Any :-> t/Any]
+                -children-schema [IntoSchema t/Any :-> (t/Nilable (t/SequentialColl t/Any))]
+                -into-schema [IntoSchema t/Any t/Any t/Any :-> Schema])
+
 (defprotocol IntoSchema
   (-type [this] "returns type of the schema")
   (-type-properties [this] "returns schema type properties")
   (-properties-schema [this options] "maybe returns :map schema describing schema properties")
   (-children-schema [this options] "maybe returns sequence schema describing schema children")
   (-into-schema [this properties children options] "creates a new schema instance"))
+
+(t/ann-protocol Schema
+                -validator [Schema :-> [t/Any :-> t/Bool]]
+                -explainer [Schema (t/Vec t/Any) :-> [t/Any t/Any t/Any :-> t/Any]]
+                -parser [Schema :-> [t/Any :-> t/Any]]
+                -unparser [Schema :-> [t/Any :-> t/Any]]
+                -transformer [Schema t/Any t/Any t/Any :-> [t/Any :-> t/Any]]
+                -walk [Schema t/Any t/Any t/Any :-> t/Any]
+                -properties [Schema :-> t/Any]
+                -options [Schema :-> t/Any]
+                -children [Schema :-> (t/Nilable (t/SequentialColl t/Any))]
+                -parent [Schema :-> IntoSchema]
+                -form [Schema :-> t/Any]
+                )
 
 (defprotocol Schema
   (-validator [this] "returns a predicate function that checks if the schema is valid")
@@ -84,11 +106,17 @@
   (-regex-transformer [this transformer method options] "returns the raw internal regex transformer implementation")
   (-regex-min-max [this] "returns size of the sequence as [min max] vector. nil max means unbuond."))
 
+(t/ann ^:no-check -ref-schema? [t/Any :-> t/Bool :filters {:then (is RefSchema 0)}])
 (defn -ref-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.RefSchema x))
+(t/ann ^:no-check -entry-parser? [t/Any :-> t/Bool :filters {:then (is EntryParser 0)}])
 (defn -entry-parser? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntryParser x))
+(t/ann ^:no-check -entry-schema? [t/Any :-> t/Bool :filters {:then (is EntrySchema 0)}])
 (defn -entry-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntrySchema x))
+(t/ann ^:no-check -cached? [t/Any :-> t/Bool :filters {:then (is Cached 0)}])
 (defn -cached? [x] (#?(:clj instance?, :cljs implements?) malli.core.Cached x))
+(t/ann ^:no-check -ast? [t/Any :-> t/Bool :filters {:then (is AST 0)}])
 (defn -ast? [x] (#?(:clj instance?, :cljs implements?) malli.core.AST x))
+(t/ann ^:no-check -transformer? [t/Any :-> t/Bool :filters {:then (is Transformer 0)}])
 (defn -transformer? [x] (#?(:clj instance?, :cljs implements?) malli.core.Transformer x))
 
 (extend-type #?(:clj Object, :cljs default)
