@@ -64,15 +64,14 @@
 
 (t/ann-protocol malli.core/RegexSchema
                 -regex-op? [m/RegexSchema :-> t/Bool]
-                -regex-validator (t/IFn 
-                                        [m/RegexSchema :-> t/Any])
+                -regex-validator [m/RegexSchema :-> t/Any]
                 -regex-explainer [m/RegexSchema (t/Vec t/Any) :-> t/Any]
                 -regex-unparser [m/RegexSchema :-> t/Any]
                 -regex-parser [m/RegexSchema :-> t/Any]
                 -regex-transformer [m/RegexSchema t/Any t/Any t/Any :-> t/Any]
                 -regex-min-max [m/RegexSchema :-> '[(t/Nilable t/Int) (t/Nilable t/Int)]])
 
-;; TODO add assymetric instance?/implements? filters to checker
+;; TODO add asymmetric instance?/implements? filters to checker
 (t/ann ^:no-check m/-ref-schema? [t/Any :-> t/Bool :filters {:then (is m/RefSchema 0)}])
 (t/ann ^:no-check m/-entry-parser? [t/Any :-> t/Bool :filters {:then (is m/EntryParser 0)}])
 (t/ann ^:no-check m/-entry-schema? [t/Any :-> t/Bool :filters {:then (is m/EntrySchema 0)}])
