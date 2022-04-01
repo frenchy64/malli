@@ -17,7 +17,9 @@
                                lambdaisland/deep-diff {:mvn/version "0.0-47"}
                                com.bhauman/spell-spec {:mvn/version "0.1.2"}
                                org.clojure/spec-alpha2 {:git/url "https://github.com/clojure/spec-alpha2.git"
-                                                        :sha "99456b1856a6fd934e2c30b17920bd790dd81775"}}}
+                                                        :sha "99456b1856a6fd934e2c30b17920bd790dd81775"}
+                               org.typedclojure/typed.clojure {:git/url "https://github.com/typedclojure/typedclojure.git"
+                                                               :git/sha "6ffa6d7a2e1b5ae207b879dc743fe5af16794309"}}}
            :cljs-test-runner {:extra-deps {olical/cljs-test-runner {:mvn/version "3.8.0"}}
                               :extra-paths ["test" "cljs-test-runner-out/gen"]
                               :main-opts ["-m" "cljs-test-runner.main" "-d" "test"]}
@@ -63,7 +65,4 @@
         org.clojure/test.check {:mvn/version "1.1.1"}
         ;; pretty errors, optional deps
         fipp/fipp {:mvn/version "0.6.25"}
-        mvxcvi/arrangement {:mvn/version "2.0.0"}
-        org.typedclojure/typed.clojure {:git/url "https://github.com/typedclojure/typedclojure.git"
-                                        :git/sha "6ffa6d7a2e1b5ae207b879dc743fe5af16794309"
-                                        }}}
+        mvxcvi/arrangement {:mvn/version "2.0.0"}}}
