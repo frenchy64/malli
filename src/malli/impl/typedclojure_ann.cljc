@@ -94,6 +94,10 @@
                        [?Schema Options :-> Parser]))
 (t/ann m/unparser (t/IFn [?Schema :-> Unparser]
                          [?Schema Options :-> Unparser]))
+(t/ann m/-fail! (t/IFn [t/Any :-> t/Nothing]
+                       [t/Any t/Any :-> t/Nothing]))
+(t/ann m/-safe-pred [[t/Any :-> t/Any] :-> [t/Any :-> t/Bool]])
+(t/ann m/-guard [[t/Any :-> t/Any] [t/Any :-> t/Any] :-> (t/Nilable [t/Any :-> t/Any])])
 
 ;; malli.impl.regex
 (t/ann re/item-validator [Validator :-> t/Any])

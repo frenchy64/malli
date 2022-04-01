@@ -5,7 +5,9 @@
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
-            [malli.sci :as ms])
+            [malli.sci :as ms]
+            ;; goal: delete this
+            [typed.clojure :as t])
   #?(:clj (:import (clojure.lang Associative IPersistentCollection MapEntry IPersistentVector LazilyPersistentVector PersistentArrayMap)
                    (java.util.concurrent.atomic AtomicReference)
                    (java.util.regex Pattern))))
@@ -123,8 +125,8 @@
 
   (-regex-min-max [_] {:min 1, :max 1}))
 
-#?(:clj (defmethod print-method ::into-schema [v ^java.io.Writer w] (.write w (str "#IntoSchema{:type " (pr-str (-type v)) "}"))))
-#?(:clj (defmethod print-method ::schema [v ^java.io.Writer w] (.write w (pr-str (-form v)))))
+#?(:clj (t/tc-ignore (defmethod print-method ::into-schema [v ^java.io.Writer w] (.write w (str "#IntoSchema{:type " (pr-str (-type v)) "}")))))
+#?(:clj (t/tc-ignore (defmethod print-method ::schema [v ^java.io.Writer w] (.write w (pr-str (-form v))))))
 
 ;;
 ;; impl
