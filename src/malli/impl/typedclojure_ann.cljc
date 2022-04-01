@@ -1,7 +1,7 @@
 (ns malli.impl.typedclojure-ann
   (:require [typed.clojure :as t]
-            [malli.core :as m]
-            [malli.impl.regex :as mir]))
+            [malli.core #?(:clj :as-alias :cljs :as) m]
+            [malli.impl.regex #?(:clj :as-alias :cljs :as) mir]))
 ;;TODO support namespace aliases in ann-protocol first arg
 
 (t/ann-protocol malli.core/IntoSchema
