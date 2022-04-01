@@ -9,7 +9,8 @@
             [malli.impl.util :as miu]
             [malli.registry :as mr]
             [malli.transform :as mt]
-            [malli.util :as mu])
+            [malli.util :as mu]
+            [typed.clojure :as t])
   #?(:clj (:import (clojure.lang IFn))))
 
 (defn with-schema-forms [result]
@@ -2659,3 +2660,7 @@
       (is (m/schema? (via-ast :my/bigger-than-3)))
       (is (m/schema? (via-ast :my-bigger-than-4)))
       (is (m/schema? (via-ast 'my/bigger-than-5))))))
+
+(deftest check-ns-test
+  (is (t/check-ns-clj 'malli.core))
+  (is (t/check-ns-cljs 'malli.core)))
