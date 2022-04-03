@@ -150,7 +150,11 @@
 (defn -guard [pred tf] (when tf (fn [x] (if (pred x) (tf x) x))))
 
 (defn -unlift-keys [m prefix]
-  (reduce-kv #(if (= (name prefix) (namespace %2)) (assoc %1 (keyword (name %2)) %3) %1) {} m))
+  (reduce-kv (t/fn [%1 :- (t/Map t/Ident x)
+                    %2 :- t/Ident
+                    %3 :- x]
+               (if (= (name prefix) (namespace %2)) (assoc %1 (keyword (name %2)) %3) %1))
+             {} m))
 
 (defn ^:no-doc -check-children? [] true)
 

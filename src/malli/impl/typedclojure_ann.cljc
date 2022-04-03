@@ -11,8 +11,11 @@
 (t/defalias MinMax '{:min (t/Nilable t/Int)
                      :max (t/Nilable t/Int)})
 
+(t/defalias Schema
+  (t/I m/Schema
+       m/IntoSchema))
 (t/defalias RegexSchema
-  (t/I m/RegexSchema m/Schema))
+  (t/I m/RegexSchema Schema))
 
 (t/defalias Path (t/Vec t/Any))
 
@@ -21,22 +24,22 @@
                 -type-properties [m/IntoSchema :-> (t/Nilable (t/Map t/Any t/Any))]
                 -properties-schema [m/IntoSchema t/Any :-> t/Any]
                 -children-schema [m/IntoSchema t/Any :-> (t/Nilable (t/SequentialColl t/Any))]
-                -into-schema [m/IntoSchema t/Any t/Any t/Any :-> m/Schema])
+                -into-schema [m/IntoSchema t/Any t/Any t/Any :-> Schema])
 
 (t/defalias Validator [t/Any :-> t/Bool])
 
 (t/ann-protocol malli.core/Schema
-                -validator [m/Schema :-> Validator]
-                -explainer [m/Schema (t/Vec t/Any) :-> [t/Any t/Any t/Any :-> t/Any]]
-                -parser [m/Schema :-> Parser]
-                -unparser [m/Schema :-> [t/Any :-> t/Any]]
-                -transformer [m/Schema t/Any t/Any t/Any :-> [t/Any :-> t/Any]]
-                -walk [m/Schema t/Any t/Any t/Any :-> t/Any]
-                -properties [m/Schema :-> t/Any]
-                -options [m/Schema :-> t/Any]
-                -children [m/Schema :-> (t/Nilable (t/SequentialColl t/Any))]
-                -parent [m/Schema :-> m/IntoSchema]
-                -form [m/Schema :-> t/Any])
+                -validator [Schema :-> Validator]
+                -explainer [Schema (t/Vec t/Any) :-> [t/Any t/Any t/Any :-> t/Any]]
+                -parser [Schema :-> Parser]
+                -unparser [Schema :-> [t/Any :-> t/Any]]
+                -transformer [Schema t/Any t/Any t/Any :-> [t/Any :-> t/Any]]
+                -walk [Schema t/Any t/Any t/Any :-> t/Any]
+                -properties [Schema :-> t/Any]
+                -options [Schema :-> t/Any]
+                -children [Schema :-> (t/Nilable (t/SequentialColl t/Any))]
+                -parent [Schema :-> m/IntoSchema]
+                -form [Schema :-> t/Any])
 
 (t/ann-protocol malli.core/AST
                 -to-ast [t/AST (t/Map t/Any t/Any) :-> (t/Map t/Kw t/Any)]
@@ -57,21 +60,21 @@
 
 (t/ann-protocol malli.core/LensSchema
                 -keep [m/LensSchema :-> t/Any]
-                -get (t/All [x] [m/LensSchema t/Any x :-> (t/U m/Schema x)])
-                -set [m/LensSchema t/Any m/Schema :-> m/LensSchema])
+                -get (t/All [x] [m/LensSchema t/Any x :-> (t/U Schema x)])
+                -set [m/LensSchema t/Any Schema :-> m/LensSchema])
 
 (t/ann-protocol malli.core/RefSchema
                 -ref [m/RefSchema :-> (t/Nilable (t/U t/Sym t/Kw))]
                 -deref [RegexSchema :-> RegexSchema])
 
 (t/ann-protocol malli.core/Walker
-                -accept [m/Walker m/Schema (t/Vec t/Any) (t/Map t/Any t/Any) :-> t/Any]
-                -inner [m/Walker m/Schema (t/Vec t/Any) (t/Map t/Any t/Any) :-> t/Any]
-                -outer [m/Walker m/Schema (t/Vec t/Any) (t/Seqable m/Schema) (t/Map t/Any t/Any) :-> t/Any])
+                -accept [m/Walker Schema (t/Vec t/Any) (t/Map t/Any t/Any) :-> t/Any]
+                -inner [m/Walker Schema (t/Vec t/Any) (t/Map t/Any t/Any) :-> t/Any]
+                -outer [m/Walker Schema (t/Vec t/Any) (t/Seqable Schema) (t/Map t/Any t/Any) :-> t/Any])
 
 (t/ann-protocol malli.core/Transformer
                 -transformer-chain [m/Transformer :-> (t/Vec '{:name t/Any :encoders t/Any :decoders t/Any :options t/Any})]
-                -value-transformer [m/Transformer m/Schema t/Any (t/Map t/Any t/Any) :-> t/Any])
+                -value-transformer [m/Transformer Schema t/Any (t/Map t/Any t/Any) :-> t/Any])
 
 (t/ann-protocol malli.core/RegexSchema
                 -regex-op? [RegexSchema :-> t/Bool]
@@ -98,6 +101,17 @@
                        [t/Any t/Any :-> t/Nothing]))
 (t/ann m/-safe-pred [[t/Any :-> t/Any] :-> [t/Any :-> t/Bool]])
 (t/ann m/-guard [[t/Any :-> t/Any] [t/Any :-> t/Any] :-> (t/Nilable [t/Any :-> t/Any])])
+(t/ann m/-deprecated! [t/Str :-> nil])
+(t/ann m/-keyword->string [(t/U t/Kw t/Str) :-> t/Str])
+(t/ann m/-unlift-keys (t/All [x] [(t/Map t/Ident x) (t/U t/Str t/Ident) :-> (t/Map t/Ident x)]))
+(t/ann m/-check-children? [:-> t/Bool])
+(t/ann m/-check-children! (t/IFn [t/Any t/Any (t/Seqable t/Any) MinMax :-> (t/Nilable t/Any)]
+                                 [t/Any t/Any (t/Seqable t/Any) (t/Nilable t/Int) (t/Nilable t/Int) :-> (t/Nilable t/Any)]))
+(t/ann m/-schema-schema [(t/HMap :optional {:id t/Any :raw t/Any}) :-> Schema])
+(t/ann m/-pointer [t/Any Schema t/Any :-> Schema])
+(t/ann m/-ref-schema [t/Any Schema t/Any :-> Schema])
+(t/ann m/-reference? [?Schema :-> t/Bool :filters {:then (is (t/U t/Kw t/Str) 0)
+                                                   :else (! t/Str 0)}])
 
 ;; malli.impl.regex
 (t/ann re/item-validator [Validator :-> t/Any])
