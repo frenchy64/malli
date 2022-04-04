@@ -10,6 +10,8 @@
 (t/defalias Unparser [t/Any :-> t/Any])
 (t/defalias MinMax '{:min (t/Nilable t/Int)
                      :max (t/Nilable t/Int)})
+(t/defalias Properties (t/Nilable (t/Map t/Any t/Any)))
+(t/defalias Children (t/Nilable (t/SequentialColl Schema)))
 
 (t/defalias Schema
   (t/I m/Schema
@@ -24,7 +26,7 @@
                 -type-properties [m/IntoSchema :-> (t/Nilable (t/Map t/Any t/Any))]
                 -properties-schema [m/IntoSchema t/Any :-> t/Any]
                 -children-schema [m/IntoSchema t/Any :-> (t/Nilable (t/SequentialColl t/Any))]
-                -into-schema [m/IntoSchema t/Any t/Any t/Any :-> Schema])
+                -into-schema [m/IntoSchema Properties Children Options :-> Schema])
 
 (t/defalias Validator [t/Any :-> t/Bool])
 
@@ -35,7 +37,7 @@
                 -unparser [Schema :-> [t/Any :-> t/Any]]
                 -transformer [Schema t/Any t/Any t/Any :-> [t/Any :-> t/Any]]
                 -walk [Schema t/Any t/Any t/Any :-> t/Any]
-                -properties [Schema :-> t/Any]
+                -properties [Schema :-> Properties]
                 -options [Schema :-> t/Any]
                 -children [Schema :-> (t/Nilable (t/SequentialColl t/Any))]
                 -parent [Schema :-> m/IntoSchema]
@@ -52,7 +54,7 @@
                 -entry-forms [m/EntryParser :-> (t/Nilable (t/SequentialColl t/Any))])
 
 (t/ann-protocol malli.core/EntrySchema
-                -entries [m/EntrySchema :-> (t/SeqentialColl t/Any)]
+                -entries [m/EntrySchema :-> (t/SequentialColl t/Any)]
                 -entry-parser [m/EntrySchema :-> m/EntryParser])
 
 (t/ann-protocol malli.core/Cached
@@ -108,10 +110,20 @@
 (t/ann m/-check-children! (t/IFn [t/Any t/Any (t/Seqable t/Any) MinMax :-> (t/Nilable t/Any)]
                                  [t/Any t/Any (t/Seqable t/Any) (t/Nilable t/Int) (t/Nilable t/Int) :-> (t/Nilable t/Any)]))
 (t/ann m/-schema-schema [(t/HMap :optional {:id t/Any :raw t/Any}) :-> Schema])
-(t/ann m/-pointer [t/Any Schema t/Any :-> Schema])
-(t/ann m/-ref-schema [t/Any Schema t/Any :-> Schema])
+(t/ann m/-pointer [t/Any Schema Options :-> Schema])
+(t/ann m/-ref-schema (t/IFn [:-> Schema]
+                            [(t/Nilable (t/HMap :optional {:lazy t/Bool
+                                                           :type-properties (t/Nilable (t/Map t/Any t/Any))}))
+                             :-> Schema]))
 (t/ann m/-reference? [?Schema :-> t/Bool :filters {:then (is (t/U t/Kw t/Str) 0)
                                                    :else (! t/Str 0)}])
+(t/ann m/-lazy [Schema Options :-> Schema])
+(t/ann ^:no-check
+       m/-comp (t/IFn [:-> [t/Any * :-> t/Any]]
+                      [[t/Any * :-> t/Any] :-> [t/Any * :-> t/Any]]
+                      [[t/Any :-> t/Any] [t/Any * :-> t/Any] :-> [t/Any * :-> t/Any]]
+                      [[t/Any :-> t/Any] [t/Any :-> t/Any] [t/Any * :-> t/Any] :-> [t/Any * :-> t/Any]]))
+;(t/ann m/-update )
 
 ;; malli.impl.regex
 (t/ann re/item-validator [Validator :-> t/Any])
