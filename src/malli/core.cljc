@@ -199,7 +199,7 @@
 
 (defn -equals [x y] (or (identical? x y) (= x y)))
 
-(defn -vmap ([os] (miu/-vmap identity os)) ([f os] (miu/-vmap f os)))
+(defn -vmap ([os] (miu/-vmap (t/inst identity x) os)) ([f os] (miu/-vmap f os)))
 
 (defn -memoize [f]
   (let [value #?(:clj (AtomicReference. nil), :cljs (atom nil))]

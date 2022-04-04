@@ -1,7 +1,8 @@
 (ns malli.impl.typedclojure-ann
   (:require [typed.clojure :as t]
             [malli.core #?(:clj :as-alias :cljs :as) m]
-            [malli.impl.regex #?(:clj :as-alias :cljs :as) re]))
+            [malli.impl.regex #?(:clj :as-alias :cljs :as) re]
+            [malli.impl.util #?(:clj :as-alias :cljs :as) miu]))
 ;;TODO support namespace aliases in ann-protocol first arg
 
 (t/defalias ?Schema t/Any)
@@ -20,15 +21,22 @@
   (t/I m/RegexSchema Schema))
 
 (t/defalias Path (t/Vec t/Any))
+(t/defalias Type (t/U t/Sym t/Kw))
 
 (t/ann-protocol malli.core/IntoSchema
-                -type [m/IntoSchema :-> (t/U t/Sym t/Kw)]
+                -type [m/IntoSchema :-> Type]
                 -type-properties [m/IntoSchema :-> (t/Nilable (t/Map t/Any t/Any))]
                 -properties-schema [m/IntoSchema t/Any :-> t/Any]
                 -children-schema [m/IntoSchema t/Any :-> (t/Nilable (t/SequentialColl t/Any))]
                 -into-schema [m/IntoSchema Properties Children Options :-> Schema])
 
 (t/defalias Validator [t/Any :-> t/Bool])
+(t/defalias Arity (t/U t/Int ':varargs))
+(t/defalias FunctionInfo (t/HMap :mandatory {:min t/Int
+                                             :arity Arity
+                                             :input Schema
+                                             :output Schema}
+                                 :optional {:max t/Int}))
 
 (t/ann-protocol malli.core/Schema
                 -validator [Schema :-> Validator]
@@ -118,12 +126,27 @@
 (t/ann m/-reference? [?Schema :-> t/Bool :filters {:then (is (t/U t/Kw t/Str) 0)
                                                    :else (! t/Str 0)}])
 (t/ann m/-lazy [Schema Options :-> Schema])
+(t/ann m/-boolean-fn [(t/U t/Bool [t/Any :-> t/Bool] (t/Not clojure.lang.IFn)) :-> [t/Any :-> t/Bool]])
 (t/ann ^:no-check
        m/-comp (t/IFn [:-> [t/Any * :-> t/Any]]
                       [[t/Any * :-> t/Any] :-> [t/Any * :-> t/Any]]
                       [[t/Any :-> t/Any] [t/Any * :-> t/Any] :-> [t/Any * :-> t/Any]]
                       [[t/Any :-> t/Any] [t/Any :-> t/Any] [t/Any * :-> t/Any] :-> [t/Any * :-> t/Any]]))
-;(t/ann m/-update )
+;;TODO
+(t/ann ^:no-check m/-update [(t/Nilable (t/Map t/Any t/Any)) t/Any t/Any :-> (t/Map t/Any t/Any)])
+;;TODO occurrence typing hook. make = an path element, probably need to make literal values paths elements too.
+(t/ann m/-equals [t/Any t/Any :-> t/Any])
+(t/ann m/-vmap (t/All [x y]
+                      (t/IFn [(t/Seqable x) :-> (t/Vec x)]
+                             [[x :-> y] (t/Seqable y) :-> (t/Vec y)])))
+;;TODO AtomicReference
+(t/ann ^:no-check m/-memoize (t/All [x]
+                                    [[x :-> x] :-> [x :-> x]]))
+(t/ann m/type [?Schema :-> Type])
+;;TODO (when (= (type schema) :=>) ...)
+(t/ann ^:no-check
+       m/-function-info [Schema :-> (t/Nilable FunctionInfo)])
+(t/ann ^:no-check m/-group-by-arity! [(t/Seqable FunctionInfo) :-> (t/Map Arity FunctionInfo)])
 
 ;; malli.impl.regex
 (t/ann re/item-validator [Validator :-> t/Any])
@@ -131,3 +154,8 @@
 (t/ann re/item-parser [Parser :-> [t/Any t/Any t/Any t/Any t/Any :-> t/Any]])
 (t/ann re/item-unparser [Unparser :-> [t/Any t/Any t/Any t/Any t/Any :-> t/Any]])
 (t/ann re/item-transformer [t/Any [t/Any :-> t/Any] [t/Any :-> t/Any] :-> [t/Any t/Any t/Any t/Any t/Any :-> t/Any]])
+
+;; malli.impl.util
+(t/ann miu/-vmap (t/All [x y]
+                        (t/IFn [(t/Seqable x) :-> (t/Vec x)]
+                               [[x :-> y] (t/Seqable y) :-> (t/Vec y)])))
