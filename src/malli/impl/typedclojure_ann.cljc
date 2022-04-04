@@ -38,6 +38,8 @@
                                              :output Schema}
                                  :optional {:max t/Int}))
 
+(t/defalias Registry (t/Map t/Any Schema))
+
 (t/ann-protocol malli.core/Schema
                 -validator [Schema :-> Validator]
                 -explainer [Schema (t/Vec t/Any) :-> [t/Any t/Any t/Any :-> t/Any]]
@@ -93,7 +95,8 @@
                 -regex-unparser [RegexSchema :-> t/Any]
                 -regex-parser [RegexSchema :-> t/Any]
                 -regex-transformer [RegexSchema t/Any t/Any t/Any :-> t/Any]
-                -regex-min-max [RegexSchema :-> MinMax])
+                -regex-min-max [RegexSchema :-> (t/HMap :mandatory {:min t/Int}
+                                                        :optional {:max (t/Nilable t/Int)})])
 
 ;; TODO add asymmetric instance?/implements? filters to checker
 (t/ann ^:no-check m/-ref-schema? [t/Any :-> t/Bool :filters {:then (is m/RefSchema 0)}])
@@ -148,6 +151,12 @@
        m/-function-info [Schema :-> (t/Nilable FunctionInfo)])
 (t/ann ^:no-check m/-group-by-arity! [(t/Seqable FunctionInfo) :-> (t/Map Arity FunctionInfo)])
 (t/ann m/-re-min-max [[(t/Nilable t/Int) (t/Nilable t/Int) :-> t/Int] MinMax RegexSchema :-> MinMax])
+(t/ann m/-re-alt-min-max [MinMax RegexSchema :-> (t/HMap :mandatory {:min t/Int}
+                                                         :optional {:max t/Int})])
+(t/ann m/-register-var [Registry (t/U (t/Var1 t/Any) '[(t/Var1 t/Any) t/Any]) :-> Registry])
+(t/ann m/-simple-schema (t/Rec [x]
+                               [(t/Rec [x] (t/U nil (t/Map t/Any t/Any) (t/I clojure.lang.Fn [Properties Children :-> x])))
+                                :-> Schema]))
 
 ;; malli.impl.regex
 (t/ann re/item-validator [Validator :-> t/Any])
@@ -160,3 +169,4 @@
 (t/ann miu/-vmap (t/All [x y]
                         (t/IFn [(t/Seqable x) :-> (t/Vec x)]
                                [[x :-> y] (t/Seqable y) :-> (t/Vec y)])))
+(t/ann miu/+max-size+ t/Int)
