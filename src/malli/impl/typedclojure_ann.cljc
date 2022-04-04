@@ -154,9 +154,8 @@
 (t/ann m/-re-alt-min-max [MinMax RegexSchema :-> (t/HMap :mandatory {:min t/Int}
                                                          :optional {:max t/Int})])
 (t/ann m/-register-var [Registry (t/U (t/Var1 t/Any) '[(t/Var1 t/Any) t/Any]) :-> Registry])
-(t/ann m/-simple-schema (t/Rec [x]
-                               [(t/Rec [x] (t/U nil (t/Map t/Any t/Any) (t/I clojure.lang.Fn [Properties Children :-> x])))
-                                :-> Schema]))
+(t/ann m/-simple-schema [(t/Rec [x] (t/U nil (t/Map t/Any t/Any) (t/I clojure.lang.Fn [Properties Children :-> x])))
+                         :-> Schema])
 
 ;; malli.impl.regex
 (t/ann re/item-validator [Validator :-> t/Any])
