@@ -2,7 +2,8 @@
   (:require [typed.clojure :as t]
             [malli.core #?(:clj :as-alias :cljs :as) m]
             [malli.impl.regex #?(:clj :as-alias :cljs :as) re]
-            [malli.impl.util #?(:clj :as-alias :cljs :as) miu]))
+            [malli.impl.util #?(:clj :as-alias :cljs :as) miu]
+            [malli.registry #?(:clj :as-alias :cljs :as) mr]))
 ;;TODO support namespace aliases in ann-protocol first arg
 
 (t/defalias ?Schema t/Any)
@@ -38,7 +39,10 @@
                                              :output Schema}
                                  :optional {:max t/Int}))
 
-(t/defalias Registry (t/Map t/Any Schema))
+(t/ann-protocol malli.registry/Registry
+                -schema [Registry t/Any :-> (t/Nilable Schema)]
+                -schemas [Registry :-> (t/Map t/Any Schema)])
+(t/defalias Registry mr/Registry)
 
 (t/ann-protocol malli.core/Schema
                 -validator [Schema :-> Validator]
@@ -153,9 +157,10 @@
 (t/ann m/-re-min-max [[(t/Nilable t/Int) (t/Nilable t/Int) :-> t/Int] MinMax RegexSchema :-> MinMax])
 (t/ann m/-re-alt-min-max [MinMax RegexSchema :-> (t/HMap :mandatory {:min t/Int}
                                                          :optional {:max t/Int})])
-(t/ann m/-register-var [Registry (t/U (t/Var1 t/Any) '[(t/Var1 t/Any) t/Any]) :-> Registry])
+(t/ann m/-register-var [(t/Map t/Any Schema) (t/U (t/Var1 t/Any) '[(t/Var1 t/Any) t/Any]) :-> (t/Map t/Any Schema)])
 (t/ann m/-simple-schema [(t/Rec [x] (t/U nil (t/Map t/Any t/Any) (t/I clojure.lang.Fn [Properties Children :-> x])))
                          :-> Schema])
+(t/ann m/default-registry Registry)
 
 ;; malli.impl.regex
 (t/ann re/item-validator [Validator :-> t/Any])
@@ -169,3 +174,7 @@
                         (t/IFn [(t/Seqable x) :-> (t/Vec x)]
                                [[x :-> y] (t/Seqable y) :-> (t/Vec y)])))
 (t/ann miu/+max-size+ t/Int)
+
+;; malli.registry
+;(t/ann mr/registry)
+(t/ann ^:no-check mr/registry? [t/Any :-> t/Bool :filters {:then (is mr/Registry 0)}])

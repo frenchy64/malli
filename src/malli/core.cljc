@@ -251,11 +251,9 @@
         (assoc name schema)
         (assoc @v schema))))
 
-;;FIXME cc/defn rules explodes
-(t/tc-ignore
- (defn -registry {:arglists '([] [{:keys [registry]}])}
+(defn -registry {:arglists '([] [{:keys [registry]}])}
   ([] default-registry)
-  ([opts] (or (when opts (mr/registry (opts :registry))) default-registry))))
+  ([opts] (or (when opts (mr/registry (opts :registry))) default-registry)))
 
 (defn -property-registry [m options f]
   (let [options (assoc options ::allow-invalid-refs true)]
