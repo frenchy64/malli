@@ -9,8 +9,8 @@
 (t/defalias Options (t/Nilable (t/Map t/Any t/Any)))
 (t/defalias Parser [t/Any :-> t/Any])
 (t/defalias Unparser [t/Any :-> t/Any])
-(t/defalias MinMax '{:min (t/Nilable t/Int)
-                     :max (t/Nilable t/Int)})
+(t/defalias MinMax (t/HMap :optional {:min (t/Nilable t/Int)
+                                      :max (t/Nilable t/Int)}))
 (t/defalias Properties (t/Nilable (t/Map t/Any t/Any)))
 (t/defalias Children (t/Nilable (t/SequentialColl Schema)))
 
@@ -147,6 +147,7 @@
 (t/ann ^:no-check
        m/-function-info [Schema :-> (t/Nilable FunctionInfo)])
 (t/ann ^:no-check m/-group-by-arity! [(t/Seqable FunctionInfo) :-> (t/Map Arity FunctionInfo)])
+(t/ann m/-re-min-max [[(t/Nilable t/Int) (t/Nilable t/Int) :-> t/Int] MinMax RegexSchema :-> MinMax])
 
 ;; malli.impl.regex
 (t/ann re/item-validator [Validator :-> t/Any])
