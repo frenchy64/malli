@@ -75,4 +75,4 @@
 
 (deftest check-ns-test
   (is (t/check-ns-clj 'malli.registry))
-  (is (t/check-ns-cljs 'malli.registry)))
+  (is (t/check-ns-cljs 'malli.registrymalli.core)))
