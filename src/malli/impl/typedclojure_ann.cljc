@@ -161,6 +161,8 @@
 (t/ann m/-simple-schema [(t/Rec [x] (t/U nil (t/Map t/Any t/Any) (t/I clojure.lang.Fn [Properties Children :-> x])))
                          :-> Schema])
 (t/ann m/default-registry Registry)
+(t/ann m/-registry (t/IFn [:-> Registry]
+                          [Options :-> Registry]))
 
 ;; malli.impl.regex
 (t/ann re/item-validator [Validator :-> t/Any])
@@ -176,5 +178,7 @@
 (t/ann miu/+max-size+ t/Int)
 
 ;; malli.registry
-;(t/ann mr/registry)
+(t/ann mr/mode t/Str)
+(t/ann mr/type t/Str)
 (t/ann ^:no-check mr/registry? [t/Any :-> t/Bool :filters {:then (is mr/Registry 0)}])
+(t/ann mr/registry [t/Any :-> (t/U nil Registry)])
