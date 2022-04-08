@@ -73,6 +73,6 @@
 
       (is (= 2 (count @loads))))))
 
-(deftest check-ns-test
-  (is (t/check-ns-clj 'malli.registry))
-  (is (t/check-ns-cljs 'malli.registry)))
+#?(:clj (deftest check-ns-test
+          (is (t/check-ns-clj 'malli.registry))
+          (is (t/check-ns-cljs 'malli.registry))))
