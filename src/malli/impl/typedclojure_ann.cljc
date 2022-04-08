@@ -181,4 +181,6 @@
 (t/ann mr/mode t/Str)
 (t/ann mr/type t/Str)
 (t/ann ^:no-check mr/registry? [t/Any :-> t/Bool :filters {:then (is mr/Registry 0)}])
-(t/ann mr/registry [t/Any :-> (t/U nil Registry)])
+(t/ann ^:no-check mr/fast-registry [java.util.Map :-> Registry])
+(t/ann mr/simple-registry [(t/Map t/Any Schema) :-> Registry])
+(t/ann mr/registry [(t/U nil (t/I Registry (t/Not (t/Map t/Any t/Any))) (t/Map t/Any Schema)) :-> (t/U nil Registry)])

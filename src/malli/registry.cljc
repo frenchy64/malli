@@ -15,7 +15,7 @@
 (defn registry? [x] (#?(:clj instance?, :cljs implements?) malli.registry.Registry x))
 
 (defn fast-registry [m]
-  (let [fm #?(:clj (doto (HashMap. 1024 0.25) (.putAll ^Map m)), :cljs m)]
+  (let [fm #?(:clj (doto (HashMap. 1024 (float 0.25)) (.putAll ^Map m)), :cljs m)]
     (reify
       Registry
       (-schema [_ type] (.get fm type))
