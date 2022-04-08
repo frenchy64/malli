@@ -7,7 +7,8 @@
 ;;TODO support namespace aliases in ann-protocol first arg
 
 (t/defalias ?Schema t/Any)
-(t/defalias Options (t/Nilable (t/Map t/Any t/Any)))
+(t/defalias ?Registry (t/U (t/I Registry (t/Not (t/Map t/Any t/Any))) (t/Map t/Any Schema)))
+(t/defalias Options (t/HMap :optional {:registry (t/Nilable ?Registry)}))
 (t/defalias Parser [t/Any :-> t/Any])
 (t/defalias Unparser [t/Any :-> t/Any])
 (t/defalias MinMax (t/HMap :optional {:min (t/Nilable t/Int)
@@ -183,8 +184,8 @@
 (t/ann ^:no-check mr/registry? [t/Any :-> t/Bool :filters {:then (is mr/Registry 0)}])
 (t/ann ^:no-check mr/fast-registry [java.util.Map :-> Registry])
 (t/ann mr/simple-registry [(t/Map t/Any Schema) :-> Registry])
-(t/ann mr/registry (t/IFn [(t/U (t/I Registry (t/Not (t/Map t/Any t/Any))) (t/Map t/Any Schema)) :-> Registry]
-                          #_[(t/U nil (t/I Registry (t/Not (t/Map t/Any t/Any))) (t/Map t/Any Schema)) :-> (t/U nil Registry)]))
+(t/ann mr/registry (t/IFn [?Registry :-> Registry]
+                          [(t/Nilable ?Registry) :-> (t/Nilable Registry)]))
 (t/ann mr/registry* (t/Atom1 Registry))
 (t/ann mr/set-default-registry! [(t/U (t/I Registry (t/Not (t/Map t/Any t/Any))) (t/Map t/Any Schema))
                                  :-> Registry])
@@ -193,5 +194,6 @@
 (t/ann ^:no-check mr/composite-registry [Registry :* :-> Registry])
 (t/ann mr/*registry* (t/Map t/Any Schema))
 (t/ann mr/lazy-registry [Registry [t/Any Registry :-> Schema] :-> Registry])
+(t/ann mr/dynamic-registry [:-> Registry])
 (t/ann mr/schema [Registry t/Any :-> (t/Nilable Schema)])
 (t/ann mr/schemas [Registry :-> (t/Map t/Any Schema)])
