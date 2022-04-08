@@ -2661,6 +2661,6 @@
       (is (m/schema? (via-ast :my-bigger-than-4)))
       (is (m/schema? (via-ast 'my/bigger-than-5))))))
 
-(deftest check-ns-test
-  (is (t/check-ns-clj 'malli.core))
-  (is (t/check-ns-cljs 'malli.core)))
+#?(:clj (deftest check-ns-test
+          (is (t/check-ns-clj 'malli.core))
+          (is (t/check-ns-cljs 'malli.core))))
