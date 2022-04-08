@@ -253,7 +253,7 @@
 
 (defn -registry {:arglists '([] [{:keys [registry]}])}
   ([] default-registry)
-  ([opts] (or (when opts (mr/registry (opts :registry))) default-registry)))
+  ([opts] (or (when opts (mr/registry (:registry opts))) default-registry)))
 
 (defn -property-registry [m options f]
   (let [options (assoc options ::allow-invalid-refs true)]
