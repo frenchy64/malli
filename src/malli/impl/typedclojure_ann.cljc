@@ -166,17 +166,66 @@
                           [Options :-> Registry]))
 
 ;; malli.impl.regex
-(t/ann re/item-validator [Validator :-> t/Any])
-(t/ann re/item-explainer [Path t/Any [t/Any t/Any t/Any :-> t/Any] :-> [t/Any t/Any t/Any t/Any t/Any :-> t/Any]])
-(t/ann re/item-parser [Parser :-> [t/Any t/Any t/Any t/Any t/Any :-> t/Any]])
-(t/ann re/item-unparser [Unparser :-> [t/Any t/Any t/Any t/Any t/Any :-> t/Any]])
-(t/ann re/item-transformer [t/Any [t/Any :-> t/Any] [t/Any :-> t/Any] :-> [t/Any t/Any t/Any t/Any t/Any :-> t/Any]])
+(t/defalias Explainer t/Any)
+(t/defalias SchemaExplainer [t/Any In (t/Coll t/Any) :-> (t/Coll Error)])
+(t/defalias Pos t/Int)
+(t/defalias Regs t/Any)
+(t/defalias ValidatorK [t/Int (t/Seqable t/Any) :-> t/Any])
+(t/defalias ValidatorTramp [t/Any t/Any t/Int (t/Seqable t/Any) ValidatorK :-> t/Any])
+(t/defalias ExplainerK ValidatorK)
+(t/defalias ExplainerTramp [re/IExplanationDriver t/Any t/Int (t/Coll t/Any) ExplainerK :-> t/Any])
+(t/defalias ParserK [t/Any t/Int (t/Seqable t/Any) :-> t/Any])
+(t/defalias ParserTramp [t/Any t/Any Pos (t/Coll t/Any) ParserK :-> t/Any])
+(t/defalias EncoderK [(t/Coll t/Any) t/Int (t/Seqable t/Any) :-> t/Any])
+(t/defalias EncoderTramp [t/Any t/Any (t/Coll t/Any) Pos (t/Coll t/Any) EncoderK :-> t/Any])
+(t/defalias TransformerK EncoderK)
+(t/defalias TransformerTramp EncoderK)
+(t/defalias In (t/Vec Pos))
+(t/defalias Transformer t/Any)
+(t/defalias Encoder [t/Any :-> t/Any])
+(t/defalias Decoder Encoder)
+(t/ann-protocol malli.impl.regex/Driver
+                succeed! [re/Driver :-> t/Any]
+                succeeded? [re/Driver :-> t/Bool]
+                pop-thunk! [re/Driver :-> (t/Nilable [:-> t/Any])])
+(t/ann-protocol malli.impl.regex/IValidationDriver
+                noncaching-park-validator! [re/IValidationDriver Validator Regs Pos (t/Seqable t/Any) ValidatorK :-> t/Any]
+                park-validator! [re/IValidationDriver Validator Regs Pos (t/Seqable t/Any) ValidatorK :-> t/Any])
+(t/ann-protocol malli.impl.regex/IExplanationDriver
+                noncaching-park-explainer! [re/IExplanationDriver Explainer Regs Pos (t/Seqable t/Any) ExplainerK :-> t/Any]
+                park-explainer! [re/IExplanationDriver Explainer Regs Pos (t/Seqable t/Any) ExplainerK :-> t/Any]
+                value-path [re/IExplanationDriver Pos :-> In]
+                fail! [re/IExplanationDriver Pos (t/Seqable Error) :-> t/Any])
+(t/ann-protocol malli.impl.regex/IParseDriver
+                noncaching-park-transformer! [re/IParseDriver Transformer Regs (t/Seqable t/Any) Pos (t/Seqable t/Any) ParserK :-> t/Any]
+                park-transformer! [re/IParseDriver Transformer Regs Pos (t/Seqable t/Any) ParserK :-> t/Any]
+                succeed-with! [re/IParseDriver t/Any :-> t/Any]
+                success-result [re/IParseDriver :-> t/Any]) ;;returns coll sometimes? polymorphic?
+(t/ann re/item-validator [Validator :-> ValidatorTramp])
+(t/ann re/item-explainer [Path Schema SchemaExplainer :-> ExplainerTramp])
+(t/ann re/item-parser [Parser :-> ParserTramp])
+(t/ann ^:no-check re/item-unparser [Unparser :-> [t/Any :-> t/Any]])
+(t/ann re/item-transformer [(t/U ':encode ':decode) Validator (t/U Encoder Decoder) :-> EncoderTramp])
+(t/ann re/item-encoder [Validator Encoder :-> EncoderTramp])
+(t/ann re/item-decoder [Decoder Validator :-> EncoderTramp])
+(t/ann ^:no-check re/item-unparser [Unparser :-> [t/Any :-> t/Any]])
+(t/ann re/end-validator [:-> ValidatorTramp])
+(t/ann re/end-explainer [Schema Path :-> ExplainerTramp])
+(t/ann re/end-parser [:-> ParserTramp])
+(t/ann re/end-transformer [:-> TransformerTramp])
+(t/ann re/pure-parser [t/Any :-> ParserTramp])
+(t/ann re/pure-unparser [t/Any :-> '[]])
 
 ;; malli.impl.util
+(t/defalias Error (t/HMap :mandatory {:path Path :in In :schema Schema :value t/Any}
+                          :optional {:type t/Any}))
 (t/ann miu/-vmap (t/All [x y]
                         (t/IFn [(t/Seqable x) :-> (t/Vec x)]
                                [[x :-> y] (t/Seqable y) :-> (t/Vec y)])))
 (t/ann miu/+max-size+ t/Int)
+(t/ann miu/-error (t/IFn [Path In Schema t/Any :-> Error]
+                         [Path In Schema t/Any t/Any :-> Error]))
+(t/ann miu/-map-valid [[Validator :-> t/Any] :-> t/Any])
 
 ;; malli.registry
 (t/ann mr/mode t/Str)

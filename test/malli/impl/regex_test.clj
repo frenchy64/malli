@@ -4,4 +4,5 @@
 
 (deftest check-ns-test
   (is (t/check-ns-clj 'malli.impl.regex))
+  #_
   (is (t/check-ns-cljs 'malli.impl.regex)))
