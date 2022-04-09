@@ -34,7 +34,8 @@
   https://www.metosin.fi/blog/malli-regex-schemas/."
 
   (:refer-clojure :exclude [+ * repeat cat])
-  (:require [malli.impl.util :as miu])
+  (:require [malli.impl.util :as miu]
+            [typed.clojure :as t])
   #?(:clj (:import [java.util ArrayDeque])))
 
 ;;;; # Driver Protocols
@@ -134,11 +135,11 @@
 
 (defn fmap-parser [f p]
   (fn [driver regs pos coll k]
-    (p driver regs pos coll (fn [v pos coll] (k (f v) pos coll)))))
-
+    (p driver regs pos coll (-> (fn [v pos coll] (k (f v) pos coll))
+                                (t/ann-form malli.impl.typedclojure-ann/ParserK)))))
 ;;;; ## Catenation
 
-(defn- entry->regex [?kr] (if (vector? ?kr) (get ?kr 1) ?kr))
+(defn- entry->regex [?kr] (if (vector? ?kr) (nth ?kr 1) ?kr))
 
 (defn cat-validator
   ([] (fn [_ _ pos coll k] (k pos coll)))
@@ -184,8 +185,19 @@
   (let [unparsers (vec unparsers)]
     (fn [tup]
       (if (and (vector? tup) (= (count tup) (count unparsers)))
-        (reduce-kv (fn [coll i unparser] (miu/-map-valid #(into coll %) (unparser (get tup i))))
-                   [] unparsers)
+        (reduce-kv (t/fn [coll :- (t/U malli.impl.typedclojure-ann/Invalid (t/Vec t/Any))
+                          i :- t/Int
+                          unparser :- malli.impl.typedclojure-ann/Unparser]
+                     :- (t/U malli.impl.typedclojure-ann/Invalid (t/Vec t/Any))
+                     (let [up (unparser (nth tup i))]
+                       (assert (or (miu/-invalid? up) (vector? up)))
+                       (if (miu/-invalid? coll)
+                         coll
+                         (miu/-map-valid
+                           (t/ann-form #(into coll %) [(t/Vec t/Any) :-> (t/Vec t/Any)])
+                           up))))
+                   (t/ann-form [] (t/U malli.impl.typedclojure-ann/Invalid (t/Vec t/Any)))
+                   (t/ann-form unparsers (t/Associative t/Any t/Int malli.impl.typedclojure-ann/Unparser)))
         :malli.core/invalid))))
 
 (defn catn-unparser [& unparsers]

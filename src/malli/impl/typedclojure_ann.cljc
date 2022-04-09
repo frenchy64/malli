@@ -174,16 +174,17 @@
 (t/defalias ValidatorTramp [t/Any t/Any t/Int (t/Seqable t/Any) ValidatorK :-> t/Any])
 (t/defalias ExplainerK ValidatorK)
 (t/defalias ExplainerTramp [re/IExplanationDriver t/Any t/Int (t/Coll t/Any) ExplainerK :-> t/Any])
-(t/defalias ParserK [t/Any t/Int (t/Seqable t/Any) :-> t/Any])
+(t/defalias ParserK [t/Any Pos (t/Seqable t/Any) :-> t/Any])
 (t/defalias ParserTramp [t/Any t/Any Pos (t/Coll t/Any) ParserK :-> t/Any])
-(t/defalias EncoderK [(t/Coll t/Any) t/Int (t/Seqable t/Any) :-> t/Any])
+(t/defalias EncoderK [(t/Coll t/Any) Pos (t/Seqable t/Any) :-> t/Any])
 (t/defalias EncoderTramp [t/Any t/Any (t/Coll t/Any) Pos (t/Coll t/Any) EncoderK :-> t/Any])
 (t/defalias TransformerK EncoderK)
-(t/defalias TransformerTramp EncoderK)
+(t/defalias TransformerTramp EncoderTramp)
 (t/defalias In (t/Vec Pos))
 (t/defalias Transformer t/Any)
 (t/defalias Encoder [t/Any :-> t/Any])
 (t/defalias Decoder Encoder)
+(t/defalias ?KR (t/U '[t/Any ValidatorTramp] (t/I ValidatorTramp (t/Not (t/Vec t/Any)))))
 (t/ann-protocol malli.impl.regex/Driver
                 succeed! [re/Driver :-> t/Any]
                 succeeded? [re/Driver :-> t/Bool]
@@ -215,17 +216,26 @@
 (t/ann re/end-transformer [:-> TransformerTramp])
 (t/ann re/pure-parser [t/Any :-> ParserTramp])
 (t/ann re/pure-unparser [t/Any :-> '[]])
+(t/ann re/fmap-parser [[t/Any :-> t/Any] ParserTramp :-> ParserTramp])
+(t/ann re/entry->regex [?KR :-> ValidatorTramp])
+(t/ann ^:no-check re/cat-validator [?KR :* :-> ValidatorTramp])
+(t/ann ^:no-check re/cat-explainer [?KR :* :-> ExplainerTramp])
+(t/ann ^:no-check re/cat-parser [?KR :* :-> ParserTramp])
+(t/ann ^:no-check re/catn-parser [?KR :* :-> ParserTramp])
+(t/ann re/cat-unparser [Unparser :* :-> Unparser])
 
 ;; malli.impl.util
 (t/defalias Error (t/HMap :mandatory {:path Path :in In :schema Schema :value t/Any}
                           :optional {:type t/Any}))
+(t/defalias Invalid ':malli.core/invalid)
 (t/ann miu/-vmap (t/All [x y]
                         (t/IFn [(t/Seqable x) :-> (t/Vec x)]
                                [[x :-> y] (t/Seqable y) :-> (t/Vec y)])))
 (t/ann miu/+max-size+ t/Int)
 (t/ann miu/-error (t/IFn [Path In Schema t/Any :-> Error]
                          [Path In Schema t/Any t/Any :-> Error]))
-(t/ann miu/-map-valid [[Validator :-> t/Any] :-> t/Any])
+(t/ann miu/-invalid? (t/Pred Invalid))
+(t/ann miu/-map-valid (t/All [x y] [[x :-> y] (t/U x Invalid) :-> (t/U y Invalid)]))
 
 ;; malli.registry
 (t/ann mr/mode t/Str)
