@@ -188,16 +188,13 @@
         (reduce-kv (t/fn [coll :- (t/U malli.impl.typedclojure-ann/Invalid (t/Vec t/Any))
                           i :- t/Int
                           unparser :- malli.impl.typedclojure-ann/Unparser]
-                     :- (t/U malli.impl.typedclojure-ann/Invalid (t/Vec t/Any))
+                     (assert (not (miu/-invalid? coll)))
                      (let [up (unparser (nth tup i))]
-                       (assert (or (miu/-invalid? up) (vector? up)))
-                       (if (miu/-invalid? coll)
-                         coll
-                         (miu/-map-valid
-                           (t/ann-form #(into coll %) [(t/Vec t/Any) :-> (t/Vec t/Any)])
-                           up))))
-                   (t/ann-form [] (t/U malli.impl.typedclojure-ann/Invalid (t/Vec t/Any)))
-                   (t/ann-form unparsers (t/Associative t/Any t/Int malli.impl.typedclojure-ann/Unparser)))
+                       (if (miu/-invalid? up)
+                         (reduced up)
+                         (do (assert (vector? up))
+                             (into coll up)))))
+                   [] unparsers)
         :malli.core/invalid))))
 
 (defn catn-unparser [& unparsers]
