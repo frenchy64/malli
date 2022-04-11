@@ -187,8 +187,15 @@
   (let [unparsers (vec unparsers)]
     (fn [tup]
       (if (and (vector? tup) (= (count tup) (count unparsers)))
-        (reduce-kv (fn [coll i unparser] (miu/-map-valid #(into coll %) (unparser (get tup i))))
-                   [] unparsers)
+        ;; Note: original reduce-kv had a bug: coll could become ::m/invalid and call (into ::m/invalid ...)
+        (vec
+          (map-indexed (fn [^{::t/- t/Int} i 
+                            ^{::t/- ann/Unparser} unparser]
+                         (miu/-map-valid (fn [v]
+                                           {:pre [(vector? v)]}
+                                           v)
+                                         (unparser (nth tup i))))
+                       unparsers))
         :malli.core/invalid))))
 
 (defn catn-unparser [& unparsers]
