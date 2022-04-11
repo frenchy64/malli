@@ -187,15 +187,21 @@
   (let [unparsers (vec unparsers)]
     (fn [tup]
       (if (and (vector? tup) (= (count tup) (count unparsers)))
-        ;; Note: original reduce-kv had a bug: coll could become ::m/invalid and call (into ::m/invalid ...)
-        (vec
-          (map-indexed (fn [^{::t/- t/Int} i 
-                            ^{::t/- ann/Unparser} unparser]
-                         (miu/-map-valid (fn [v]
-                                           {:pre [(vector? v)]}
-                                           v)
-                                         (unparser (nth tup i))))
-                       unparsers))
+        (reduce-kv (fn [^{::t/- (t/U ann/Invalid (t/Vec t/Any))}
+                        coll
+                        i
+                        ^{::t/- ann/Unparser}
+                        unparser]
+                     {:pre [(vector? coll)
+                            (integer? i)]}
+                     (let [res (miu/-map-valid (fn [v]
+                                                 {:pre [(seqable? v)]}
+                                                 (into coll v))
+                                               (unparser (get tup i)))]
+                       ;; BUG missing code in malli
+                       (cond-> res
+                         (miu/-invalid? res) reduced)))
+                   [] unparsers)
         :malli.core/invalid))))
 
 (defn catn-unparser [& unparsers]
@@ -203,10 +209,13 @@
     (fn [m]
       (if (and (map? m) (= (count m) (count unparsers)))
         (reduce-kv (fn [coll tag unparser]
+                     {:pre [(vector? coll)]}
                      (if-some [kv (find m tag)]
-                       (miu/-map-valid #(into coll %) (unparser (val kv)))
-                       ^{::t/:- ExampleNonIMetaAnn}
-                       (do :malli.core/invalid)))
+                       (let [res (miu/-map-valid #(into coll %) (unparser (val kv)))]
+                         ;; BUG missing code in malli
+                         (cond-> res
+                           (miu/-invalid? res) reduced))
+                       :malli.core/invalid))
                    ;; `m` is in hash order, so have to iterate over `unparsers` to restore seq order:
                    [] unparsers)
         :malli.core/invalid))))
