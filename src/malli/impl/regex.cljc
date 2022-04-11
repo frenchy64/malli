@@ -35,7 +35,9 @@
 
   (:refer-clojure :exclude [+ * repeat cat])
   (:require [malli.impl.util :as miu]
-            [typed.clojure :as t])
+            #?(:cljs malli.impl.regex) ;; big hammer to work around the lack of :as-alias in cljs
+            #?@(:clj [[typed.clojure :as-alias t]
+                      [malli.impl.typedclojure-ann :as-alias ann]]))
   #?(:clj (:import [java.util ArrayDeque])))
 
 ;;;; # Driver Protocols
@@ -135,8 +137,8 @@
 
 (defn fmap-parser [f p]
   (fn [driver regs pos coll k]
-    (p driver regs pos coll (-> (fn [v pos coll] (k (f v) pos coll))
-                                (t/ann-form malli.impl.typedclojure-ann/ParserK)))))
+    (p driver regs pos coll (fn [v pos coll] (k (f v) pos coll)))))
+
 ;;;; ## Catenation
 
 (defn- entry->regex [?kr] (if (vector? ?kr) (nth ?kr 1) ?kr))
@@ -185,15 +187,7 @@
   (let [unparsers (vec unparsers)]
     (fn [tup]
       (if (and (vector? tup) (= (count tup) (count unparsers)))
-        (reduce-kv (t/fn [coll :- (t/U malli.impl.typedclojure-ann/Invalid (t/Vec t/Any))
-                          i :- t/Int
-                          unparser :- malli.impl.typedclojure-ann/Unparser]
-                     (assert (not (miu/-invalid? coll)))
-                     (let [up (unparser (nth tup i))]
-                       (if (miu/-invalid? up)
-                         (reduced up)
-                         (do (assert (vector? up))
-                             (into coll up)))))
+        (reduce-kv (fn [coll i unparser] (miu/-map-valid #(into coll %) (unparser (get tup i))))
                    [] unparsers)
         :malli.core/invalid))))
 
@@ -204,7 +198,8 @@
         (reduce-kv (fn [coll tag unparser]
                      (if-some [kv (find m tag)]
                        (miu/-map-valid #(into coll %) (unparser (val kv)))
-                       :malli.core/invalid))
+                       ^{::t/:- ExampleNonIMetaAnn}
+                       (do :malli.core/invalid)))
                    ;; `m` is in hash order, so have to iterate over `unparsers` to restore seq order:
                    [] unparsers)
         :malli.core/invalid))))
@@ -224,7 +219,8 @@
   (reduce (fn [acc ?kr]
             (let [r (entry->regex acc), r* (entry->regex ?kr)]
               (fn [driver regs pos coll k]
-                (park-validator! driver r* regs pos coll k) ; remember fallback
+                (^{::t/inst [t/Example t/Meta t/Inst]}
+                 park-validator! driver r* regs pos coll k) ; remember fallback
                 (park-validator! driver r regs pos coll k))))
           ?krs))
 
