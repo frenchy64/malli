@@ -37,7 +37,9 @@
   (:require [malli.impl.util :as miu]
             #?(:cljs malli.impl.regex) ;; big hammer to work around the lack of :as-alias in cljs
             #?@(:clj [[typed.clojure :as-alias t]
-                      [malli.impl.typedclojure-ann :as-alias ann]]))
+                      [malli.impl.typedclojure-ann :as
+                       #_:as-alias ;; kaocha doesn't like this
+                       ann]]))
   #?(:clj (:import [java.util ArrayDeque])))
 
 ;;;; # Driver Protocols
@@ -208,10 +210,17 @@
   (let [unparsers (into {} unparsers)]
     (fn [m]
       (if (and (map? m) (= (count m) (count unparsers)))
-        (reduce-kv (fn [coll tag unparser]
+        (reduce-kv (fn [^{::t/- (t/U ann/Invalid (t/Vec t/Any))}
+                        coll
+                        tag
+                        ^{::t/- ann/Unparser}
+                        unparser]
                      {:pre [(vector? coll)]}
                      (if-some [kv (find m tag)]
-                       (let [res (miu/-map-valid #(into coll %) (unparser (val kv)))]
+                       (let [res (miu/-map-valid (fn [v]
+                                                   {:pre [(seqable? v)]}
+                                                   (into coll v))
+                                                 (unparser (val kv)))]
                          ;; BUG missing code in malli
                          (cond-> res
                            (miu/-invalid? res) reduced))

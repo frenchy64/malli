@@ -223,6 +223,7 @@
 (t/ann ^:no-check re/cat-parser [?KR :* :-> ParserTramp])
 (t/ann ^:no-check re/catn-parser [?KR :* :-> ParserTramp])
 (t/ann re/cat-unparser [Unparser :* :-> Unparser])
+(t/ann re/catn-unparser [Unparser :* :-> Unparser])
 
 ;; malli.impl.util
 (t/defalias Error (t/HMap :mandatory {:path Path :in In :schema Schema :value t/Any}
