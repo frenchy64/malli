@@ -2636,6 +2636,10 @@
   (is (= ["1"] (m/-vmap str (lazy-seq [1]))))
   (is (= ["1" "2"] (m/-vmap str [1 2]))))
 
+#?(:clj (deftest check-ns-test
+          (is (t/check-ns-clj 'malli.core))
+          (is (t/check-ns-cljs 'malli.core))))
+
 (deftest issue-626-test
   (testing "m/from-ast does not work with symbols or unamespaced keywords"
     (let [BiggerThan3 (m/schema
@@ -2661,6 +2665,6 @@
       (is (m/schema? (via-ast :my-bigger-than-4)))
       (is (m/schema? (via-ast 'my/bigger-than-5))))))
 
-#?(:clj (deftest check-ns-test
-          (is (t/check-ns-clj 'malli.core))
-          (is (t/check-ns-cljs 'malli.core))))
+(deftest cat-catn-unparse-test
+  (is (= ::m/invalid (m/unparse [:cat string? int? string?] [1 2 3])))
+  (is (= ::m/invalid (m/unparse [:catn [:a string?] [:b int?] [:c string?]] {:a 1 :b 2 :c 3}))))
