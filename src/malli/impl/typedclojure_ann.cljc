@@ -237,6 +237,8 @@
                          [Path In Schema t/Any t/Any :-> Error]))
 (t/ann miu/-invalid? (t/Pred Invalid))
 (t/ann miu/-map-valid (t/All [x y] [[x :-> y] (t/U x Invalid) :-> (t/U y Invalid)]))
+(t/ann miu/-reduce-kv-valid (t/All [a k v]
+                                   [[a k v -> (t/U (t/Reduced a) a Invalid)] a (t/Option (t/Associative k v)) -> (t/U a Invalid)]))
 
 ;; malli.registry
 (t/ann mr/mode t/Str)
