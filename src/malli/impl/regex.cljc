@@ -189,20 +189,7 @@
   (let [unparsers (vec unparsers)]
     (fn [tup]
       (if (and (vector? tup) (= (count tup) (count unparsers)))
-        (reduce-kv (fn [^{::t/- (t/U ann/Invalid (t/Vec t/Any))}
-                        coll
-                        i
-                        ^{::t/- ann/Unparser}
-                        unparser]
-                     {:pre [(vector? coll)
-                            (integer? i)]}
-                     (let [res (miu/-map-valid (fn [v]
-                                                 {:pre [(seqable? v)]}
-                                                 (into coll v))
-                                               (unparser (get tup i)))]
-                       ;; BUG missing code in malli
-                       (cond-> res
-                         (miu/-invalid? res) reduced)))
+        (reduce-kv (fn [coll i unparser] (miu/-map-valid #(into coll %) (unparser (get tup i))))
                    [] unparsers)
         :malli.core/invalid))))
 
@@ -210,20 +197,9 @@
   (let [unparsers (into {} unparsers)]
     (fn [m]
       (if (and (map? m) (= (count m) (count unparsers)))
-        (reduce-kv (fn [^{::t/- (t/U ann/Invalid (t/Vec t/Any))}
-                        coll
-                        tag
-                        ^{::t/- ann/Unparser}
-                        unparser]
-                     {:pre [(vector? coll)]}
+        (reduce-kv (fn [coll tag unparser]
                      (if-some [kv (find m tag)]
-                       (let [res (miu/-map-valid (fn [v]
-                                                   {:pre [(seqable? v)]}
-                                                   (into coll v))
-                                                 (unparser (val kv)))]
-                         ;; BUG missing code in malli
-                         (cond-> res
-                           (miu/-invalid? res) reduced))
+                       (miu/-map-valid #(into coll %) (unparser (val kv)))
                        :malli.core/invalid))
                    ;; `m` is in hash order, so have to iterate over `unparsers` to restore seq order:
                    [] unparsers)
