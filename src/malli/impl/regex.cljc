@@ -224,7 +224,9 @@
 (defn cat-transformer
   ([] (fn [_ _ coll* pos coll k] (k coll* pos coll)))
   ([?kr & ?krs]
-   (reduce (fn [acc ?kr]
+   (reduce (fn ^{::t/- ann/TransformerTramp}
+             [^{::t/- ann/ValidatorTramp} acc
+              ^{::t/- ann/?KR} ?kr]
              (let [r (entry->regex ?kr)]
                (fn [driver regs coll* pos coll k]
                  (acc driver regs coll* pos coll (fn [coll* pos coll] (r driver regs coll* pos coll k))))))

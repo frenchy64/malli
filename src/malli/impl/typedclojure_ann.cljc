@@ -219,7 +219,8 @@
 (t/ann ^:no-check re/catn-parser [?KR :* :-> ParserTramp])
 (t/ann re/cat-unparser [Unparser :* :-> Unparser])
 (t/ann re/catn-unparser ['[t/Any Unparser] :* :-> Unparser])
-(t/ann re/cat-transformer [:* :-> Unparser])
+(t/ann re/cat-transformer (t/IFn [:-> TransformerTramp]
+                                 [?KR :+ :-> TransformerTramp]))
 
 ;; malli.impl.util
 (t/defalias Error (t/HMap :mandatory {:path Path :in In :schema Schema :value t/Any}
