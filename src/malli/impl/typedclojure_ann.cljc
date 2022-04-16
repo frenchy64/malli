@@ -213,7 +213,12 @@
 (t/ann re/pure-parser [t/Any :-> ParserTramp])
 (t/ann re/pure-unparser [t/Any :-> '[]])
 (t/ann re/fmap-parser [[t/Any :-> t/Any] ParserTramp :-> ParserTramp])
-(t/ann re/entry->regex (t/All [x] [(?KR x) :-> x]))
+;; FIXME (I x (Not (Vec Any))) intersects to x because:
+;; - x <: (Not (Vec Any)) since
+;; - Any <: (Not (Vec Any))
+;; the call to nth in the body of re/entry->regex fails because the target
+;; is inferred as (I x (Vec Any)), since x is restricted by the vector? predicate.
+(t/ann ^:no-check re/entry->regex (t/All [x] [(?KR x) :-> x]))
 (t/ann re/cat-validator [(?KR ValidatorTramp) :* :-> ValidatorTramp])
 (t/ann re/cat-explainer [(?KR ExplainerTramp) :* :-> ExplainerTramp])
 (t/ann re/cat-parser [(?KR ParserTramp) :* :-> ParserTramp])
