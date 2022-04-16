@@ -179,7 +179,8 @@
 (t/defalias Transformer t/Any)
 (t/defalias Encoder [t/Any :-> t/Any])
 (t/defalias Decoder Encoder)
-(t/defalias ?KR (t/U '[t/Any ValidatorTramp] (t/I ValidatorTramp (t/Not (t/Vec t/Any)))))
+(t/defalias ?KR (t/TFn [[tramp :variance :covariant]]
+                       (t/U '[t/Any tramp] (t/I tramp (t/Not (t/Vec t/Any))))))
 (t/ann-protocol malli.impl.regex/Driver
                 succeed! [re/Driver :-> t/Any]
                 succeeded? [re/Driver :-> t/Bool]
@@ -212,15 +213,15 @@
 (t/ann re/pure-parser [t/Any :-> ParserTramp])
 (t/ann re/pure-unparser [t/Any :-> '[]])
 (t/ann re/fmap-parser [[t/Any :-> t/Any] ParserTramp :-> ParserTramp])
-(t/ann re/entry->regex [?KR :-> ValidatorTramp])
-(t/ann ^:no-check re/cat-validator [?KR :* :-> ValidatorTramp])
-(t/ann ^:no-check re/cat-explainer [?KR :* :-> ExplainerTramp])
-(t/ann ^:no-check re/cat-parser [?KR :* :-> ParserTramp])
-(t/ann ^:no-check re/catn-parser [?KR :* :-> ParserTramp])
+(t/ann re/entry->regex (t/All [x] [(?KR x) :-> x]))
+(t/ann re/cat-validator [(?KR ValidatorTramp) :* :-> ValidatorTramp])
+(t/ann re/cat-explainer [(?KR ExplainerTramp) :* :-> ExplainerTramp])
+(t/ann re/cat-parser [(?KR ParserTramp) :* :-> ParserTramp])
+(t/ann re/catn-parser [(?KR ParserTramp) :* :-> ParserTramp])
 (t/ann re/cat-unparser [Unparser :* :-> Unparser])
 (t/ann re/catn-unparser ['[t/Any Unparser] :* :-> Unparser])
 (t/ann re/cat-transformer (t/IFn [:-> TransformerTramp]
-                                 [?KR :+ :-> TransformerTramp]))
+                                 [(?KR TransformerTramp) :+ :-> TransformerTramp]))
 
 ;; malli.impl.util
 (t/defalias Error (t/HMap :mandatory {:path Path :in In :schema Schema :value t/Any}

@@ -225,8 +225,8 @@
   ([] (fn [_ _ coll* pos coll k] (k coll* pos coll)))
   ([?kr & ?krs]
    (reduce (fn ^{::t/- ann/TransformerTramp}
-             [^{::t/- ann/ValidatorTramp} acc
-              ^{::t/- ann/?KR} ?kr]
+             [^{::t/- ann/TransformerTramp} acc
+              ^{::t/- (ann/?KR ann/TransformerTramp)} ?kr]
              (let [r (entry->regex ?kr)]
                (fn [driver regs coll* pos coll k]
                  (acc driver regs coll* pos coll (fn [coll* pos coll] (r driver regs coll* pos coll k))))))
@@ -238,8 +238,7 @@
   (reduce (fn [acc ?kr]
             (let [r (entry->regex acc), r* (entry->regex ?kr)]
               (fn [driver regs pos coll k]
-                (^{::t/inst [t/Example t/Meta t/Inst]}
-                 park-validator! driver r* regs pos coll k) ; remember fallback
+                (park-validator! driver r* regs pos coll k) ; remember fallback
                 (park-validator! driver r regs pos coll k))))
           ?krs))
 
