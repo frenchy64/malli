@@ -111,12 +111,9 @@
 (t/ann ^:no-check m/-ast? [t/Any :-> t/Bool :filters {:then (is m/AST 0)}])
 (t/ann ^:no-check m/-transformer? [t/Any :-> t/Bool :filters {:then (is m/Transformer 0)}])
 
-(t/ann m/parser (t/IFn [?Schema :-> Parser]
-                       [?Schema Options :-> Parser]))
-(t/ann m/unparser (t/IFn [?Schema :-> Unparser]
-                         [?Schema Options :-> Unparser]))
-(t/ann m/-fail! (t/IFn [t/Any :-> t/Nothing]
-                       [t/Any t/Any :-> t/Nothing]))
+(t/ann m/parser [?Schema Options :? :-> Parser])
+(t/ann m/unparser [?Schema Options :? :-> Unparser])
+(t/ann m/-fail! [t/Any t/Any :? :-> t/Nothing])
 (t/ann m/-safe-pred [[t/Any :-> t/Any] :-> [t/Any :-> t/Bool]])
 (t/ann m/-guard [[t/Any :-> t/Any] [t/Any :-> t/Any] :-> (t/Nilable [t/Any :-> t/Any])])
 (t/ann m/-deprecated! [t/Str :-> nil])
@@ -127,19 +124,18 @@
                                  [t/Any t/Any (t/Seqable t/Any) (t/Nilable t/Int) (t/Nilable t/Int) :-> (t/Nilable t/Any)]))
 (t/ann m/-schema-schema [(t/HMap :optional {:id t/Any :raw t/Any}) :-> Schema])
 (t/ann m/-pointer [t/Any Schema Options :-> Schema])
-(t/ann m/-ref-schema (t/IFn [:-> Schema]
-                            [(t/Nilable (t/HMap :optional {:lazy t/Bool
-                                                           :type-properties (t/Nilable (t/Map t/Any t/Any))}))
-                             :-> Schema]))
+(t/ann m/-ref-schema [(t/Nilable (t/HMap :optional {:lazy t/Bool
+                                                    :type-properties (t/Nilable (t/Map t/Any t/Any))}))
+                      :? :-> Schema])
 (t/ann m/-reference? [?Schema :-> t/Bool :filters {:then (is (t/U t/Kw t/Str) 0)
                                                    :else (! t/Str 0)}])
 (t/ann m/-lazy [Schema Options :-> Schema])
 (t/ann m/-boolean-fn [(t/U t/Bool [t/Any :-> t/Bool] (t/Not clojure.lang.IFn)) :-> [t/Any :-> t/Bool]])
 (t/ann ^:no-check
-       m/-comp (t/IFn [:-> [t/Any * :-> t/Any]]
-                      [[t/Any * :-> t/Any] :-> [t/Any * :-> t/Any]]
-                      [[t/Any :-> t/Any] [t/Any * :-> t/Any] :-> [t/Any * :-> t/Any]]
-                      [[t/Any :-> t/Any] [t/Any :-> t/Any] [t/Any * :-> t/Any] :-> [t/Any * :-> t/Any]]))
+       m/-comp (t/IFn [:-> [t/Any :* :-> t/Any]]
+                      [[t/Any :* :-> t/Any] :-> [t/Any :* :-> t/Any]]
+                      [[t/Any :-> t/Any] [t/Any :* :-> t/Any] :-> [t/Any :* :-> t/Any]]
+                      [[t/Any :-> t/Any] [t/Any :-> t/Any] [t/Any :* :-> t/Any] :-> [t/Any :* :-> t/Any]]))
 ;;TODO
 (t/ann ^:no-check m/-update [(t/Nilable (t/Map t/Any t/Any)) t/Any t/Any :-> (t/Map t/Any t/Any)])
 ;;TODO occurrence typing hook. make = an path element, probably need to make literal values paths elements too.
@@ -162,8 +158,7 @@
 (t/ann m/-simple-schema [(t/Rec [x] (t/U nil (t/Map t/Any t/Any) (t/I clojure.lang.Fn [Properties Children :-> x])))
                          :-> Schema])
 (t/ann m/default-registry Registry)
-(t/ann m/-registry (t/IFn [:-> Registry]
-                          [Options :-> Registry]))
+(t/ann m/-registry [Options :? :-> Registry])
 
 ;; malli.impl.regex
 (t/defalias Explainer t/Any)
@@ -223,7 +218,8 @@
 (t/ann ^:no-check re/cat-parser [?KR :* :-> ParserTramp])
 (t/ann ^:no-check re/catn-parser [?KR :* :-> ParserTramp])
 (t/ann re/cat-unparser [Unparser :* :-> Unparser])
-(t/ann re/catn-unparser [Unparser :* :-> Unparser])
+(t/ann re/catn-unparser ['[t/Any Unparser] :* :-> Unparser])
+(t/ann re/cat-transformer [:* :-> Unparser])
 
 ;; malli.impl.util
 (t/defalias Error (t/HMap :mandatory {:path Path :in In :schema Schema :value t/Any}
@@ -233,8 +229,7 @@
                         (t/IFn [(t/Seqable x) :-> (t/Vec x)]
                                [[x :-> y] (t/Seqable y) :-> (t/Vec y)])))
 (t/ann miu/+max-size+ t/Int)
-(t/ann miu/-error (t/IFn [Path In Schema t/Any :-> Error]
-                         [Path In Schema t/Any t/Any :-> Error]))
+(t/ann miu/-error [Path In Schema t/Any t/Any :? :-> Error])
 (t/ann miu/-invalid? (t/Pred Invalid))
 (t/ann miu/-map-valid (t/All [x y] [[x :-> y] (t/U x Invalid) :-> (t/U y Invalid)]))
 (t/ann miu/-reduce-kv-valid (t/All [a k v]
