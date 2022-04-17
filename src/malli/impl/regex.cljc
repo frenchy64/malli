@@ -148,9 +148,8 @@
 (defn cat-validator
   ([] (fn [_ _ pos coll k] (k pos coll)))
   ([?kr & ?krs]
-   (reduce (fn ^{::t/- ann/ValidatorTramp}
-             [^{::t/- ann/ValidatorTramp} acc
-              ^{::t/- (ann/?KR ann/ValidatorTramp)} ?kr]
+   (reduce (fn ^{::t/- [ann/ValidatorTramp (ann/?KR ann/ValidatorTramp) :-> ann/ValidatorTramp]} _
+             [acc ?kr]
              (let [r* (entry->regex ?kr)]
                (fn [driver regs pos coll k]
                  (acc driver regs pos coll (fn [pos coll] (r* driver regs pos coll k))))))
@@ -159,9 +158,8 @@
 (defn cat-explainer
   ([] (fn [_ _ pos coll k] (k pos coll)))
   ([?kr & ?krs]
-   (reduce (fn ^{::t/- ann/ExplainerTramp}
-             [^{::t/- ann/ExplainerTramp} acc
-              ^{::t/- (ann/?KR ann/ExplainerTramp)} ?kr]
+   (reduce (fn ^{::t/- [ann/ExplainerTramp (ann/?KR ann/ExplainerTramp) :-> ann/ExplainerTramp]} _
+             [acc ?kr]
              (let [r* (entry->regex ?kr)]
                (fn [driver regs pos coll k]
                  (acc driver regs pos coll (fn [pos coll] (r* driver regs pos coll k))))))
@@ -170,13 +168,12 @@
 (defn cat-parser
   ([] (fn [_ _ pos coll k] (k [] pos coll)))
   ([r & rs]
-   (let [sp (reduce (fn ^{::t/- ann/EncoderTramp}
-                      [^{::t/- ann/EncoderTramp} acc
-                       ^{::t/- ann/ParserTramp} r]
+   (let [sp (reduce (fn ^{::t/- [ann/EncoderTramp ann/ParserTramp :-> ann/EncoderTramp]} _
+                      [acc r]
                       (fn [driver regs coll* pos coll k]
                         (r driver regs pos coll
                            (fn [v pos coll] (acc driver regs (conj coll* v) pos coll k)))))
-                    (fn ^{::t/- ann/EncoderTramp} _f
+                    (fn ^{::t/- ann/EncoderTramp} _
                       [_ _ coll* pos coll k] (k coll* pos coll))
                     (reverse (cons r rs)))]
      (fn [driver regs pos coll k] (sp driver regs [] pos coll k)))))
@@ -184,9 +181,8 @@
 (defn catn-parser
   ([] (fn [_ _ pos coll k] (k {} pos coll)))
   ([kr & krs]
-   (let [sp (reduce (fn ^{::t/- ann/EncoderTramp}
-                      [^{::t/- ann/EncoderTramp} acc
-                       ^{::t/- (ann/KR ann/ParserTramp)} [tag r]]
+   (let [sp (reduce (fn ^{::t/- [ann/EncoderTramp (ann/KR ann/ParserTramp) :-> ann/EncoderTramp]} _
+                      [acc [tag r]]
                       (fn [driver regs m pos coll k]
                         {:pre [(map? m)]}
                         (r driver regs pos coll
@@ -235,9 +231,8 @@
 (defn cat-transformer
   ([] (fn [_ _ coll* pos coll k] (k coll* pos coll)))
   ([?kr & ?krs]
-   (reduce (fn ^{::t/- ann/TransformerTramp}
-             [^{::t/- ann/TransformerTramp} acc
-              ^{::t/- (ann/?KR ann/TransformerTramp)} ?kr]
+   (reduce (fn ^{::t/- [ann/TransformerTramp (ann/?KR ann/TransformerTramp) :-> ann/TransformerTramp]} _
+             [acc ?kr]
              (let [r (entry->regex ?kr)]
                (fn [driver regs coll* pos coll k]
                  (acc driver regs coll* pos coll (fn [coll* pos coll] (r driver regs coll* pos coll k))))))
@@ -246,8 +241,7 @@
 ;;;; ## Alternation
 
 (defn alt-validator [& ?krs]
-  (reduce (fn ^{::t/- [(ann/?KR ann/ValidatorTramp) (ann/?KR ann/ValidatorTramp)
-                       :-> ann/ValidatorTramp]} _f
+  (reduce (fn ^{::t/- [(ann/?KR ann/ValidatorTramp) (ann/?KR ann/ValidatorTramp) :-> ann/ValidatorTramp]} _
             [acc ?kr]
             (let [r (entry->regex acc), r* (entry->regex ?kr)]
               (fn [driver regs pos coll k]
