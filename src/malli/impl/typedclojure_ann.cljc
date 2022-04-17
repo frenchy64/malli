@@ -212,6 +212,13 @@
                  stack :- Stack
                  cache :- Cache
                  result :- (t/Nilable (t/Coll t/Any))])
+(t/ann-datatype malli.impl.regex.ExplanationDriver
+                [success :- t/Bool
+                 stack :- Stack
+                 cache :- Cache
+                 in :- In
+                 errors-max-pos :- t/Int
+                 errors :- Errors])
 
 (t/ann re/item-validator [Validator :-> ValidatorTramp])
 (t/ann re/item-explainer [Path Schema Explainer :-> ExplainerTramp])

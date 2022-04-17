@@ -581,6 +581,8 @@
                        (or (succeeded? driver) (recur)))
                      false))))))))
 
+  ) ;;tc-ignore
+
 ;;;; # Explainer
 
 (deftype ^:private ExplanationDriver
@@ -606,8 +608,6 @@
                                (set! errors errors*))
       (= pos errors-max-pos) (set! errors (into errors errors*))))
   (latest-errors [_] errors))
-
-  ) ;;tc-ignore
 
 (defn explainer [schema path p]
   (let [p (cat-explainer p (end-explainer schema path))]
