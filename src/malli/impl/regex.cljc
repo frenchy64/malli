@@ -187,7 +187,7 @@
                         {:pre [(map? m)]}
                         (r driver regs pos coll
                            (fn [v pos coll] (acc driver regs (assoc m tag v) pos coll k)))))
-                    (fn ^{::t/- ann/EncoderTramp} _f
+                    (fn ^{::t/- ann/EncoderTramp} _
                       [_ _ m pos coll k] (k m pos coll))
                     (reverse (cons kr krs)))]
      (fn [driver regs pos coll k] (sp driver regs {} pos coll k)))))
@@ -250,7 +250,8 @@
           ?krs))
 
 (defn alt-explainer [& ?krs]
-  (reduce (fn [acc ?kr]
+  (reduce (fn ^{::t/- [(ann/?KR ann/ExplainerTramp) (ann/?KR ann/ExplainerTramp) :-> ann/ExplainerTramp]} _
+            [acc ?kr]
             (let [r (entry->regex acc), r* (entry->regex ?kr)]
               (fn [driver regs pos coll k]
                 (park-explainer! driver r* regs pos coll k) ; remember fallback
@@ -258,7 +259,8 @@
           ?krs))
 
 (defn alt-parser [& rs]
-  (reduce (fn [r r*]
+  (reduce (fn ^{::t/- [ann/ParserTramp ann/ParserTramp :-> ann/ParserTramp]} _
+            [r r*]
             (fn [driver regs pos coll k]
               (park-validator! driver r* regs pos coll k) ; remember fallback
               (park-validator! driver r regs pos coll k)))
