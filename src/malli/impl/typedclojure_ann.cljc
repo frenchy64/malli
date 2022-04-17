@@ -236,6 +236,9 @@
 (t/defalias Error (t/HMap :mandatory {:path Path :in In :schema Schema :value t/Any}
                           :optional {:type t/Any}))
 (t/defalias Invalid ':malli.core/invalid)
+(t/defalias Tagged (t/TFn [[k :variance :covariant]
+                           [v :variance :covariant]]
+                          (t/AMapEntry k v)))
 (t/ann miu/-vmap (t/All [x y]
                         (t/IFn [(t/Seqable x) :-> (t/Vec x)]
                                [[x :-> y] (t/Seqable y) :-> (t/Vec y)])))
@@ -245,6 +248,8 @@
 (t/ann miu/-map-valid (t/All [x y] [[x :-> y] (t/U x Invalid) :-> (t/U y Invalid)]))
 (t/ann miu/-reduce-kv-valid (t/All [a k v]
                                    [[a k v :-> (t/U (t/Reduced (t/U a Invalid)) a Invalid)] a (t/Option (t/Associative k v)) :-> (t/U a Invalid)]))
+(t/ann miu/-tagged (t/All [k v] [k v :-> (Tagged k v)]))
+(t/ann miu/-tagged? (t/Pred (Tagged t/Any t/Any)))
 
 ;; malli.registry
 (t/ann mr/mode t/Str)
