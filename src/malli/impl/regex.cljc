@@ -134,7 +134,7 @@
 (defn pure-unparser [_] [])
 
 ;;;; # Combinators
-
+(t/tc-ignore
 ;;;; ## Functor
 
 (defn fmap-parser [f p]
@@ -151,9 +151,13 @@
    (reduce (fn ^{::t/- [ann/ValidatorTramp (ann/?KR ann/ValidatorTramp) :-> ann/ValidatorTramp]} _
              [acc ?kr]
              (let [r* (entry->regex ?kr)]
+               (assert (not (vector? r*))) ;;FIXME
                (fn [driver regs pos coll k]
                  (acc driver regs pos coll (fn [pos coll] (r* driver regs pos coll k))))))
-           (entry->regex ?kr) ?krs)))
+           (doto (entry->regex ?kr)
+             ;;FIXME
+             (-> vector? not assert))
+           ?krs)))
 
 (defn cat-explainer
   ([] (fn [_ _ pos coll k] (k pos coll)))
@@ -168,12 +172,12 @@
 (defn cat-parser
   ([] (fn [_ _ pos coll k] (k [] pos coll)))
   ([r & rs]
-   (let [sp (reduce (fn ^{::t/- [ann/EncoderTramp ann/ParserTramp :-> ann/EncoderTramp]} _
+   (let [sp (reduce (fn ^{::t/- [ann/ParserTramp ann/ParserTramp :-> ann/ParserTramp]} _
                       [acc r]
                       (fn [driver regs coll* pos coll k]
                         (r driver regs pos coll
                            (fn [v pos coll] (acc driver regs (conj coll* v) pos coll k)))))
-                    (fn ^{::t/- ann/EncoderTramp} _
+                    (fn ^{::t/- ann/ParserTramp} _
                       [_ _ coll* pos coll k] (k coll* pos coll))
                     (reverse (cons r rs)))]
      (fn [driver regs pos coll k] (sp driver regs [] pos coll k)))))
@@ -638,6 +642,7 @@
                 :malli.core/invalid))))
         :malli.core/invalid))))
 
+  ) ;;tc-ignore
 ;;;; # Transformer
 
 (defn transformer [p]
@@ -645,6 +650,7 @@
     (fn [coll]
       (if (sequential? coll)
         (let [driver (ParseDriver. false (make-stack) (make-cache) nil)]
+          (assert (coll? coll))
           (p driver () [] 0 coll (fn [coll* _ _] (succeed-with! driver coll*)))
           (if (succeeded? driver)
             (success-result driver)
