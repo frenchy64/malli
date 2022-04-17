@@ -540,6 +540,7 @@
     (when-not (ensure-cached! cache validator pos regs)
       (noncaching-park-validator! self validator regs pos coll k))))
 
+(t/tc-ignore
 (deftype ^:private ParseDriver
          #?(:clj  [^:unsynchronized-mutable ^boolean success, ^ArrayDeque stack, cache
                    ^:unsynchronized-mutable result]
@@ -563,7 +564,9 @@
     (when-not (ensure-cached! cache transformer pos regs)
       (noncaching-park-transformer! driver transformer regs coll* pos coll k)))
   (succeed-with! [self v] (succeed! self) (set! result v))
-  (success-result [_] result))
+  (success-result [_] result)))
+
+  ) ;;tc-ignore
 
 ;;;; # Validator
 
@@ -572,6 +575,7 @@
     (fn [coll]
       (and (sequential? coll)
            (let [driver (CheckDriver. false (make-stack) (make-cache))]
+             (assert (coll? coll))
              (p driver () 0 coll (fn [_ _] (succeed! driver)))
              (or (succeeded? driver)
                  (loop []
@@ -581,10 +585,9 @@
                        (or (succeeded? driver) (recur)))
                      false))))))))
 
-  ) ;;tc-ignore
-
 ;;;; # Explainer
 
+(t/tc-ignore
 (deftype ^:private ExplanationDriver
          #?(:clj  [^:unsynchronized-mutable ^boolean success, ^ArrayDeque stack, cache
                    in, ^:unsynchronized-mutable errors-max-pos, ^:unsynchronized-mutable errors]
@@ -608,6 +611,7 @@
                                (set! errors errors*))
       (= pos errors-max-pos) (set! errors (into errors errors*))))
   (latest-errors [_] errors))
+)
 
 (defn explainer [schema path p]
   (let [p (cat-explainer p (end-explainer schema path))]
