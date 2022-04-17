@@ -230,7 +230,7 @@
 (t/ann re/cat-transformer [(?KR TransformerTramp) :* :-> TransformerTramp])
 (t/ann re/alt-validator [(?KR ValidatorTramp) :+ :-> ValidatorTramp])
 (t/ann re/alt-explainer [(?KR ExplainerTramp) :+ :-> ExplainerTramp])
-(t/ann re/alt-parser [ParserTramp :+ :-> ParserTramp])
+(t/ann re/alt-parser [ValidatorTramp :+ :-> ValidatorTramp])
 
 ;; malli.impl.util
 (t/defalias Error (t/HMap :mandatory {:path Path :in In :schema Schema :value t/Any}

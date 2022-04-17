@@ -259,7 +259,7 @@
           ?krs))
 
 (defn alt-parser [& rs]
-  (reduce (fn ^{::t/- [ann/ParserTramp ann/ParserTramp :-> ann/ParserTramp]} _
+  (reduce (fn ^{::t/- [ann/ValidatorTramp ann/ValidatorTramp :-> ann/ValidatorTramp]} _
             [r r*]
             (fn [driver regs pos coll k]
               (park-validator! driver r* regs pos coll k) ; remember fallback
@@ -267,7 +267,8 @@
           rs))
 
 (defn altn-parser [kr & krs]
-  (reduce (fn [r [tag r*]]
+  (reduce (fn ^{::t/- [ann/ParserTramp '[t/Any ann/ParserTramp] :-> ann/ParserTramp]} _
+            [r [tag r*]]
             (let [r* (fmap-parser (fn [v] (miu/-tagged tag v)) r*)]
               (fn [driver regs pos coll k]
                 (park-validator! driver r* regs pos coll k) ; remember fallback
@@ -278,7 +279,7 @@
 
 (defn alt-unparser [& unparsers]
   (fn [x]
-    (reduce (fn [_ unparse] (miu/-map-valid reduced (unparse x)))
+    (reduce (fn [_, ^{::t/- ann/Unparser} unparse] (miu/-map-valid #(reduced %) (unparse x)))
             :malli.core/invalid unparsers)))
 
 (defn altn-unparser [& unparsers]
