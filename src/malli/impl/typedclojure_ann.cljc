@@ -165,29 +165,31 @@
 (t/defalias SchemaExplainer [t/Any In (t/Coll t/Any) :-> (t/Coll Error)])
 (t/defalias Pos t/Int)
 (t/defalias Regs t/Any)
-(t/defalias ValidatorK [t/Int (t/Seqable t/Any) :-> t/Any])
-(t/defalias ValidatorTramp [t/Any t/Any t/Int (t/Seqable t/Any) ValidatorK :-> t/Any])
+(t/defalias ValidatorK [t/Int (t/Coll t/Any) :-> t/Any])
+(t/defalias ValidatorTramp [re/IValidationDriver Regs Pos (t/Coll t/Any) ValidatorK :-> t/Any])
 (t/defalias ExplainerK ValidatorK)
 (t/defalias ExplainerTramp [re/IExplanationDriver t/Any t/Int (t/Coll t/Any) ExplainerK :-> t/Any])
-(t/defalias ParserK [t/Any Pos (t/Seqable t/Any) :-> t/Any])
-(t/defalias ParserTramp [t/Any t/Any Pos (t/Coll t/Any) ParserK :-> t/Any])
-(t/defalias EncoderK [(t/Coll t/Any) Pos (t/Seqable t/Any) :-> t/Any])
-(t/defalias EncoderTramp [t/Any t/Any (t/Coll t/Any) Pos (t/Coll t/Any) EncoderK :-> t/Any])
+(t/defalias ParserK [t/Any Pos (t/Coll t/Any) :-> t/Any])
+(t/defalias ParserTramp [re/IParseDriver Regs Pos (t/Coll t/Any) ParserK :-> t/Any])
+(t/defalias EncoderK [(t/Coll t/Any) Pos (t/Coll t/Any) :-> t/Any])
+(t/defalias EncoderTramp [re/IParseDriver Regs (t/Coll t/Any) Pos (t/Coll t/Any) EncoderK :-> t/Any])
 (t/defalias TransformerK EncoderK)
 (t/defalias TransformerTramp EncoderTramp)
 (t/defalias In (t/Vec Pos))
 (t/defalias Transformer t/Any)
 (t/defalias Encoder [t/Any :-> t/Any])
 (t/defalias Decoder Encoder)
+(t/defalias KR (t/TFn [[tramp :variance :covariant]]
+                      '[t/Any tramp]))
 (t/defalias ?KR (t/TFn [[tramp :variance :covariant]]
-                       (t/U '[t/Any tramp] (t/I tramp (t/Not (t/Vec t/Any))))))
+                       (t/U (KR tramp) (t/I tramp (t/Not (t/Vec t/Any))))))
 (t/ann-protocol malli.impl.regex/Driver
                 succeed! [re/Driver :-> t/Any]
                 succeeded? [re/Driver :-> t/Bool]
                 pop-thunk! [re/Driver :-> (t/Nilable [:-> t/Any])])
 (t/ann-protocol malli.impl.regex/IValidationDriver
                 noncaching-park-validator! [re/IValidationDriver Validator Regs Pos (t/Seqable t/Any) ValidatorK :-> t/Any]
-                park-validator! [re/IValidationDriver Validator Regs Pos (t/Seqable t/Any) ValidatorK :-> t/Any])
+                park-validator! [re/IValidationDriver ValidatorTramp Regs Pos (t/Coll t/Any) ValidatorK :-> t/Any])
 (t/ann-protocol malli.impl.regex/IExplanationDriver
                 noncaching-park-explainer! [re/IExplanationDriver Explainer Regs Pos (t/Seqable t/Any) ExplainerK :-> t/Any]
                 park-explainer! [re/IExplanationDriver Explainer Regs Pos (t/Seqable t/Any) ExplainerK :-> t/Any]
@@ -221,11 +223,12 @@
 (t/ann ^:no-check re/entry->regex (t/All [x] [(?KR x) :-> x]))
 (t/ann re/cat-validator [(?KR ValidatorTramp) :* :-> ValidatorTramp])
 (t/ann re/cat-explainer [(?KR ExplainerTramp) :* :-> ExplainerTramp])
-(t/ann re/cat-parser [(?KR ParserTramp) :* :-> ParserTramp])
-(t/ann re/catn-parser [(?KR ParserTramp) :* :-> ParserTramp])
+(t/ann re/cat-parser [ParserTramp :* :-> ParserTramp])
+(t/ann re/catn-parser [(KR ParserTramp) :* :-> ParserTramp])
 (t/ann re/cat-unparser [Unparser :* :-> Unparser])
 (t/ann re/catn-unparser ['[t/Any Unparser] :* :-> Unparser])
 (t/ann re/cat-transformer [(?KR TransformerTramp) :* :-> TransformerTramp])
+(t/ann re/alt-validator [(?KR ValidatorTramp) :+ :-> ValidatorTramp])
 
 ;; malli.impl.util
 (t/defalias Error (t/HMap :mandatory {:path Path :in In :schema Schema :value t/Any}
