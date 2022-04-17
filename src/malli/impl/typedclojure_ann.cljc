@@ -161,7 +161,7 @@
 (t/ann m/-registry [Options :? :-> Registry])
 
 ;; malli.impl.regex
-(t/defalias Explainer [t/Any In (t/Coll Error) :-> (t/Coll Error)])
+(t/defalias Explainer [t/Any In Errors :-> Errors])
 (t/defalias Pos t/Int)
 (t/defalias Regs t/Any)
 (t/defalias ValidatorK [t/Int (t/Coll t/Any) :-> t/Any])
@@ -192,7 +192,8 @@
                 noncaching-park-explainer! [re/IExplanationDriver ExplainerTramp Regs Pos (t/Coll t/Any) ExplainerK :-> t/Any]
                 park-explainer! [re/IExplanationDriver ExplainerTramp Regs Pos (t/Coll t/Any) ExplainerK :-> t/Any]
                 value-path [re/IExplanationDriver Pos :-> In]
-                fail! [re/IExplanationDriver Pos (t/Seqable Error) :-> t/Any])
+                fail! [re/IExplanationDriver Pos Errors :-> t/Any]
+                latest-errors [re/IExplanationDriver :-> Errors])
 (t/ann-protocol malli.impl.regex/IParseDriver
                 noncaching-park-transformer! [re/IParseDriver ParserTramp Regs (t/Seqable t/Any) Pos (t/Seqable t/Any) ParserK :-> t/Any]
                 park-transformer! [re/IParseDriver ParserTramp Regs Pos (t/Seqable t/Any) ParserK :-> t/Any]
@@ -249,13 +250,14 @@
 (t/ann re/empty-stack? [Stack :-> t/Bool])
 (t/ann re/make-cache [:-> Cache])
 (t/ann re/validator [(?KR ValidatorTramp) :-> Validator])
-(t/ann re/explainer [(?KR ExplainerTramp) :-> Explainer])
+(t/ann re/explainer [Schema Path (?KR ExplainerTramp) :-> Explainer])
 (t/ann re/parser [(?KR ParserTramp) :-> Parser])
 (t/ann re/transformer [(?KR TransformerTramp) :-> Transformer])
 
 ;; malli.impl.util
 (t/defalias Error (t/HMap :mandatory {:path Path :in In :schema Schema :value t/Any}
                           :optional {:type t/Any}))
+(t/defalias Errors (t/Vec Error))
 (t/defalias Invalid ':malli.core/invalid)
 (t/defalias Tagged (t/TFn [[k :variance :covariant]
                            [v :variance :covariant]]

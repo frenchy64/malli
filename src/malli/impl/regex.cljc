@@ -607,12 +607,15 @@
       (= pos errors-max-pos) (set! errors (into errors errors*))))
   (latest-errors [_] errors))
 
+  ) ;;tc-ignore
+
 (defn explainer [schema path p]
   (let [p (cat-explainer p (end-explainer schema path))]
     (fn [coll in errors]
       (if (sequential? coll)
         (let [pos 0
               driver (ExplanationDriver. false (make-stack) (make-cache) in pos [])]
+          (assert (coll? coll))
           (p driver () pos coll (fn [_ _] (succeed! driver)))
           (if (succeeded? driver)
             errors
@@ -623,8 +626,6 @@
                   (if (succeeded? driver) errors (recur)))
                 (into errors (latest-errors driver))))))
         (conj errors (miu/-error path in schema coll :malli.core/invalid-type))))))
-
-  ) ;;tc-ignore
 
 ;;;; # Parser
 
