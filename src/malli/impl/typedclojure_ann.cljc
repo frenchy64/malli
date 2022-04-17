@@ -192,7 +192,7 @@
                 noncaching-park-explainer! [re/IExplanationDriver ExplainerTramp Regs Pos (t/Coll t/Any) ExplainerK :-> t/Any]
                 park-explainer! [re/IExplanationDriver ExplainerTramp Regs Pos (t/Coll t/Any) ExplainerK :-> t/Any]
                 value-path [re/IExplanationDriver Pos :-> In]
-                fail! [re/IExplanationDriver Pos Errors :-> t/Any]
+                fail! [re/IExplanationDriver Pos (t/Coll Error) :-> t/Any]
                 latest-errors [re/IExplanationDriver :-> Errors])
 (t/ann-protocol malli.impl.regex/IParseDriver
                 noncaching-park-transformer! [re/IParseDriver ParserTramp Regs (t/Seqable t/Any) Pos (t/Seqable t/Any) ParserK :-> t/Any]
