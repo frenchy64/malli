@@ -624,6 +624,8 @@
                 (into errors (latest-errors driver))))))
         (conj errors (miu/-error path in schema coll :malli.core/invalid-type))))))
 
+  ) ;;tc-ignore
+
 ;;;; # Parser
 
 (defn parser [p]
@@ -631,6 +633,7 @@
     (fn [coll]
       (if (sequential? coll)
         (let [driver (ParseDriver. false (make-stack) (make-cache) nil)]
+          (assert (coll? coll))
           (p driver () 0 coll (fn [v _ _] (succeed-with! driver v)))
           (if (succeeded? driver)
             (first (success-result driver))
@@ -641,8 +644,6 @@
                   (if (succeeded? driver) (first (success-result driver)) (recur)))
                 :malli.core/invalid))))
         :malli.core/invalid))))
-
-  ) ;;tc-ignore
 ;;;; # Transformer
 
 (defn transformer [p]

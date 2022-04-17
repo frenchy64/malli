@@ -197,7 +197,7 @@
                 noncaching-park-transformer! [re/IParseDriver ParserTramp Regs (t/Seqable t/Any) Pos (t/Seqable t/Any) ParserK :-> t/Any]
                 park-transformer! [re/IParseDriver ParserTramp Regs Pos (t/Seqable t/Any) ParserK :-> t/Any]
                 succeed-with! [re/IParseDriver t/Any :-> t/Any]
-                success-result [re/IParseDriver :-> t/Any]) ;;returns coll sometimes? polymorphic?
+                success-result [re/IParseDriver :-> (t/Nilable (t/Coll t/Any))])
 
 (t/defalias Stack #?(:clj java.util.ArrayDeque
                      ;;TODO
@@ -210,7 +210,7 @@
                 [success :- t/Bool
                  stack :- Stack
                  cache :- Cache
-                 result :- t/Any])
+                 result :- (t/Nilable (t/Coll t/Any))])
 
 (t/ann re/item-validator [Validator :-> ValidatorTramp])
 (t/ann re/item-explainer [Path Schema Explainer :-> ExplainerTramp])
