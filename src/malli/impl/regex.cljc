@@ -587,7 +587,6 @@
 
 ;;;; # Explainer
 
-(t/tc-ignore
 (deftype ^:private ExplanationDriver
          #?(:clj  [^:unsynchronized-mutable ^boolean success, ^ArrayDeque stack, cache
                    in, ^:unsynchronized-mutable errors-max-pos, ^:unsynchronized-mutable errors]
@@ -611,7 +610,6 @@
                                (set! errors errors*))
       (= pos errors-max-pos) (set! errors (into errors errors*))))
   (latest-errors [_] errors))
-)
 
 (defn explainer [schema path p]
   (let [p (cat-explainer p (end-explainer schema path))]
@@ -649,6 +647,7 @@
                   (if (succeeded? driver) (first (success-result driver)) (recur)))
                 :malli.core/invalid))))
         :malli.core/invalid))))
+
 ;;;; # Transformer
 
 (defn transformer [p]
