@@ -1,9 +1,10 @@
 (ns malli.impl.typedclojure-ann
   (:require [typed.clojure :as t]
-            [malli.core #?(:clj :as-alias :cljs :as) m]
-            [malli.impl.regex #?(:clj :as-alias :cljs :as) re]
-            [malli.impl.util #?(:clj :as-alias :cljs :as) miu]
-            [malli.registry #?(:clj :as-alias :cljs :as) mr]))
+            ;; load these namespaces for protocols
+            [malli.core :as m]
+            [malli.impl.regex :as re]
+            [malli.impl.util :as miu]
+            [malli.registry :as mr]))
 ;;TODO support namespace aliases in ann-protocol first arg
 
 (t/defalias ?Schema t/Any)
@@ -199,6 +200,8 @@
                 park-transformer! [re/IParseDriver ParserTramp Regs Pos (t/Seqable t/Any) ParserK :-> t/Any]
                 succeed-with! [re/IParseDriver t/Any :-> t/Any]
                 success-result [re/IParseDriver :-> (t/Nilable (t/Coll t/Any))])
+(t/ann-protocol malli.impl.regex/ICache
+                ensure-cached! [re/ICache t/Any Pos Regs :-> t/Any])
 
 (t/defalias Stack #?(:clj java.util.ArrayDeque
                      ;;TODO

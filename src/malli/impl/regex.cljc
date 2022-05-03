@@ -37,9 +37,7 @@
   (:require [malli.impl.util :as miu]
             #?(:cljs malli.impl.regex) ;; big hammer to work around the lack of :as-alias in cljs
             #?@(:clj [[typed.clojure :as-alias t]
-                      [malli.impl.typedclojure-ann :as
-                       #_:as-alias ;; kaocha doesn't like this
-                       ann]]))
+                      [malli.impl.typedclojure-ann :as-alias ann]]))
   #?(:clj (:import [java.util ArrayDeque])))
 
 ;;;; # Driver Protocols
@@ -134,7 +132,7 @@
 (defn pure-unparser [_] [])
 
 ;;;; # Combinators
-(t/tc-ignore
+^::t/ignore (do
 ;;;; ## Functor
 
 (defn fmap-parser [f p]
@@ -540,7 +538,7 @@
     (when-not (ensure-cached! cache validator pos regs)
       (noncaching-park-validator! self validator regs pos coll k))))
 
-(t/tc-ignore
+^::t/ignore (do
 (deftype ^:private ParseDriver
          #?(:clj  [^:unsynchronized-mutable ^boolean success, ^ArrayDeque stack, cache
                    ^:unsynchronized-mutable result]
@@ -595,10 +593,14 @@
   Driver
   (succeed! [_] (set! success (boolean true)))
   (succeeded? [_] success)
-  (pop-thunk! [_] (when-not (empty-stack? stack) (.pop stack)))
+  (pop-thunk! [_] (when-not (empty-stack? stack)
+                    ^::t/ignore ^{::t/unsafe-cast [:-> t/Any]}
+                    (.pop stack)))
 
   IExplanationDriver
-  (noncaching-park-explainer! [self validator regs pos coll k] (.push stack #(validator self regs pos coll k)))
+  (noncaching-park-explainer! [self validator regs pos coll k] (let [f #(validator self regs pos coll k)]
+                                                                 ^::t/ignore
+                                                                 (.push stack f)))
   (park-explainer! [self validator regs pos coll k]
     (when-not (ensure-cached! cache validator pos regs)
       (noncaching-park-explainer! self validator regs pos coll k)))
