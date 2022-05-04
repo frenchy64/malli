@@ -60,7 +60,7 @@
                              "-Dclojure.compiler.direct-linking=true"]}
            :clojure-10 {:extra-deps {org.clojure/clojure {:mvn/version "1.10.3"}}}
            :clojure-11 {}}
- :deps {org.clojure/clojure {:mvn/version "1.11.0"}
+ :deps {org.clojure/clojure {:mvn/version "1.11.1"}
         borkdude/dynaload {:mvn/version "0.2.2"}
         borkdude/edamame {:mvn/version "0.0.19"}
         org.clojure/test.check {:mvn/version "1.1.1"}
