@@ -1,8 +1,7 @@
 (ns malli.instrument.cljs
   (:require [cljs.analyzer.api :as ana-api]
             [clojure.walk :as walk]
-            [malli.core :as m]
-            [malli.generator :as mg]))
+            [malli.core :as m]))
 
 ;;
 ;; Collect schemas - register them into the known malli.core/-function-schemas[-cljs]* atom based on their metadata.
@@ -44,25 +43,41 @@
 
 (defn -sequential [x] (cond (set? x) x (sequential? x) x :else [x]))
 
+(defn -collect!*
+  [env {:keys [ns]}]
+  (reduce (fn [acc [var-name var-map]] (let [v (-collect! env var-name var-map)] (cond-> acc v (conj v))))
+    #{}
+    (mapcat (fn [n]
+              (let [ns-sym (cond (symbol? n) n
+                                 ;; handles (quote ns-name) - quoted symbols passed to cljs macros show up this way.
+                                 (list? n) (second n)
+                                 :else (symbol (str n)))]
+                (ana-api/ns-publics ns-sym)))
+      (-sequential ns))))
+
 ;; intended to be called from a cljs macro
-(defn -collect-all-ns []
-  `(collect! {:ns ~(ana-api/all-ns)}))
+(defn -collect-all-ns [env]
+  (-collect!* env {:ns (ana-api/all-ns)}))
 
 ;;
 ;; instrument
 ;;
 
-(defn -emit-instrument-fn [env {:keys [gen filters] :as instrument-opts} {:keys [schema] :as schema-map} ns-sym fn-sym]
+(defn -emit-instrument-fn [env {:keys [gen filters report] :as instrument-opts}
+                           {:keys [schema] :as schema-map} ns-sym fn-sym]
   ;; gen is a function
   (let [schema-map (-> schema-map
                        (select-keys [:gen :scope :report])
                        ;; The schema passed in may contain cljs vars that have to be resolved at runtime in cljs.
-                       (assoc :schema `(m/function-schema ~schema)))
+                       (assoc :schema `(m/function-schema ~schema))
+                     (cond-> report
+                       (assoc :report `(cljs.core/fn [type# data#] (~report type# (assoc data# :fn-name '~fn-sym))))))
         schema-map-with-gen
-        (as-> (merge (select-keys instrument-opts [:scope :report :gen]) schema-map) $
-          ;; use the passed in gen fn to generate a value
-          (cond (and gen (true? (:gen schema-map))) (assoc $ :gen gen)
-                :else (dissoc $ :gen)))
+                   (as-> (merge (select-keys instrument-opts [:scope :report :gen]) schema-map) $
+                     ;; use the passed in gen fn to generate a value
+                     (if (and gen (true? (:gen schema-map)))
+                       (assoc $ :gen gen)
+                       (dissoc $ :gen)))
         replace-var-code (when (ana-api/resolve env fn-sym)
                            `(do
                               (swap! instrumented-vars #(assoc % '~fn-sym ~fn-sym))
@@ -121,7 +136,7 @@
 (defn -emit-check [{:keys [schema]} fn-sym]
   `(let [schema# (m/function-schema ~schema)
          fn# (or (get @instrumented-vars '~fn-sym) ~fn-sym)]
-     (when-let [err# (mg/check schema# fn#)]
+     (when-let [err# (perform-check schema# fn#)]
        ['~fn-sym err#])))
 
 (defn -check []
@@ -151,16 +166,7 @@
    | `:malli/report` | optional side-effecting function of `key data -> any` to report problems, defaults to `m/-fail!`
    | `:malli/gen`    | optional value `true` or function of `schema -> schema -> value` to be invoked on the args to get the return value"
   ([] `(collect! ~{:ns (symbol (str *ns*))}))
-  ([{:keys [ns]}]
-   (reduce (fn [acc [var-name var-map]] (let [v (-collect! &env var-name var-map)] (cond-> acc v (conj v))))
-           #{}
-           (mapcat (fn [n]
-                     (let [ns-sym (cond (symbol? n) n
-                                        ;; handles (quote ns-name) - quoted symbols passed to cljs macros show up this way.
-                                        (list? n) (second n)
-                                        :else (symbol (str n)))]
-                       (ana-api/ns-publics ns-sym)))
-                   (-sequential ns)))))
+  ([args-map] (-collect!* &env args-map)))
 
 (defmacro instrument!
   "Applies instrumentation for a filtered set of function Vars (e.g. `defn`s).

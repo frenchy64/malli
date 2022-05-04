@@ -215,16 +215,9 @@
   (let [unparsers (into {} unparsers)]
     (fn [m]
       (if (and (map? m) (= (count m) (count unparsers)))
-        (miu/-reduce-kv-valid (fn [^{::t/- (t/Vec t/Any)}
-                                   coll
-                                   tag
-                                   ^{::t/- ann/Unparser}
-                                   unparser]
+        (miu/-reduce-kv-valid (fn [coll tag unparser]
                                 (if-some [kv (find m tag)]
-                                  (miu/-map-valid (fn [v]
-                                                    {:pre [(seqable? v)]}
-                                                    (into coll v))
-                                                  (unparser (val kv)))
+                                  (miu/-map-valid #(into coll %) (unparser (val kv)))
                                   :malli.core/invalid))
                               ;; `m` is in hash order, so have to iterate over `unparsers` to restore seq order:
                               [] unparsers)
