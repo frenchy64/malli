@@ -6,8 +6,7 @@
             [malli.impl.util :as miu]
             [malli.registry :as mr]
             [malli.sci :as ms]
-            ;; goal: delete this
-            [typed.clojure :as t])
+            [typed.clojure :as-alias t])
   #?(:clj (:import (clojure.lang Associative IPersistentCollection MapEntry IPersistentVector LazilyPersistentVector PersistentArrayMap)
                    (java.util.concurrent.atomic AtomicReference)
                    (java.util.regex Pattern))))
@@ -125,8 +124,8 @@
 
   (-regex-min-max [_] {:min 1, :max 1}))
 
-#?(:clj (t/tc-ignore (defmethod print-method ::into-schema [v ^java.io.Writer w] (.write w (str "#IntoSchema{:type " (pr-str (-type v)) "}")))))
-#?(:clj (t/tc-ignore (defmethod print-method ::schema [v ^java.io.Writer w] (.write w (pr-str (-form v))))))
+#?(:clj ^::t/ignore (defmethod print-method ::into-schema [v ^java.io.Writer w] (.write w (str "#IntoSchema{:type " (pr-str (-type v)) "}"))))
+#?(:clj ^::t/ignore (defmethod print-method ::schema [v ^java.io.Writer w] (.write w (pr-str (-form v)))))
 
 ;;
 ;; impl
@@ -150,9 +149,9 @@
 (defn -guard [pred tf] (when tf (fn [x] (if (pred x) (tf x) x))))
 
 (defn -unlift-keys [m prefix]
-  (reduce-kv (t/fn [%1 :- (t/Map t/Ident x)
-                    %2 :- t/Ident
-                    %3 :- x]
+  (reduce-kv (fn [^{::t/- (t/Map t/Ident x)} %1
+                  ^{::t/- t/Ident} %2
+                  ^{::t/- x} %3]
                (if (= (name prefix) (namespace %2)) (assoc %1 (keyword (name %2)) %3) %1))
              {} m))
 
@@ -199,7 +198,7 @@
 
 (defn -equals [x y] (or (identical? x y) (= x y)))
 
-(defn -vmap ([os] (miu/-vmap (t/inst identity x) os)) ([f os] (miu/-vmap f os)))
+(defn -vmap ([os] (miu/-vmap ^{::t/inst [x]} identity os)) ([f os] (miu/-vmap f os)))
 
 (defn -memoize [f]
   (let [value #?(:clj (AtomicReference. nil), :cljs (atom nil))]
