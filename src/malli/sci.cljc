@@ -1,4 +1,4 @@
-(ns malli.sci
+(ns ^:typed.clojure/ignore malli.sci
   (:require [borkdude.dynaload :as dynaload]))
 
 (defn evaluator [options fail!]

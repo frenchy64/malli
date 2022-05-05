@@ -1,4 +1,4 @@
-(ns malli.error
+(ns ^:typed.clojure/ignore malli.error
   (:require [clojure.string :as str]
             [malli.core :as m]
             [malli.util :as mu]))

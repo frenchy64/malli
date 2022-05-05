@@ -1,4 +1,4 @@
-(ns malli.impl.util
+(ns ^:typed.clojure/ignore malli.impl.util
   #?(:clj (:import (clojure.lang MapEntry LazilyPersistentVector)
                    (java.util.concurrent TimeoutException TimeUnit FutureTask))))
 

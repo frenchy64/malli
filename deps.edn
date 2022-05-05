@@ -19,7 +19,7 @@
                                org.clojure/spec-alpha2 {:git/url "https://github.com/clojure/spec-alpha2.git"
                                                         :sha "99456b1856a6fd934e2c30b17920bd790dd81775"}
                                org.typedclojure/typed.clojure {:git/url "https://github.com/typedclojure/typedclojure.git"
-                                                               :git/sha "f15b5b15d31ff44eff9a98e9fea30b1b92df55a3"}}}
+                                                               :git/sha "541527920fd6270c0e160ee2eebeb566a6a41b0e"}}}
            :type-check {:exec-fn typed.clojure.main/exec
                         :exec-args {:dirs ["src"]}}
            :cljs-test-runner {:extra-deps {olical/cljs-test-runner {:mvn/version "3.8.0"}}
