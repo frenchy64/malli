@@ -6,11 +6,13 @@
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
-            [malli.sci :as ms]
-            [typed.clojure #?(:clj :as-alias :cljs :as) t])
+            [malli.sci :as ms])
   #?(:clj (:import (clojure.lang Associative IPersistentCollection MapEntry IPersistentVector LazilyPersistentVector PersistentArrayMap)
                    (java.util.concurrent.atomic AtomicReference)
                    (java.util.regex Pattern))))
+
+#?(:clj (create-ns 'typed.clojure))
+#?(:clj (alias 't 'typed.clojure))
 
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
