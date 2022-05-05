@@ -7,7 +7,7 @@
             [malli.impl.util :as miu]
             [malli.registry :as mr]
             [malli.sci :as ms]
-            [typed.clojure :as-alias t])
+            [typed.clojure #?(:clj :as-alias :cljs :as) t])
   #?(:clj (:import (clojure.lang Associative IPersistentCollection MapEntry IPersistentVector LazilyPersistentVector PersistentArrayMap)
                    (java.util.concurrent.atomic AtomicReference)
                    (java.util.regex Pattern))))

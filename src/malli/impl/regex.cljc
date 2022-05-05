@@ -37,8 +37,10 @@
   (:require [malli.impl.util :as miu]
             #?(:cljs malli.impl.regex) ;; big hammer to work around the lack of :as-alias in cljs
             #?@(:clj [[typed.clojure :as-alias t]
-                      [malli.impl.typedclojure-ann :as-alias ann]]))
+                      #_[malli.impl.typedclojure-ann :as-alias ann]]))
   #?(:clj (:import [java.util ArrayDeque])))
+
+#?(:clj (alias 'ann 'malli.impl.typedclojure-ann))
 
 ;;;; # Driver Protocols
 

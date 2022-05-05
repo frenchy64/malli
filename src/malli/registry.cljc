@@ -1,5 +1,5 @@
 (ns malli.registry
-  (:require [typed.clojure :as t]
+  (:require [typed.clojure #?(:clj :as-alias :cljs :as) t]
             ;; circular dep
             #_[malli.impl.typedclojure-ann :as ann])
   (:refer-clojure :exclude [type])
@@ -75,8 +75,10 @@
     (-schemas [_] (-schemas (registry *registry*)))))
 
 (defn lazy-registry [default-registry provider]
-  (let [cache* (t/atom :- (t/Map t/Any malli.impl.typedclojure-ann/Schema), {})
-        registry* (t/atom :- malli.impl.typedclojure-ann/Registry, default-registry)]
+  (let [cache* (atom ^{::t/- (t/Map t/Any malli.impl.typedclojure-ann/Schema)}
+                     (do {}))
+        registry* (atom ^{::t/- malli.impl.typedclojure-ann/Registry}
+                        default-registry)]
     (reset!
      registry*
      (composite-registry
@@ -86,7 +88,7 @@
         (-schema [_ name]
           (or (@cache* name)
               (when-let [schema (provider name @registry*)]
-                (swap! cache* (t/fn [c :- (t/Map t/Any malli.impl.typedclojure-ann/Schema)] :- (t/Map t/Any malli.impl.typedclojure-ann/Schema)
+                (swap! cache* (fn [^{::t/- (t/Map t/Any malli.impl.typedclojure-ann/Schema)} c]
                                 (assoc c name schema)))
                 schema)))
         (-schemas [_] @cache*))))))
