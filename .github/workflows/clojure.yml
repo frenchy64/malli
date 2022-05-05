@@ -13,8 +13,10 @@ jobs:
       matrix:
         # Supported Java versions: LTS releases and latest
         # TODO: Add 18 when available
-        jdk: [8, 11, 17]
-        clojure: [10, 11]
+        #jdk: [8, 11, 17]
+        jdk: [17]
+        #clojure: [10, 11]
+        clojure: [11]
 
     name: Clojure ${{ matrix.clojure }} (Java ${{ matrix.jdk }})
 
