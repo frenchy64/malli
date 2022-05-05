@@ -35,6 +35,30 @@ jobs:
       - name: Run tests
         run: CLOJURE_ALIAS=clojure-${{ matrix.clojure }} bin/kaocha
 
+  build-typed:
+    strategy:
+      matrix:
+        jdk: 17
+
+    name: Typed Clojure
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Java ${{ matrix.jdk }}
+        uses: actions/setup-java@v2.5.0
+        with:
+          distribution: zulu
+          java-version: ${{ matrix.jdk }}
+          cache: maven
+      - name: Setup Clojure
+        uses: DeLaGuardo/setup-clojure@master
+        with:
+          cli: latest
+      - name: Type check
+        run: bin/typed
+
   build-cljs:
     name: ClojureScript
 

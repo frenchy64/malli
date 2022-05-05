@@ -1,4 +1,4 @@
-(ns malli.dev.pretty
+(ns ^:typed.clojure/ignore malli.dev.pretty
   (:require [malli.core :as m]
             [malli.dev.virhe :as v]
             [malli.error :as me]))

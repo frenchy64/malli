@@ -1,4 +1,4 @@
-(ns malli.dev.cljs
+(ns ^:typed.clojure/ignore malli.dev.cljs
   #?(:cljs (:require-macros [malli.dev.cljs]))
   #?(:cljs (:require [malli.instrument.cljs]
                      [malli.dev.pretty :as pretty]))

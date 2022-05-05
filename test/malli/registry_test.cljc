@@ -1,8 +1,7 @@
 (ns malli.registry-test
   (:require [clojure.test :refer [deftest is testing]]
             [malli.core :as m]
-            [malli.registry :as mr]
-            [typed.clojure :as t]))
+            [malli.registry :as mr]))
 
 (deftest mutable-test
   (let [registry* (atom {})
@@ -72,7 +71,3 @@
                   {:Type "AWS::ApiGateway::UsagePlan"})))
 
       (is (= 2 (count @loads))))))
-
-#?(:clj (deftest check-ns-test
-          (is (t/check-ns-clj 'malli.registry))
-          (is (t/check-ns-cljs 'malli.registry))))

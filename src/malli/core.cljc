@@ -1,4 +1,4 @@
-(ns ^:typed.clojure/ignore malli.core
+(ns malli.core
   (:refer-clojure :exclude [eval type -deref deref -lookup -key])
   #?(:cljs (:require-macros malli.core))
   (:require #?(:clj [clojure.walk :as walk])

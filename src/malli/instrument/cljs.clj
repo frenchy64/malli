@@ -1,4 +1,4 @@
-(ns malli.instrument.cljs
+(ns ^:typed.clojure/ignore malli.instrument.cljs
   (:require [cljs.analyzer.api :as ana-api]
             [clojure.walk :as walk]
             [malli.core :as m]))

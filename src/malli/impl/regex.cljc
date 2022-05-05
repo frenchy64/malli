@@ -40,6 +40,7 @@
                       #_[malli.impl.typedclojure-ann :as-alias ann]]))
   #?(:clj (:import [java.util ArrayDeque])))
 
+#?(:clj (create-ns 'malli.impl.typedclojure-ann))
 #?(:clj (alias 'ann 'malli.impl.typedclojure-ann))
 
 ;;;; # Driver Protocols
