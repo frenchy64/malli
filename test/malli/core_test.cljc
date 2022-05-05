@@ -9,8 +9,7 @@
             [malli.impl.util :as miu]
             [malli.registry :as mr]
             [malli.transform :as mt]
-            [malli.util :as mu]
-            [typed.clojure :as t])
+            [malli.util :as mu])
   #?(:clj (:import (clojure.lang IFn))))
 
 (defn with-schema-forms [result]
@@ -2635,10 +2634,6 @@
   (is (= ["1"] (m/-vmap str (subvec [1 2] 0 1))))
   (is (= ["1"] (m/-vmap str (lazy-seq [1]))))
   (is (= ["1" "2"] (m/-vmap str [1 2]))))
-
-#?(:clj (deftest check-ns-test
-          (is (t/check-ns-clj 'malli.core))
-          (is (t/check-ns-cljs 'malli.core))))
 
 (deftest issue-626-test
   (testing "m/from-ast does not work with symbols or unamespaced keywords"
