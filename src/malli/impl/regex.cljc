@@ -34,8 +34,8 @@
   https://www.metosin.fi/blog/malli-regex-schemas/."
 
   (:refer-clojure :exclude [+ * repeat cat])
+  #?(:cljs (:require-macros malli.impl.regex)) ;; big hammer to work around the lack of :as-alias in cljs
   (:require [malli.impl.util :as miu]
-            #?(:cljs malli.impl.regex) ;; big hammer to work around the lack of :as-alias in cljs
             #?@(:clj [[typed.clojure :as-alias t]
                       #_[malli.impl.typedclojure-ann :as-alias ann]]))
   #?(:clj (:import [java.util ArrayDeque])))
