@@ -19,7 +19,7 @@
                                org.clojure/spec-alpha2 {:git/url "https://github.com/clojure/spec-alpha2.git"
                                                         :sha "99456b1856a6fd934e2c30b17920bd790dd81775"}
                                org.typedclojure/typed.clojure {:git/url "https://github.com/typedclojure/typedclojure.git"
-                                                               :git/sha "f20949883029f3875457ffc6e446afbee8531fb3"}}}
+                                                               :git/sha "0a17cccd549df9c52ac549d6f25721161a443536"}}}
            :typed {:exec-fn typed.clojure.main/exec
                    :exec-args {:dirs ["src"]
                                :watch-dirs ["src" "test" "resources"]
