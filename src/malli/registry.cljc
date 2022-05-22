@@ -1,6 +1,6 @@
 (ns malli.registry
   (:require [typed.clojure :as-alias t]
-            [malli.impl.typedclojure-ann :as ann])
+            [malli.impl.typedclojure-ann :as-alias ann])
   (:refer-clojure :exclude [type])
   #?(:clj (:import (java.util HashMap Map))))
 
