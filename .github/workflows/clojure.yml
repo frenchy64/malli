@@ -59,7 +59,7 @@ jobs:
         with:
           cli: latest
       - name: Type check
-        run: bin/typed "[$THIS_SPLIT 2]"
+        run: bin/typed :split "[$THIS_SPLIT 2]"
         env:
           THIS_SPLIT: ${{ matrix.this_split }}
 
