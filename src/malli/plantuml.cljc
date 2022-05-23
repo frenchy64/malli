@@ -1,4 +1,4 @@
-(ns malli.plantuml
+(ns ^:typed.clojure/ignore malli.plantuml
   (:require [clojure.string :as str]
             [malli.core :as m]
             [malli.dot :as md]))

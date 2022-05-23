@@ -1,4 +1,4 @@
-(ns malli.dev
+(ns ^:typed.clojure/ignore malli.dev
   (:require [malli.clj-kondo :as clj-kondo]
             [malli.core :as m]
             [malli.dev.pretty :as pretty]

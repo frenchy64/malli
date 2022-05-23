@@ -1,4 +1,4 @@
-(ns malli.experimental
+(ns ^:typed.clojure/ignore malli.experimental
   (:refer-clojure :exclude [defn])
   #?(:cljs (:require-macros malli.experimental))
   (:require [clojure.core :as c]
