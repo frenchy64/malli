@@ -34,7 +34,10 @@
   https://www.metosin.fi/blog/malli-regex-schemas/."
 
   (:refer-clojure :exclude [+ * repeat cat])
-  (:require [malli.impl.util :as miu])
+  #?(:cljs (:require-macros malli.impl.regex)) ;; big hammer to work around the lack of :as-alias in cljs
+  (:require [malli.impl.util :as miu]
+            [typed.clojure :as-alias t]
+            [malli.impl.typedclojure-ann :as-alias ann])
   #?(:clj (:import [java.util ArrayDeque])))
 
 ;;;; # Driver Protocols
@@ -129,7 +132,7 @@
 (defn pure-unparser [_] [])
 
 ;;;; # Combinators
-
+^::t/ignore (do
 ;;;; ## Functor
 
 (defn fmap-parser [f p]
@@ -138,21 +141,27 @@
 
 ;;;; ## Catenation
 
-(defn- entry->regex [?kr] (if (vector? ?kr) (get ?kr 1) ?kr))
+(defn- entry->regex [?kr] (if (vector? ?kr) (nth ?kr 1) ?kr))
 
 (defn cat-validator
   ([] (fn [_ _ pos coll k] (k pos coll)))
   ([?kr & ?krs]
-   (reduce (fn [acc ?kr]
+   (reduce (fn ^{::t/- [ann/ValidatorTramp (ann/?KR ann/ValidatorTramp) :-> ann/ValidatorTramp]} _
+             [acc ?kr]
              (let [r* (entry->regex ?kr)]
+               (assert (not (vector? r*))) ;;FIXME
                (fn [driver regs pos coll k]
                  (acc driver regs pos coll (fn [pos coll] (r* driver regs pos coll k))))))
-           (entry->regex ?kr) ?krs)))
+           (doto (entry->regex ?kr)
+             ;;FIXME
+             (-> vector? not assert))
+           ?krs)))
 
 (defn cat-explainer
   ([] (fn [_ _ pos coll k] (k pos coll)))
   ([?kr & ?krs]
-   (reduce (fn [acc ?kr]
+   (reduce (fn ^{::t/- [ann/ExplainerTramp (ann/?KR ann/ExplainerTramp) :-> ann/ExplainerTramp]} _
+             [acc ?kr]
              (let [r* (entry->regex ?kr)]
                (fn [driver regs pos coll k]
                  (acc driver regs pos coll (fn [pos coll] (r* driver regs pos coll k))))))
@@ -161,22 +170,27 @@
 (defn cat-parser
   ([] (fn [_ _ pos coll k] (k [] pos coll)))
   ([r & rs]
-   (let [sp (reduce (fn [acc r]
+   (let [sp (reduce (fn ^{::t/- [ann/ParserTramp ann/ParserTramp :-> ann/ParserTramp]} _
+                      [acc r]
                       (fn [driver regs coll* pos coll k]
                         (r driver regs pos coll
                            (fn [v pos coll] (acc driver regs (conj coll* v) pos coll k)))))
-                    (fn [_ _ coll* pos coll k] (k coll* pos coll))
+                    (fn ^{::t/- ann/ParserTramp} _
+                      [_ _ coll* pos coll k] (k coll* pos coll))
                     (reverse (cons r rs)))]
      (fn [driver regs pos coll k] (sp driver regs [] pos coll k)))))
 
 (defn catn-parser
   ([] (fn [_ _ pos coll k] (k {} pos coll)))
   ([kr & krs]
-   (let [sp (reduce (fn [acc [tag r]]
+   (let [sp (reduce (fn ^{::t/- [ann/EncoderTramp (ann/KR ann/ParserTramp) :-> ann/EncoderTramp]} _
+                      [acc [tag r]]
                       (fn [driver regs m pos coll k]
+                        {:pre [(map? m)]}
                         (r driver regs pos coll
                            (fn [v pos coll] (acc driver regs (assoc m tag v) pos coll k)))))
-                    (fn [_ _ m pos coll k] (k m pos coll))
+                    (fn ^{::t/- ann/EncoderTramp} _
+                      [_ _ m pos coll k] (k m pos coll))
                     (reverse (cons kr krs)))]
      (fn [driver regs pos coll k] (sp driver regs {} pos coll k)))))
 
@@ -184,7 +198,16 @@
   (let [unparsers (vec unparsers)]
     (fn [tup]
       (if (and (vector? tup) (= (count tup) (count unparsers)))
-        (miu/-reduce-kv-valid (fn [coll i unparser] (miu/-map-valid #(into coll %) (unparser (get tup i))))
+        (miu/-reduce-kv-valid (fn [^{::t/- (t/Vec t/Any)}
+                                   coll
+                                   i
+                                   ^{::t/- ann/Unparser}
+                                   unparser]
+                                {:pre [(integer? i)]}
+                                (miu/-map-valid (fn [v]
+                                                  {:pre [(seqable? v)]}
+                                                  (into coll v))
+                                                (unparser (nth tup i))))
                               [] unparsers)
         :malli.core/invalid))))
 
@@ -203,7 +226,8 @@
 (defn cat-transformer
   ([] (fn [_ _ coll* pos coll k] (k coll* pos coll)))
   ([?kr & ?krs]
-   (reduce (fn [acc ?kr]
+   (reduce (fn ^{::t/- [ann/TransformerTramp (ann/?KR ann/TransformerTramp) :-> ann/TransformerTramp]} _
+             [acc ?kr]
              (let [r (entry->regex ?kr)]
                (fn [driver regs coll* pos coll k]
                  (acc driver regs coll* pos coll (fn [coll* pos coll] (r driver regs coll* pos coll k))))))
@@ -212,7 +236,8 @@
 ;;;; ## Alternation
 
 (defn alt-validator [& ?krs]
-  (reduce (fn [acc ?kr]
+  (reduce (fn ^{::t/- [(ann/?KR ann/ValidatorTramp) (ann/?KR ann/ValidatorTramp) :-> ann/ValidatorTramp]} _
+            [acc ?kr]
             (let [r (entry->regex acc), r* (entry->regex ?kr)]
               (fn [driver regs pos coll k]
                 (park-validator! driver r* regs pos coll k) ; remember fallback
@@ -220,7 +245,8 @@
           ?krs))
 
 (defn alt-explainer [& ?krs]
-  (reduce (fn [acc ?kr]
+  (reduce (fn ^{::t/- [(ann/?KR ann/ExplainerTramp) (ann/?KR ann/ExplainerTramp) :-> ann/ExplainerTramp]} _
+            [acc ?kr]
             (let [r (entry->regex acc), r* (entry->regex ?kr)]
               (fn [driver regs pos coll k]
                 (park-explainer! driver r* regs pos coll k) ; remember fallback
@@ -228,14 +254,16 @@
           ?krs))
 
 (defn alt-parser [& rs]
-  (reduce (fn [r r*]
+  (reduce (fn ^{::t/- [ann/ValidatorTramp ann/ValidatorTramp :-> ann/ValidatorTramp]} _
+            [r r*]
             (fn [driver regs pos coll k]
               (park-validator! driver r* regs pos coll k) ; remember fallback
               (park-validator! driver r regs pos coll k)))
           rs))
 
 (defn altn-parser [kr & krs]
-  (reduce (fn [r [tag r*]]
+  (reduce (fn ^{::t/- [ann/ParserTramp '[t/Any ann/ParserTramp] :-> ann/ParserTramp]} _
+            [r [tag r*]]
             (let [r* (fmap-parser (fn [v] (miu/-tagged tag v)) r*)]
               (fn [driver regs pos coll k]
                 (park-validator! driver r* regs pos coll k) ; remember fallback
@@ -246,7 +274,7 @@
 
 (defn alt-unparser [& unparsers]
   (fn [x]
-    (reduce (fn [_ unparse] (miu/-map-valid reduced (unparse x)))
+    (reduce (fn [_, ^{::t/- ann/Unparser} unparse] (miu/-map-valid #(reduced %) (unparse x)))
             :malli.core/invalid unparsers)))
 
 (defn altn-unparser [& unparsers]
@@ -503,6 +531,7 @@
     (when-not (ensure-cached! cache validator pos regs)
       (noncaching-park-validator! self validator regs pos coll k))))
 
+^::t/ignore (do
 (deftype ^:private ParseDriver
          #?(:clj  [^:unsynchronized-mutable ^boolean success, ^ArrayDeque stack, cache
                    ^:unsynchronized-mutable result]
@@ -526,7 +555,9 @@
     (when-not (ensure-cached! cache transformer pos regs)
       (noncaching-park-transformer! driver transformer regs coll* pos coll k)))
   (succeed-with! [self v] (succeed! self) (set! result v))
-  (success-result [_] result))
+  (success-result [_] result)))
+
+  ) ;;tc-ignore
 
 ;;;; # Validator
 
@@ -535,6 +566,7 @@
     (fn [coll]
       (and (sequential? coll)
            (let [driver (CheckDriver. false (make-stack) (make-cache))]
+             (assert (coll? coll))
              (p driver () 0 coll (fn [_ _] (succeed! driver)))
              (or (succeeded? driver)
                  (loop []
@@ -554,10 +586,14 @@
   Driver
   (succeed! [_] (set! success (boolean true)))
   (succeeded? [_] success)
-  (pop-thunk! [_] (when-not (empty-stack? stack) (.pop stack)))
+  (pop-thunk! [_] (when-not (empty-stack? stack)
+                    ^::t/ignore ^{::t/unsafe-cast [:-> t/Any]}
+                    (.pop stack)))
 
   IExplanationDriver
-  (noncaching-park-explainer! [self validator regs pos coll k] (.push stack #(validator self regs pos coll k)))
+  (noncaching-park-explainer! [self validator regs pos coll k] (let [f #(validator self regs pos coll k)]
+                                                                 ^::t/ignore
+                                                                 (.push stack f)))
   (park-explainer! [self validator regs pos coll k]
     (when-not (ensure-cached! cache validator pos regs)
       (noncaching-park-explainer! self validator regs pos coll k)))
@@ -576,6 +612,7 @@
       (if (sequential? coll)
         (let [pos 0
               driver (ExplanationDriver. false (make-stack) (make-cache) in pos [])]
+          (assert (coll? coll))
           (p driver () pos coll (fn [_ _] (succeed! driver)))
           (if (succeeded? driver)
             errors
@@ -594,6 +631,7 @@
     (fn [coll]
       (if (sequential? coll)
         (let [driver (ParseDriver. false (make-stack) (make-cache) nil)]
+          (assert (coll? coll))
           (p driver () 0 coll (fn [v _ _] (succeed-with! driver v)))
           (if (succeeded? driver)
             (first (success-result driver))
@@ -612,6 +650,7 @@
     (fn [coll]
       (if (sequential? coll)
         (let [driver (ParseDriver. false (make-stack) (make-cache) nil)]
+          (assert (coll? coll))
           (p driver () [] 0 coll (fn [coll* _ _] (succeed-with! driver coll*)))
           (if (succeeded? driver)
             (success-result driver)

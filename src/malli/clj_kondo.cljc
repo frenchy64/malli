@@ -1,4 +1,4 @@
-(ns malli.clj-kondo
+(ns ^:typed.clojure/ignore malli.clj-kondo
   #?(:cljs (:require-macros [malli.clj-kondo]))
   (:require [fipp.edn :as fipp]
             [malli.core :as m]

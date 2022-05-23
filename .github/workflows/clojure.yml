@@ -13,8 +13,10 @@ jobs:
       matrix:
         # Supported Java versions: LTS releases and latest
         # TODO: Add 18 when available
-        jdk: [8, 11, 17]
-        clojure: [10, 11]
+        #jdk: [8, 11, 17]
+        jdk: [17]
+        #clojure: [10, 11]
+        clojure: [11]
 
     name: Clojure ${{ matrix.clojure }} (Java ${{ matrix.jdk }})
 
@@ -34,6 +36,32 @@ jobs:
           cli: latest
       - name: Run tests
         run: CLOJURE_ALIAS=clojure-${{ matrix.clojure }} bin/kaocha
+
+  build-typed:
+    strategy:
+      matrix:
+        this_split: [0, 1]
+
+    name: Typed Clojure
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Java 17
+        uses: actions/setup-java@v2.5.0
+        with:
+          distribution: zulu
+          java-version: 17
+          cache: maven
+      - name: Setup Clojure
+        uses: DeLaGuardo/setup-clojure@master
+        with:
+          cli: latest
+      - name: Type check
+        run: bin/typed :split "[$THIS_SPLIT 2]"
+        env:
+          THIS_SPLIT: ${{ matrix.this_split }}
 
   build-cljs:
     name: ClojureScript

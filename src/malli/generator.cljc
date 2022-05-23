@@ -1,4 +1,4 @@
-(ns malli.generator
+(ns ^:typed.clojure/ignore malli.generator
   (:require [clojure.spec.gen.alpha :as ga]
             [clojure.string :as str]
             [clojure.test.check :as check]

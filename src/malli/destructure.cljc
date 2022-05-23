@@ -1,4 +1,4 @@
-(ns malli.destructure
+(ns ^:typed.clojure/ignore malli.destructure
   (:require [clojure.walk :as walk]
             [malli.core :as m]
             [malli.impl.util :as miu]))

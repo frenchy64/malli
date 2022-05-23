@@ -1,4 +1,4 @@
-(ns malli.dot
+(ns ^:typed.clojure/ignore malli.dot
   (:require [clojure.string :as str]
             [malli.core :as m]
             [malli.registry :as mr]

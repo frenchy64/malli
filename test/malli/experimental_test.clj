@@ -121,6 +121,7 @@
       :filters [(mi/-filter-var #(= % v))]})))
 
 (deftest defn-test
+  (require 'malli.experimental-test :reload)
   (doseq [{:keys [var calls instrumented] :as e} expectations]
 
     (testing "plain calls"

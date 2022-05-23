@@ -1,4 +1,4 @@
-(ns malli.json-schema
+(ns ^:typed.clojure/ignore malli.json-schema
   (:require [clojure.set :as set]
             [malli.core :as m]))
 

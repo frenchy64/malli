@@ -1,4 +1,4 @@
-(ns malli.edn
+(ns ^:typed.clojure/ignore malli.edn
   (:refer-clojure :exclude [read-string])
   (:require [edamame.core :as edamame]
             [malli.core :as m]))

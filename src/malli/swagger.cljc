@@ -1,4 +1,4 @@
-(ns malli.swagger
+(ns ^:typed.clojure/ignore malli.swagger
   (:require [clojure.set :as set]
             [malli.core :as m]
             [malli.json-schema :as json-schema]))

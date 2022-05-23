@@ -1,7 +1,7 @@
 {:paths ["src" "resources"]
  :aliases {:test {:extra-paths ["test"]
                   :extra-deps {com.gfredericks/test.chuck {:mvn/version "0.2.13"}
-                               lambdaisland/kaocha {:mvn/version "1.63.998"}
+                               lambdaisland/kaocha {:mvn/version "1.66.1034"}
                                lambdaisland/kaocha-cljs {:mvn/version "1.0.107"}
                                org.babashka/sci {:mvn/version "0.3.1"}
                                lambdaisland/kaocha-junit-xml {:mvn/version "0.0.76"}
@@ -17,7 +17,13 @@
                                lambdaisland/deep-diff {:mvn/version "0.0-47"}
                                com.bhauman/spell-spec {:mvn/version "0.1.2"}
                                org.clojure/spec-alpha2 {:git/url "https://github.com/clojure/spec-alpha2.git"
-                                                        :sha "99456b1856a6fd934e2c30b17920bd790dd81775"}}}
+                                                        :sha "99456b1856a6fd934e2c30b17920bd790dd81775"}
+                               org.typedclojure/typed.clojure {:git/url "https://github.com/typedclojure/typedclojure.git"
+                                                               :git/sha "7d8ca07c2e97e1152b0230a20cb7dccd8ca9f8c6"}}}
+           :typed {:exec-fn typed.clojure.main/exec
+                   :exec-args {:dirs ["src"]
+                               :watch-dirs ["src" "test" "resources"]
+                               :refresh-dirs ["src" "test"]}}
            :cljs-test-runner {:extra-deps {olical/cljs-test-runner {:mvn/version "3.8.0"}}
                               :extra-paths ["test" "cljs-test-runner-out/gen"]
                               :main-opts ["-m" "cljs-test-runner.main" "-d" "test"]}
@@ -58,7 +64,7 @@
                              "-Dclojure.compiler.direct-linking=true"]}
            :clojure-10 {:extra-deps {org.clojure/clojure {:mvn/version "1.10.3"}}}
            :clojure-11 {}}
- :deps {org.clojure/clojure {:mvn/version "1.11.0-rc1"}
+ :deps {org.clojure/clojure {:mvn/version "1.11.1"}
         borkdude/dynaload {:mvn/version "0.2.2"}
         borkdude/edamame {:mvn/version "0.0.19"}
         org.clojure/test.check {:mvn/version "1.1.1"}

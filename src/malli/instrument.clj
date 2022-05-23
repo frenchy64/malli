@@ -1,4 +1,4 @@
-(ns malli.instrument
+(ns ^:typed.clojure/ignore malli.instrument
   (:require [malli.core :as m]
             [malli.generator :as mg]))
 

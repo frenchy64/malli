@@ -1,4 +1,4 @@
-(ns malli.dev.virhe
+(ns ^:typed.clojure/ignore malli.dev.virhe
   "initial code for https://github.com/metosin/virhe"
   (:require [arrangement.core]
             [fipp.edn]

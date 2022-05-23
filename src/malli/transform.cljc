@@ -1,4 +1,4 @@
-(ns malli.transform
+(ns ^:typed.clojure/ignore malli.transform
   #?(:cljs (:refer-clojure :exclude [Inst Keyword UUID]))
   (:require [malli.core :as m]
             #?(:cljs [goog.date.UtcDateTime])

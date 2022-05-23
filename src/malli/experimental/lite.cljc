@@ -1,4 +1,4 @@
-(ns malli.experimental.lite
+(ns ^:typed.clojure/ignore malli.experimental.lite
   (:refer-clojure :exclude [set vector and or])
   (:require [malli.core :as m]))
 

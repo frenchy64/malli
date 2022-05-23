@@ -1,4 +1,4 @@
-(ns malli.provider
+(ns ^:typed.clojure/ignore malli.provider
   (:require [malli.core :as m]
             [malli.registry :as mr]))
 

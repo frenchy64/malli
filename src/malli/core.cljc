@@ -1,4 +1,4 @@
-(ns malli.core
+(ns ^:typed.clojure/ignore malli.core
   (:refer-clojure :exclude [eval type -deref deref -lookup -key])
   #?(:cljs (:require-macros malli.core))
   (:require #?(:clj [clojure.walk :as walk])
@@ -6,7 +6,8 @@
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
-            [malli.sci :as ms])
+            [malli.sci :as ms]
+            [typed.clojure :as-alias t])
   #?(:clj (:import (clojure.lang Associative IPersistentCollection MapEntry IPersistentVector LazilyPersistentVector PersistentArrayMap)
                    (java.util.concurrent.atomic AtomicReference)
                    (java.util.regex Pattern))))
@@ -83,7 +84,7 @@
   (-regex-unparser [this] "returns the raw internal regex unparser implementation")
   (-regex-parser [this] "returns the raw internal regex parser implementation")
   (-regex-transformer [this transformer method options] "returns the raw internal regex transformer implementation")
-  (-regex-min-max [this] "returns size of the sequence as [min max] vector. nil max means unbuond."))
+  (-regex-min-max [this] "returns size of the sequence as {:min .. :max ..} map. nil max means unbound."))
 
 (defn -ref-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.RefSchema x))
 (defn -entry-parser? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntryParser x))
@@ -92,6 +93,7 @@
 (defn -ast? [x] (#?(:clj instance?, :cljs implements?) malli.core.AST x))
 (defn -transformer? [x] (#?(:clj instance?, :cljs implements?) malli.core.Transformer x))
 
+;; TODO support extend-type in cljs checker
 (extend-type #?(:clj Object, :cljs default)
   RegexSchema
   (-regex-op? [_] false)
@@ -123,8 +125,8 @@
 
   (-regex-min-max [_] {:min 1, :max 1}))
 
-#?(:clj (defmethod print-method ::into-schema [v ^java.io.Writer w] (.write w (str "#IntoSchema{:type " (pr-str (-type ^IntoSchema v)) "}"))))
-#?(:clj (defmethod print-method ::schema [v ^java.io.Writer w] (.write w (pr-str (-form ^Schema v)))))
+#?(:clj ^::t/ignore (defmethod print-method ::into-schema [v ^java.io.Writer w] (.write w (str "#IntoSchema{:type " (pr-str (-type v)) "}"))))
+#?(:clj ^::t/ignore (defmethod print-method ::schema [v ^java.io.Writer w] (.write w (pr-str (-form v)))))
 
 ;;
 ;; impl
@@ -148,7 +150,11 @@
 (defn -guard [pred tf] (when tf (fn [x] (if (pred x) (tf x) x))))
 
 (defn -unlift-keys [m prefix]
-  (reduce-kv #(if (= (name prefix) (namespace %2)) (assoc %1 (keyword (name %2)) %3) %1) {} m))
+  (reduce-kv (fn [^{::t/- (t/Map t/Ident x)} %1
+                  ^{::t/- t/Ident} %2
+                  ^{::t/- x} %3]
+               (if (= (name prefix) (namespace %2)) (assoc %1 (keyword (name %2)) %3) %1))
+             {} m))
 
 (defn ^:no-doc -check-children? [] true)
 
@@ -193,7 +199,7 @@
 
 (defn -equals [x y] (or (identical? x y) (= x y)))
 
-(defn -vmap ([os] (miu/-vmap identity os)) ([f os] (miu/-vmap f os)))
+(defn -vmap ([os] (miu/-vmap ^{::t/inst [x]} identity os)) ([f os] (miu/-vmap f os)))
 
 (defn -memoize [f]
   (let [value #?(:clj (AtomicReference. nil), :cljs (atom nil))]
@@ -247,7 +253,7 @@
 
 (defn -registry {:arglists '([] [{:keys [registry]}])}
   ([] default-registry)
-  ([opts] (or (when opts (mr/registry (opts :registry))) default-registry)))
+  ([opts] (or (when opts (mr/registry (:registry opts))) default-registry)))
 
 (defn -property-registry [m options f]
   (let [options (assoc options ::allow-invalid-refs true)]
