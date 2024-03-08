@@ -3147,3 +3147,9 @@
                                              ::xymap [:merge ::xmap ::ymap]}}
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
+
+(deftest poly-test
+  (is (= [:=> [:cat :any] :any]
+         (m/form
+           (m/all [a b]
+                  [:=> [:cat a] b])))))

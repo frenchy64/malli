@@ -2631,3 +2631,21 @@
                            info (apply (:f info) args)
                            varargs-info (if (< arity (:min varargs-info)) (report-arity) (apply (:f varargs-info) args))
                            :else (report-arity))))))))))
+
+(defn -all-schema [binder-syntax body-syntax f]
+  ^{:type ::into-schema}
+  (reify
+    IntoSchema
+    (-type [_] :all)
+    (-type-properties [_])
+    (-properties-schema [_ _])
+    (-children-schema [_ _])
+    (-into-schema [parent properties children options]
+      (schema (apply f (repeat (count binder-syntax) :any))))))
+
+(defmacro all
+  [binder body]
+  `(-all-schema
+     '~binder
+     '~body
+     (fn ~binder ~body)))
