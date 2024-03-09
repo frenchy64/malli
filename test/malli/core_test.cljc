@@ -3147,3 +3147,21 @@
                                              ::xymap [:merge ::xmap ::ymap]}}
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
+
+(deftest all-syntax-test
+  (is (= [:all [:catn [:a :schema-schema]]
+          [:=> [:cat [:tv :a]] [:tv :a]]]
+         (m/all [a] [:=> [:cat a] a]))))
+
+(deftest subst-tv-test
+  (is (= :any (m/-subst-tv [:tv :a]
+                           {:a :any}
+                           nil)))
+  (is (= [:sequential :any]
+         (m/-subst-tv [:sequential [:tv :a]]
+                      {:a :any}
+                      nil)))
+  (is (= [:catn [:foo :any]]
+         (m/-subst-tv [:catn [:foo [:tv :a]]]
+                      {:a :any}
+                      nil))))

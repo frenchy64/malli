@@ -1670,6 +1670,53 @@
            (-regex-transformer [this _ _ _] (-fail! ::potentially-recursive-seqex this))
            (-regex-min-max [this _] (-fail! ::potentially-recursive-seqex this))))))))
 
+(defn -tv-schema []
+  ^{:type ::into-schema}
+  (reify
+    AST
+    (-from-ast [parent ast options] (-from-value-ast parent ast options))
+    IntoSchema
+    (-type [_] :tv)
+    (-type-properties [_])
+    (-into-schema [parent properties [tv :as children] options]
+      (-check-children! :tv properties children 1 1)
+      (when-not (simple-keyword? tv)
+        (-fail! ::invalid-tv {:ref tv}))
+      (let [children (vec children)
+            form (delay (-simple-form parent properties children identity options))
+            cache (-create-cache options)]
+        ^{:type ::schema}
+        (reify
+          AST
+          (-to-ast [this _] (-to-value-ast this))
+          Schema
+          (-validator [this] (-fail! ::uninstantiated-tv this))
+          (-explainer [this path] (-fail! ::uninstantiated-tv this))
+          (-parser [this] (-fail! ::uninstantiated-tv this))
+          (-unparser [this] (-fail! ::uninstantiated-tv this))
+          (-transformer [this transformer method options] (-fail! ::uninstantiated-tv this))
+          (-walk [this walker path options] (-walk-leaf this walker path options))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] @form)
+          Cached
+          (-cache [_] cache)
+          ;LensSchema
+          ;(-get [_ key default] (if (= key 0) (-pointer tv (rf) options) default))
+          ;(-keep [_])
+          ;(-set [this key value] (if (= key 0) (-set-children this [value])
+          ;                                     (-fail! ::index-out-of-bounds {:schema this, :key key})))
+          RegexSchema
+          (-regex-op? [_] false)
+          (-regex-validator [this] (-fail! ::uninstantiated-tv this))
+          (-regex-explainer [this _] (-fail! ::uninstantiated-tv this))
+          (-regex-parser [this] (-fail! ::uninstantiated-tv this))
+          (-regex-unparser [this] (-fail! ::uninstantiated-tv this))
+          (-regex-transformer [this _ _ _] (-fail! ::uninstantiated-tv this))
+          (-regex-min-max [this _] (-fail! ::uninstantiated-tv this)))))))
+
 (defn -schema-schema [{:keys [id raw]}]
   ^{:type ::into-schema}
   (let [internal (or id raw)
@@ -1705,8 +1752,7 @@
             (-unparser [_] (-unparser child))
             (-transformer [this transformer method options]
               (-parent-children-transformer this children transformer method options))
-            (-walk [this walker path options]
-              (when (-accept walker this path options)
+            (-walk [this walker path options] (when (-accept walker this path options)
                 (if (or (not id) ((-boolean-fn (::walk-schema-refs options false)) id))
                   (-outer walker this path (-inner-indexed walker path children options) options)
                   (-outer walker this path children options))))
@@ -2589,6 +2635,7 @@
    :=> (-=>-schema)
    :function (-function-schema nil)
    :all (-all-schema)
+   :tv (-tv-schema)
    :schema (-schema-schema nil)
    :schema-schema (-schema-schema-schema)
    ::schema (-schema-schema {:raw true})})
@@ -2722,6 +2769,30 @@
                    f
                    options)))))
 
+(defn -subst-tv [?schema tv->schema options]
+  (let [options (assoc options
+                       ::walk-refs false
+                       ::walk-schema-refs false
+                       ::walk-entry-vals true
+                       ::tv->schema tv->schema)
+        inner (fn [this s path {::keys [tv->schema] :as options}]
+                (case (type s)
+                  :tv (if-some [[_ v] (when (= :tv (type s))
+                                        (find tv->schema (first (-children s))))]
+                        v
+                        s)
+                  :all (assert nil "TODO shadowing")
+                  :.. (assert nil "TODO shadowing")
+                  (-walk s this path options)))]
+    (inner
+      (reify Walker
+        (-accept [_ s path options] true)
+        (-inner [this s path options] (inner this s path options))
+        (-outer [this schema path children options] schema))
+      (schema ?schema options)
+      []
+      options)))
+
 ;;TODO kind annotations. try [:sequential :schema-schema] for non-uniform variable arity polymorphism,
 ;; #'nat-int for dependently typed functions.
 ;; e.g., schema for variable-arity map
@@ -2734,7 +2805,19 @@
 ;;   [:sequential b]])
 (defmacro all
   [binder body]
-  `(let [~@(mapcat (fn [b]
-                     [b (list 'quote (gensym b))])
-                   binder)]
-     [:all ~binder ~body]))
+  (let [syms (map (fn [b]
+                    (if (symbol? b)
+                      b
+                      (first b)))
+                  binder)]
+    `[:all (into [:catn]
+                 (map
+                   (fn [b#]
+                     (if (symbol? b#)
+                       [(keyword b#) :schema-schema]
+                       (update b# 0 keyword))))
+                 '~binder)
+      (let [~@(mapcat (fn [b]
+                        [b [:tv (keyword b)]])
+                      syms)]
+        ~body)]))
