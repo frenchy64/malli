@@ -2722,7 +2722,16 @@
                    f
                    options)))))
 
-
+;;TODO kind annotations. try [:sequential :schema-schema] for non-uniform variable arity polymorphism,
+;; #'nat-int for dependently typed functions.
+;; e.g., schema for variable-arity map
+;; (all [a :- :schema-schema
+;;       b :- :schema-schema
+;;       c :- [:sequential :schema-schema]]
+;;  [:=> (into [:cat [:=> (into [:cat a] c) b] [:sequential a]]
+;;             (map #(vector :sequential %))
+;;             c)
+;;   [:sequential b]])
 (defmacro all
   [binder body]
   `(let [~@(mapcat (fn [b]
