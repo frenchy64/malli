@@ -462,6 +462,15 @@
 (defmethod -schema-generator 'ifn? [_ _] gen/keyword)
 (defmethod -schema-generator :ref [schema options] (-ref-gen schema options))
 (defmethod -schema-generator :schema [schema options] (generator (m/deref schema) options))
+(defmethod -schema-generator :schema-schema [schema options] (gen/one-of
+                                                               (mapv #(m/schema % options)
+                                                                     [[:enum (random-uuid)]
+                                                                      (let [lower (cond-> (* 10000 (rand))
+                                                                                    (< (rand) 0.5) (* -1))]
+                                                                        [:double {:min lower
+                                                                                  :max (+ 10 lower)}])
+                                                                      :keyword
+                                                                      :any])))
 (defmethod -schema-generator ::m/schema [schema options] (generator (m/deref schema) options))
 
 (defmethod -schema-generator :merge [schema options] (generator (m/deref schema) options))
@@ -583,8 +592,12 @@
                              explain-guard (assoc ::m/explain-guard explain-guard)
                              (ex-message result) (-> (update :result ex-message) (dissoc :result-data)))))))))]
      (condp = (m/type schema)
-       :=> (check schema)
+       :=> (check schema =>iterations)
        :function (let [checkers (map #(function-checker % options) (m/-children schema))]
+                   (fn [x] (->> checkers (keep #(% x)) (seq))))
+       :all (let [bounds-generator (generator (m/-bounds schema) options)]
+              (->> (prop/for-all* [bounds-generator] #(function-checker (m/-instantiate schema %) options))))
+(let [checkers (map #(function-checker % options) (m/-children schema))]
                    (fn [x] (->> checkers (keep #(% x)) (seq))))
        (m/-fail! ::invalid-function-schema {:type (m/-type schema)})))))
 

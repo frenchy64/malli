@@ -86,6 +86,11 @@
   (-regex-transformer [this transformer method options] "returns the raw internal regex transformer implementation")
   (-regex-min-max [this nested?] "returns size of the sequence as {:min min :max max}. nil max means unbounded. nested? is true when this schema is nested inside an outer regex schema."))
 
+(defprotocol AllSchema
+  (-bounds [this] "return map of type variable name to bound")
+  (-instantiate [this schemas] "replace variables in polymorphic schema with schemas")
+  (-instantiate-for-instrumentation [this] "return the schema suitable for instrumentation"))
+
 (defn -ref-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.RefSchema x))
 (defn -entry-parser? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntryParser x))
 (defn -entry-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntrySchema x))
@@ -713,6 +718,10 @@
 (defn -qualified-keyword-schema [] (-simple-schema {:type :qualified-keyword, :pred qualified-keyword?, :property-pred -qualified-keyword-pred}))
 (defn -qualified-symbol-schema [] (-simple-schema {:type :qualified-symbol, :pred qualified-symbol?}))
 (defn -uuid-schema [] (-simple-schema {:type :uuid, :pred uuid?}))
+;; the schema of all schemas
+;; TODO hardcoding upper/lower bounds to :any/:never. when adding that support, make sure
+;; `function-checker` is updated.
+(defn -schema-schema-schema [] (-simple-schema {:type :schema-schema, :pred schema?}))
 
 (defn -and-schema []
   ^{:type ::into-schema}
@@ -2506,7 +2515,9 @@
    :ref (-ref-schema)
    :=> (-=>-schema)
    :function (-function-schema nil)
+   :all (-all-schema)
    :schema (-schema-schema nil)
+   :schema-schema (-schema-schema-schema)
    ::schema (-schema-schema {:raw true})})
 
 (defn default-schemas []
@@ -2630,22 +2641,139 @@
                          (cond
                            info (apply (:f info) args)
                            varargs-info (if (< arity (:min varargs-info)) (report-arity) (apply (:f varargs-info) args))
-                           :else (report-arity))))))))))
+                           :else (report-arity))))))
+       :all (recur (assoc props :schema (-instantiate-for-instrumentation s))
+                   f
+                   options)))))
 
-(defn -all-schema [binder-syntax body-syntax f]
+(defn -all-schema [binder-syntax body-syntax]
+  (assert (seq binder-syntax))
+  (assert (apply distinct? binder-syntax))
+  (assert (every? simple-symbol? binder-syntax))
   ^{:type ::into-schema}
-  (reify
-    IntoSchema
+  (reify IntoSchema
     (-type [_] :all)
     (-type-properties [_])
     (-properties-schema [_ _])
     (-children-schema [_ _])
-    (-into-schema [parent properties children options]
-      (schema (apply f (repeat (count binder-syntax) :any))))))
+    (-into-schema [parent properties children {::keys [function-checker] :as options}]
+      (-check-children! :function properties children 1 nil)
+      (let [children (-vmap #(schema % options) children)
+            form (delay (-simple-form parent properties children -form options))
+            cache (-create-cache options)
+            ->checker (if function-checker #(function-checker % options) (constantly nil))]
+        (when-not (every? #(= :=> (type %)) children)
+          (-fail! ::non-function-childs {:children children}))
+        (-group-by-arity! (-vmap -function-info children))
+        ^{:type ::schema}
+        (reify
+          Schema
+          (-validator [this]
+            (if-let [checker (->checker this)]
+              (let [validator (fn [x] (nil? (checker x)))]
+                (fn [x] (and (ifn? x) (validator x)))) ifn?))
+          (-explainer [this path]
+            (if-let [checker (->checker this)]
+              (fn explain [x in acc]
+                (if (not (fn? x))
+                  (conj acc (miu/-error path in this x))
+                  (if-let [res (checker x)]
+                    (conj acc (assoc (miu/-error path in this x) :check res))
+                    acc)))
+              (let [validator (-validator this)]
+                (fn explain [x in acc]
+                  (if-not (validator x) (conj acc (miu/-error path in this x)) acc)))))
+          (-parser [this]
+            (let [validator (-validator this)]
+              (fn [x] (if (validator x) x ::invalid))))
+          (-unparser [this] (-parser this))
+          (-transformer [_ _ _ _])
+          (-walk [this walker path options] (-walk-indexed this walker path options))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] @form)
+          Cached
+          (-cache [_] cache)
+          AllSchema
+          (-bounds [_]
+            ;;TODO make :binder schema to replace :catn that can have variables
+            ;; depend on previous ones (f-bounded polymorphism)
+            (schema (into [:catn] (mapcat (fn [b]
+                                            [b (schema :schema-schema options)]))
+                          binder-syntax)
+                    options))
+          (-instantiate [_ schemas]
+            (schema
+              (walk/postwalk-replace
+                (zipmap binder-syntax most-general-binder)
+                body)
+              options))
+          (-instantiate-for-instrumentation [_]
+            (-instantiate this most-general-binder))
+          LensSchema
+          (-keep [_])
+          (-get [_ key default] (get children key default))
+          (-set [this key value] (-set-assoc-children this key value)))))
+
+    (-into-schema [parent properties children {::keys [function-checker] :as options}]
+      (-check-children! :all properties children 2 nil)
+      (let [[binder-syntax body-syntax] children
+            nbound (count binder-syntax)
+            form [:all binder-syntax body-syntax]
+            most-general-binder (repeat nbound :any)
+            cache (-create-cache options)
+            interesting-binders (fn []
+                                  [(shuffle
+                                     (mapv #(vector :enum %)
+                                           (range nbound)))
+                                   (mapv (fn [_] (vector :enum (random-uuid)))
+                                         (range nbound))
+                                   (mapv (fn [_]
+                                           (rand-nth [:int :boolean :nil :some :string :double :symbol :uuid]))
+                                         (range nbound))
+                                   most-general-binder])
+            ->checker (if function-checker #(function-checker % options) (constantly nil))]
+        ^{:type ::schema}
+        (reify
+          Schema
+          (-validator [this]
+            (fn [x]
+              (and (ifn? x)
+                   (every? (fn [binder]
+                             (if-let [checker (->checker (-instantiate this binder))]
+                               (nil? (checker x))
+                               true))
+                           (interesting-binders)))))
+          (-explainer [this path]
+            (if-let [checker (->checker this)]
+              (fn explain [x in acc]
+                (if (not (fn? x))
+                  (conj acc (miu/-error path in this x))
+                  (if-let [res (checker x)]
+                    (conj acc (assoc (miu/-error path in this x) :check res))
+                    acc)))
+              (let [validator (-validator this)]
+                (fn explain [x in acc]
+                  (if-not (validator x) (conj acc (miu/-error path in this x)) acc)))))
+          (-parser [this]
+            (let [validator (-validator this)]
+              (fn [x] (if (validator x) x ::invalid))))
+          (-unparser [this] (-parser this))
+          (-transformer [_ _ _ _])
+          (-walk [this walker path options] (-walk-indexed this walker path options))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] form)
+          Cached
+          (-cache [_] cache))))))
 
 (defmacro all
   [binder body]
-  `(-all-schema
-     '~binder
-     '~body
-     (fn ~binder ~body)))
+  `(let [~@(mapcat (fn [b]
+                     [b (list 'quote (gensym b))])
+                   binder)]
+     [:all ~binder ~body]))
