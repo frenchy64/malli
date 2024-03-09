@@ -8,6 +8,14 @@
 
 (defn ->plus [] plus)
 
+
+(m/=> poly-map (m/all [a b]
+                      [:=> [:cat
+                            [:=> [:cat a] b]
+                            [:sequential a]]
+                       [:sequential b]]))
+(defn poly-map [f c] (mapv f c))
+
 (defn unstrument! [] (with-out-str (mi/unstrument! {:filters [(mi/-filter-ns 'malli.instrument-test)]})))
 (defn instrument! [] (with-out-str (mi/instrument! {:filters [(mi/-filter-ns 'malli.instrument-test)]})))
 
@@ -18,18 +26,25 @@
     (is (thrown?
          ClassCastException
          ((->plus) "2")))
-    (is (= 7 ((->plus) 6))))
+    (is (= 7 ((->plus) 6)))
+    (is (thrown?
+          NullPointerException
+          (poly-map nil [1]))))
 
   (testing "with instrumentation"
     (instrument!)
     (is (thrown-with-msg?
          Exception
-         #":malli.core/invalid-input"
+         #":malli\.core/invalid-input"
          ((->plus) "2")))
     (is (thrown-with-msg?
          Exception
-         #":malli.core/invalid-output"
-         ((->plus) 6)))))
+         #":malli\.core/invalid-output"
+         ((->plus) 6)))
+    (is (thrown-with-msg?
+          Exception
+          #":malli\.core/invalid-output"
+          (poly-map nil [1])))))
 
 (defn minus
   "kukka"
