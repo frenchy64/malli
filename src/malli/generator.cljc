@@ -623,22 +623,23 @@
                                                                                (fn [size]
                                                                                  (let [schema (m/-instantiate schema schemas)]
                                                                                    (gen/return
-                                                                                     {:explain ((function-checker
-                                                                                                  schema
-                                                                                                  (update options ::=>iterations
-                                                                                                          (fn [=>iterations]
-                                                                                                            (let [=>iterations (or =>iterations default-=>iterations)]
-                                                                                                              (if (< size 9)
-                                                                                                                1
-                                                                                                                =>iterations)))))
-                                                                                                x)
+                                                                                     {:explain (delay
+                                                                                                 ((function-checker
+                                                                                                    schema
+                                                                                                    (update options ::=>iterations
+                                                                                                            (fn [=>iterations]
+                                                                                                              (let [=>iterations (or =>iterations default-=>iterations)]
+                                                                                                                (if (< size 9)
+                                                                                                                  1
+                                                                                                                  =>iterations)))))
+                                                                                                  x))
                                                                                       :schemas schemas
                                                                                       :schema schema}))))))]
-                                                                (fn [{:keys [explain]}] (nil? explain)))
+                                                                (fn [{:keys [explain]}] (nil? @explain)))
                                                  (check/quick-check all-iterations))
                     smallest (-> shrunk :smallest first)]
                 (when-not (true? result)
-                  (:explain smallest))))
+                  @(:explain smallest))))
        (m/-fail! ::invalid-function-schema {:type (m/-type schema)})))))
 
 (defn check
