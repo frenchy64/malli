@@ -2559,7 +2559,7 @@
           (-instantiate [_ schemas]
             (schema
               (walk/postwalk-replace
-                (zipmap binder-syntax most-general-binder)
+                (zipmap binder-syntax schemas)
                 body-syntax)
               options))
           (-instantiate-for-instrumentation [this]
