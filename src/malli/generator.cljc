@@ -462,15 +462,11 @@
 (defmethod -schema-generator 'ifn? [_ _] gen/keyword)
 (defmethod -schema-generator :ref [schema options] (-ref-gen schema options))
 (defmethod -schema-generator :schema [schema options] (generator (m/deref schema) options))
-(defmethod -schema-generator :schema-schema [schema options] (gen/one-of
-                                                               (mapv #(m/schema % options)
-                                                                     [[:enum (random-uuid)]
-                                                                      (let [lower (cond-> (* 10000 (rand))
-                                                                                    (< (rand) 0.5) (* -1))]
-                                                                        [:double {:min lower
-                                                                                  :max (+ 10 lower)}])
-                                                                      :keyword
-                                                                      :any])))
+(defmethod -schema-generator :schema-schema [schema options] (gen/sized
+                                                               (fn [size]
+                                                                 (if (< size 9)
+                                                                   (apply vector :enum (repeatedly (inc size) random-uuid))
+                                                                   :any))))
 (defmethod -schema-generator ::m/schema [schema options] (generator (m/deref schema) options))
 
 (defmethod -schema-generator :merge [schema options] (generator (m/deref schema) options))
@@ -566,9 +562,11 @@
 ;; functions
 ;;
 
+(def ^:private default-=>iterations 100)
+
 (defn function-checker
   ([?schema] (function-checker ?schema nil))
-  ([?schema {::keys [=>iterations] :or {=>iterations 100} :as options}]
+  ([?schema {::keys [=>iterations all-iterations] :or {=>iterations default-=>iterations all-iterations 16} :as options}]
    (let [schema (m/schema ?schema options)
          -try (fn [f] (try [(f) true] (catch #?(:clj Exception, :cljs js/Error) e [e false])))
          check (fn [schema]
@@ -592,13 +590,31 @@
                              explain-guard (assoc ::m/explain-guard explain-guard)
                              (ex-message result) (-> (update :result ex-message) (dissoc :result-data)))))))))]
      (condp = (m/type schema)
-       :=> (check schema =>iterations)
+       :=> (check schema)
        :function (let [checkers (map #(function-checker % options) (m/-children schema))]
                    (fn [x] (->> checkers (keep #(% x)) (seq))))
-       :all (let [bounds-generator (generator (m/-bounds schema) options)]
-              (->> (prop/for-all* [bounds-generator] #(function-checker (m/-instantiate schema %) options))))
-(let [checkers (map #(function-checker % options) (m/-children schema))]
-                   (fn [x] (->> checkers (keep #(% x)) (seq))))
+       :all (fn [x]
+              (let [bounds-generator (generator (m/-bounds schema) options)
+                    {:keys [result shrunk]} (->> (prop/for-all* [(gen/bind bounds-generator
+                                                                           (fn [schemas]
+                                                                             (gen/sized
+                                                                               (fn [size]
+                                                                                 (let [schema (m/-instantiate schema schemas)]
+                                                                                   {:explain (function-checker
+                                                                                               schema
+                                                                                               (update options ::=>iterations
+                                                                                                       (fn [=>iterations]
+                                                                                                         (let [=>iterations (or =>iterations default-=>iterations)]
+                                                                                                           (if (< size 9)
+                                                                                                             1
+                                                                                                             =>iterations)))))
+                                                                                    :schemas schemas
+                                                                                    :schema schema})))))]
+                                                                (fn [{:keys [explain]}] explain))
+                                                 (check/quick-check all-iterations))
+                    smallest (-> shrunk :smallest first)]
+                (when-not (true? result)
+                  (:explain smallest))))
        (m/-fail! ::invalid-function-schema {:type (m/-type schema)})))))
 
 (defn check
