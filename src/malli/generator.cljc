@@ -462,29 +462,30 @@
 (defmethod -schema-generator 'ifn? [_ _] gen/keyword)
 (defmethod -schema-generator :ref [schema options] (-ref-gen schema options))
 (defmethod -schema-generator :schema [schema options] (generator (m/deref schema) options))
+
+(defn -vals-to-enum-schema [vs]
+  (let [schemas (remove nil?
+                        [(when (some nil? vs)
+                           :nil)
+                         (when-some [vs (seq (remove nil? vs))]
+                           (into [:enum] vs))])]
+    (assert (seq schemas))
+    (if (next schemas)
+      (into [:or] schemas)
+      (first schemas))))
+
 (defmethod -schema-generator :schema-schema [schema options] (gen/sized
                                                                (fn [size]
                                                                  (gen/one-of
-                                                                   [(gen/fmap (fn [vs]
-                                                                                (let [schemas (remove nil?
-                                                                                                      [(when (some nil? vs)
-                                                                                                         :nil)
-                                                                                                       (when-some [vs (seq (remove nil? vs))]
-                                                                                                         (into [:enum] vs))])]
-                                                                                  (assert (seq schemas))
-                                                                                  (if (next schemas)
-                                                                                    (into [:or] schemas)
-                                                                                    (first schemas))))
+                                                                   [(gen/fmap -vals-to-enum-schema
                                                                               (gen/vector
                                                                                 (gen-one-of
                                                                                   [nil-gen
                                                                                    gen/boolean
-                                                                                   (gen/one-of
-                                                                                     (mapv (fn [_] (gen/return (random-uuid)))
-                                                                                           (range 100)))
+                                                                                   (gen/fmap identity gen/uuid)
                                                                                    gen/large-integer
                                                                                    gen/keyword
-                                                                                   gen/string
+                                                                                   gen/string-alphanumeric
                                                                                    gen/symbol
                                                                                    gen/uuid])
                                                                                 (inc size)))
