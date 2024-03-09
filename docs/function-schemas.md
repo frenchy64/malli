@@ -67,7 +67,7 @@ Enter, function schemas.
 
 ## Function Schemas
 
-Function values can be described with `:=>`, `:function`, and `m/all` schemas. They allow description of both function arguments (as [sequence schemas](https://github.com/metosin/malli#sequence-schemas)) and function return values.
+Function values can be described with `:=>`, `:function`, and `m/all` schemas. They allow descriptions of both function arguments (as [sequence schemas](https://github.com/metosin/malli#sequence-schemas)) and function return values.
 
 Examples of function definitions:
 

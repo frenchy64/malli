@@ -43,7 +43,7 @@
          ((->plus) 6)))
     (is (thrown-with-msg?
           Exception
-          #":malli\.core/invalid-output"
+          #":malli\.core/invalid-input"
           (poly-map nil [1])))))
 
 (defn minus
