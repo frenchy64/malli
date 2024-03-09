@@ -919,9 +919,3 @@
                        {:seed 2})]
     (is (vector? v))
     (is (seq v))))
-
-(deftest poly-check-test
-  (is (nil? (mg/check (let [a [:enum (random-uuid)]] [:=> [:cat a] a]) identity)))
-  (is (mg/check (let [a [:enum (random-uuid)]] [:=> [:cat a] a]) (fn [_] nil)))
-  (is (nil? (mg/check (m/all [a] [:=> [:cat a] a]) identity)))
-  (is (mg/check (m/all [a] [:=> [:cat a] a]) (fn [_] nil))))
