@@ -2766,13 +2766,40 @@
                    f
                    options)))))
 
+(defn -all-names [s]
+  (map #(nth % 0) (-children (-bounds s))))
+
+(defn -fv [?schema options]
+  (let [fvs (atom #{})]
+    (-walk (schema ?schema options)
+           (reify Walker
+             (-accept [_ s _ _] s)
+             (-inner [this s p options]
+               (case (type s)
+                 :all (-walk s this p (update options ::bound-tvs into (-all-names s)))
+                 (-walk s this p options)))
+             (-outer [_ s p c {::keys [bound-tvs] :as options}]
+               (case (type s)
+                 :tv (let [k (first c)]
+                       (when-not (contains? bound-tvs k)
+                         (swap! fvs conj k)))
+                 nil)
+               s))
+           []
+           (assoc options
+                  ::walk-refs false
+                  ::walk-schema-refs false
+                  ::walk-entry-vals true
+                  ::bound-tvs #{}))
+    @fvs))
+
 ;;TODO capture avoidance
 (defn -subst-tv [?schema tv->schema options]
   (let [inner (fn [this s path options]
                 (case (type s)
                   :all (-walk s this path (update options ::tv->schema
                                                   (fn [tv->schema]
-                                                    (let [shadowed (map #(nth % 0) (-children (-bounds s)))]
+                                                    (let [shadowed (-all-names s)]
                                                       (apply dissoc tv->schema shadowed)))))
                   :.. (-fail! ::todo-subst-tv-for-dotted-schema)
                   (-walk s this path options)))
@@ -2798,6 +2825,7 @@
              ::walk-schema-refs false
              ::walk-entry-vals true
              ::tv->schema tv->schema))))
+
 
 ;;TODO kind annotations. try [:sequential :schema-schema] for non-uniform variable arity polymorphism,
 ;; #'nat-int for dependently typed functions.
