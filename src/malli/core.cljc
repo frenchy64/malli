@@ -2770,21 +2770,25 @@
   (map #(nth % 0) (-children (-bounds s))))
 
 (defn -fv [?schema options]
-  (let [fvs (atom #{})]
-    (-walk (schema ?schema options)
-           (reify Walker
+  (let [fvs (atom #{})
+        inner (fn [this s p options]
+                (prn (::bound-tvs options))
+                (case (type s)
+                  :all (-walk s this p (update options ::bound-tvs into (-all-names s)))
+                  (-walk s this p options)))]
+    (inner (reify Walker
              (-accept [_ s _ _] s)
              (-inner [this s p options]
-               (case (type s)
-                 :all (-walk s this p (update options ::bound-tvs into (-all-names s)))
-                 (-walk s this p options)))
+               (inner this s p options))
              (-outer [_ s p c {::keys [bound-tvs] :as options}]
                (case (type s)
                  :tv (let [k (first c)]
+                       (prn bound-tvs)
                        (when-not (contains? bound-tvs k)
                          (swap! fvs conj k)))
                  nil)
                s))
+           (schema ?schema options)
            []
            (assoc options
                   ::walk-refs false
