@@ -3158,10 +3158,18 @@
                            {:a :any}
                            nil)))
   (is (= [:sequential :any]
-         (m/-subst-tv [:sequential [:tv :a]]
-                      {:a :any}
-                      nil)))
+         (m/form
+           (m/-subst-tv [:sequential [:tv :a]]
+                        {:a :any}
+                        nil))))
   (is (= [:catn [:foo :any]]
-         (m/-subst-tv [:catn [:foo [:tv :a]]]
-                      {:a :any}
-                      nil))))
+         (m/form
+           (m/-subst-tv [:catn [:foo [:tv :a]]]
+                        {:a :any}
+                        nil))))
+  ;;FIXME shadow
+  (is (= (m/all [a] [:=> [:cat a] a])
+         (m/form
+           (m/-subst-tv (m/all [a] [:=> [:cat a] a])
+                        {:a :any}
+                        nil)))))

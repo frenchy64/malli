@@ -14,7 +14,7 @@
 
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
-         parser unparser ast from-ast -all-schema)
+         parser unparser ast from-ast -all-schema -subst-tv)
 
 ;;
 ;; protocols and records
@@ -2551,18 +2551,20 @@
     (-children-schema [_ _])
     (-into-schema [parent properties children {::keys [function-checker] :as options}]
       (-check-children! :all properties children 2 nil)
-      (let [[binder-syntax body-syntax] children
-            nbound (count binder-syntax)
-            most-general-binder (repeat nbound :any)
-            form [:all binder-syntax body-syntax]
+      (let [[binder body :as children] (-vmap #(schema % options) children)
+            _ (when-not (= :catn (type binder))
+                (-fail! ::all-binder-must-be-catn))
+            ks (mapv #(nth % 0) (-children binder))
+            bounds (mapv #(nth % 2) (-children binder))
+            nbound (count ks)
+            ;;TODO actually check the kind of variables in binder
+            instrumenting-binder (repeat nbound :any)
+            ;;FIXME
+            form [:all (form binder) (form body)]
             cache (-create-cache options)
             ->checker (if function-checker #(function-checker % options) (constantly nil))]
-        (when-not (seq binder-syntax)
-          (-fail! ::empty-all-binder))
-        (when-not (apply distinct? binder-syntax)
-          (-fail! ::repeated-all-binder))
-        (when-not (every? simple-symbol? binder-syntax)
-          (-fail! ::simple-symbols-all-binder))
+        (when-not (every? simple-keyword? ks)
+          (-fail! ::all-binder-must-have-simple-keywords))
         ^{:type ::schema}
         (reify
           Schema
@@ -2598,18 +2600,13 @@
           (-bounds [_]
             ;;TODO make :binder schema to replace :catn that can have variables
             ;; depend on previous ones (f-bounded polymorphism)
-            (schema (into [:catn] (map (fn [b]
-                                         [(keyword b) (schema :schema-schema options)]))
-                          binder-syntax)
-                    options))
+            binder)
           (-instantiate [_ schemas]
-            (schema
-              (walk/postwalk-replace
-                (zipmap binder-syntax schemas)
-                body-syntax)
-              options))
+            (when-not (= nbound (count schemas))
+              (-fail! ::wrong-number-of-schemas-to-instantiate))
+            (-subst-tv body (zipmap ks schemas) options))
           (-instantiate-for-instrumentation [this]
-            (-instantiate this most-general-binder))
+            (-instantiate this instrumenting-binder))
           LensSchema
           (-keep [_])
           (-get [_ key default] (get children key default))
@@ -2770,25 +2767,39 @@
                    options)))))
 
 (defn -subst-tv [?schema tv->schema options]
-  (let [options (assoc options
+  (let [inner (fn [this s path options]
+                (prn "inner" s)
+                (case (type s)
+                  ;;FIXME shadow
+                  :all (-walk s this path (update options ::tv->schema
+                                                  (fn [tv->schema]
+                                                    (let [shadowed (mapv #(nth % 0) (-children (-bounds s)))
+                                                          removed (apply dissoc tv->schema shadowed)]
+                                                      (prn "shadowed" shadowed tv->schema removed)
+                                                      removed))))
+                  :.. (-fail! ::todo-subst-tv-for-dotted-schema)
+                  (-walk s this path options)))
+        outer (schema-walker
+                (fn [s]
+                  (prn "outer" s)
+                  (case (type s)
+                    :tv (let [tv (first (children s))]
+                          (if-some [[_ v] (find tv->schema tv)]
+                            v
+                            s))
+                    ::val (first (children s))
+                    s)))
+        options (assoc options
                        ::walk-refs false
                        ::walk-schema-refs false
                        ::walk-entry-vals true
-                       ::tv->schema tv->schema)
-        inner (fn [this s path {::keys [tv->schema] :as options}]
-                (case (type s)
-                  :tv (if-some [[_ v] (when (= :tv (type s))
-                                        (find tv->schema (first (-children s))))]
-                        v
-                        s)
-                  :all (assert nil "TODO shadowing")
-                  :.. (assert nil "TODO shadowing")
-                  (-walk s this path options)))]
+                       ::tv->schema tv->schema)]
     (inner
       (reify Walker
         (-accept [_ s path options] true)
         (-inner [this s path options] (inner this s path options))
-        (-outer [this schema path children options] schema))
+        (-outer [_ schema path children options]
+          (outer schema path children options)))
       (schema ?schema options)
       []
       options)))
