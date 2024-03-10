@@ -2771,10 +2771,8 @@
                 (case (type s)
                   :all (-walk s this path (update options ::tv->schema
                                                   (fn [tv->schema]
-                                                    (let [shadowed (mapv #(nth % 0) (-children (-bounds s)))
-                                                          removed (apply dissoc tv->schema shadowed)]
-                                                      (prn "shadowed" shadowed tv->schema removed)
-                                                      removed))))
+                                                    (let [shadowed (map #(nth % 0) (-children (-bounds s)))]
+                                                      (apply dissoc tv->schema shadowed)))))
                   :.. (-fail! ::todo-subst-tv-for-dotted-schema)
                   (-walk s this path options)))
         outer (fn [s path children {::keys [tv->schema] :as options}]
