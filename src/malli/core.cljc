@@ -2768,9 +2768,7 @@
 
 (defn -subst-tv [?schema tv->schema options]
   (let [inner (fn [this s path options]
-                (prn "inner" s)
                 (case (type s)
-                  ;;FIXME shadow
                   :all (-walk s this path (update options ::tv->schema
                                                   (fn [tv->schema]
                                                     (let [shadowed (mapv #(nth % 0) (-children (-bounds s)))
@@ -2779,21 +2777,15 @@
                                                       removed))))
                   :.. (-fail! ::todo-subst-tv-for-dotted-schema)
                   (-walk s this path options)))
-        outer (schema-walker
-                (fn [s]
-                  (prn "outer" s)
+        outer (fn [s path children {::keys [tv->schema] :as options}]
+                (let [s (-set-children s children)]
                   (case (type s)
-                    :tv (let [tv (first (children s))]
+                    :tv (let [tv (first children)]
                           (if-some [[_ v] (find tv->schema tv)]
                             v
                             s))
-                    ::val (first (children s))
-                    s)))
-        options (assoc options
-                       ::walk-refs false
-                       ::walk-schema-refs false
-                       ::walk-entry-vals true
-                       ::tv->schema tv->schema)]
+                    ::val (first children)
+                    s)))]
     (inner
       (reify Walker
         (-accept [_ s path options] true)
@@ -2802,7 +2794,11 @@
           (outer schema path children options)))
       (schema ?schema options)
       []
-      options)))
+      (assoc options
+             ::walk-refs false
+             ::walk-schema-refs false
+             ::walk-entry-vals true
+             ::tv->schema tv->schema))))
 
 ;;TODO kind annotations. try [:sequential :schema-schema] for non-uniform variable arity polymorphism,
 ;; #'nat-int for dependently typed functions.
