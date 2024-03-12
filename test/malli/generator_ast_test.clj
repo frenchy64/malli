@@ -319,7 +319,7 @@
   (is (ast/generator-ast [:maybe :boolean])))
 
 (deftest schema-schema-test
-  (let [{[sized] :args} (ast/generator-ast :schema-schema)]
+  (let [{[sized] :args} (ast/generator-ast :Schema)]
     (is (= [ast/-vals-to-enum-schema
             {:op :vector
              :generator {:op :one-of

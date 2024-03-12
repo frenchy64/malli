@@ -721,7 +721,7 @@
 ;; the schema of all schemas
 ;; TODO hardcoding upper/lower bounds to :any/:never. when adding that support, make sure
 ;; `function-checker` is updated.
-(defn -schema-schema-schema [] (-simple-schema {:type :schema-schema, :pred schema?}))
+(defn -schema-schema-schema [] (-simple-schema {:type :Schema, :pred schema?}))
 
 (defn -and-schema []
   ^{:type ::into-schema}
@@ -2606,7 +2606,7 @@
             (when-not (= nbound (count schemas))
               (-fail! ::wrong-number-of-schemas-to-instantiate))
             ;; TODO check schemas against bounds
-            ;; note that :schema-schema is a non-regex schema. kind for sequences of schemas tbd
+            ;; note that :Schema is a non-regex schema. kind for sequences of schemas tbd
             (-subst-tv body (zipmap ks schemas) options))
           (-instantiate-for-instrumentation [this]
             (-instantiate this instrumenting-binder))
@@ -2637,7 +2637,7 @@
    :all (-all-schema)
    :tv (-tv-schema)
    :schema (-schema-schema nil)
-   :schema-schema (-schema-schema-schema)
+   :Schema (-schema-schema-schema)
    ::schema (-schema-schema {:raw true})})
 
 (defn default-schemas []
@@ -2775,7 +2775,6 @@
 (defn -fv [?schema options]
   (let [fvs (atom #{})
         inner (fn [this s p options]
-                (prn (::bound-tvs options))
                 (case (type s)
                   :all (-walk s this p (update options ::bound-tvs into (-all-names s)))
                   (-walk s this p options)))]
@@ -2786,7 +2785,6 @@
              (-outer [_ s p c {::keys [bound-tvs] :as options}]
                (case (type s)
                  :tv (let [k (first c)]
-                       (prn bound-tvs)
                        (when-not (contains? bound-tvs k)
                          (swap! fvs conj k)))
                  nil)
@@ -2835,21 +2833,21 @@
              ::tv->schema tv->schema))))
 
 
-;;TODO kind annotations. try [:sequential :schema-schema] for non-uniform variable arity polymorphism,
+;;TODO kind annotations. try [:sequential :Schema] for non-uniform variable arity polymorphism,
 ;; #'nat-int for dependently typed functions.
 ;; e.g., schema for variable-arity map
 #_
-(all [a :- :schema-schema
-      b :- :schema-schema
+(all [a :- :Schema
+      b :- :Schema
       ;; defaults to [:* :any]
-      c :- [:*-schema :schema-schema]]
+      c :- [:* :Schema]]
      [:=> [:cat [:=> [:cat a [:.. c c]]
                  b]
            [:sequential a]
            [:.. [:sequential c] c]]
       [:sequential b]])
 #_
-(all [a :- :+-schema, b]
+(all [a :- [:* :Schema], b]
      [:=> [:catn
            [:f [:=> [:catn [:pairwise-elements [:.. a a]]]
                 b]]
@@ -2861,7 +2859,7 @@
   (let [a [:tv :a]
         b [:tv :b]
         ...]
-    [:all [:catn [:a :schema-schema] [:b b-KIND] ...]
+    [:all [:catn [:a :Schema] [:b b-KIND] ...]
      body])"
   [binder body]
   (when-not (seq binder)
@@ -2877,9 +2875,9 @@
                        (do (when-not s
                              (-fail! ::missing-all-bound sym))
                            (recur (nthnext binder 3)
-                                  (conj [sym s])))
+                                  (conj out [sym s])))
                        (recur (next binder)
-                              (conj [sym :schema-schema]))))))
+                              (conj out [sym :Schema]))))))
         syms (map first binder)
         _ (when-not (apply distinct? syms)
             (-fail! ::repeated-all-variable syms))]

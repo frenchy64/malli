@@ -3149,7 +3149,7 @@
                         {:registry registry, ::m/ref-key :id}))))))))
 
 (deftest all-syntax-test
-  (is (= [:all [:catn [:a :schema-schema]]
+  (is (= [:all [:catn [:a :Schema]]
           [:=> [:cat [:tv :a]] [:tv :a]]]
          (m/all [a] [:=> [:cat a] a]))))
 

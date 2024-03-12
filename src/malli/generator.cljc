@@ -475,42 +475,22 @@
       (first schemas))))
 
 ;; a non-regex schema
-(defmethod -schema-generator :schema-schema [schema options] (gen/sized
-                                                               (fn [size]
-                                                                 (gen/one-of
-                                                                   [(gen/fmap -vals-to-enum-schema
-                                                                              (gen/vector
-                                                                                (gen-one-of
-                                                                                  [nil-gen
-                                                                                   gen/boolean
-                                                                                   (gen/fmap identity gen/uuid)
-                                                                                   gen/large-integer
-                                                                                   gen/keyword
-                                                                                   gen/string-alphanumeric
-                                                                                   gen/symbol
-                                                                                   gen/uuid])
-                                                                                (inc size)))
-                                                                    (gen/return :any)]))))
-
-(defmethod -schema-generator :*-schema [schema options] (let [gen-el (generator (first (m/children schema)))]
+(defmethod -schema-generator :Schema [schema options] (gen/sized
+                                                        (fn [size]
                                                           (gen/one-of
-                                                            [(gen/bind (gen/vector gen-el)
-                                                                       #(generator (into [:cat] %)
-                                                                                   options))
-                                                             (gen/bind gen-el
-                                                                       #(generator [:* %]
-                                                                                   options))])))
-
-(defmethod -schema-generator :+-schema [schema options] (let [gen-el (generator (first (m/children schema)))]
-                                                          (gen/one-of
-                                                            [(gen/sized
-                                                               (fn [size]
-                                                                 (gen/bind (gen/vector gen-el 1 (inc size))
-                                                                           #(generator (into [:cat] %)
-                                                                                       options))))
-                                                             (gen/bind gen-el
-                                                                       #(generator [:+ %]
-                                                                                   options))])))
+                                                            [(gen/fmap -vals-to-enum-schema
+                                                                       (gen/vector
+                                                                         (gen-one-of
+                                                                           [nil-gen
+                                                                            gen/boolean
+                                                                            (gen/fmap identity gen/uuid)
+                                                                            gen/large-integer
+                                                                            gen/keyword
+                                                                            gen/string-alphanumeric
+                                                                            gen/symbol
+                                                                            gen/uuid])
+                                                                         (inc size)))
+                                                             (gen/return :any)]))))
 
 (defmethod -schema-generator ::m/schema [schema options] (generator (m/deref schema) options))
 
