@@ -1742,7 +1742,11 @@
           (-parser [this] (-fail! ::uninstantiated-... this))
           (-unparser [this] (-fail! ::uninstantiated-... this))
           (-transformer [this transformer method options] (-fail! ::uninstantiated-... this))
-          (-walk [this walker path options] (-walk-leaf this walker path options))
+          (-walk [this walker path options]
+            (when (-accept walker this path options)
+              (-outer walker this path [(-inner walker pretype (conj path ::pretype) options)
+                                        (-inner walker bound (conj path ::bound) options)]
+                      options)))
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -2835,6 +2839,7 @@
                  :tv (let [k (first c)]
                        (when-not (contains? bound-tvs k)
                          (swap! fvs conj k)))
+                 ;;TODO think harder about :..
                  nil)
                s))
            (schema ?schema options)

@@ -3171,7 +3171,8 @@
 
 (deftest fv-test
   (is (= #{:a} (m/-fv [:tv :a] nil)))
-  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:tv :b]]) nil))))
+  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:tv :b]]) nil)))
+  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:.. [:tv :b] [:tv :b]]]) nil))))
 
 (deftest subst-tv-test
   (is (= :any (m/-subst-tv [:tv :a]
