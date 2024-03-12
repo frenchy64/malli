@@ -474,6 +474,7 @@
       (into [:or] schemas)
       (first schemas))))
 
+;; a non-regex schema
 (defmethod -schema-generator :schema-schema [schema options] (gen/sized
                                                                (fn [size]
                                                                  (gen/one-of
@@ -490,6 +491,27 @@
                                                                                    gen/uuid])
                                                                                 (inc size)))
                                                                     (gen/return :any)]))))
+
+(defmethod -schema-generator :*-schema [schema options] (let [gen-el (generator (first (m/children schema)))]
+                                                          (gen/one-of
+                                                            [(gen/bind (gen/vector gen-el)
+                                                                       #(generator (into [:cat] %)
+                                                                                   options))
+                                                             (gen/bind gen-el
+                                                                       #(generator [:* %]
+                                                                                   options))])))
+
+(defmethod -schema-generator :+-schema [schema options] (let [gen-el (generator (first (m/children schema)))]
+                                                          (gen/one-of
+                                                            [(gen/sized
+                                                               (fn [size]
+                                                                 (gen/bind (gen/vector gen-el 1 (inc size))
+                                                                           #(generator (into [:cat] %)
+                                                                                       options))))
+                                                             (gen/bind gen-el
+                                                                       #(generator [:+ %]
+                                                                                   options))])))
+
 (defmethod -schema-generator ::m/schema [schema options] (generator (m/deref schema) options))
 
 (defmethod -schema-generator :merge [schema options] (generator (m/deref schema) options))

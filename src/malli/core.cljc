@@ -2558,6 +2558,7 @@
             bounds (mapv #(nth % 2) (-children binder))
             nbound (count ks)
             ;;TODO actually check the kind of variables in binder
+            ;; use [:* :any] for :*-schema
             instrumenting-binder (repeat nbound :any)
             ;;FIXME
             form [:all (form binder) (form body)]
@@ -2604,6 +2605,8 @@
           (-instantiate [_ schemas]
             (when-not (= nbound (count schemas))
               (-fail! ::wrong-number-of-schemas-to-instantiate))
+            ;; TODO check schemas against bounds
+            ;; note that :schema-schema is a non-regex schema. kind for sequences of schemas tbd
             (-subst-tv body (zipmap ks schemas) options))
           (-instantiate-for-instrumentation [this]
             (-instantiate this instrumenting-binder))
@@ -2801,6 +2804,7 @@
 (defn -subst-tv [?schema tv->schema options]
   (let [inner (fn [this s path options]
                 (case (type s)
+                  ;; TODO rename :all binder if name capturing will occur
                   :all (-walk s this path (update options ::tv->schema
                                                   (fn [tv->schema]
                                                     (let [shadowed (-all-names s)]
@@ -2834,27 +2838,53 @@
 ;;TODO kind annotations. try [:sequential :schema-schema] for non-uniform variable arity polymorphism,
 ;; #'nat-int for dependently typed functions.
 ;; e.g., schema for variable-arity map
-;; (all [a :- :schema-schema
-;;       b :- :schema-schema
-;;       c :- [:sequential :schema-schema]]
-;;  [:=> (into [:cat [:=> (into [:cat a] c) b] [:sequential a]]
-;;             (map #(vector :sequential %))
-;;             c)
-;;   [:sequential b]])
+#_
+(all [a :- :schema-schema
+      b :- :schema-schema
+      ;; defaults to [:* :any]
+      c :- [:*-schema :schema-schema]]
+     [:=> [:cat [:=> [:cat a [:.. c c]]
+                 b]
+           [:sequential a]
+           [:.. [:sequential c] c]]
+      [:sequential b]])
+#_
+(all [a :- :+-schema, b]
+     [:=> [:catn
+           [:f [:=> [:catn [:pairwise-elements [:.. a a]]]
+                b]]
+           [:colls [:.. [:sequential a] a]]]
+      [:sequential b]])
 (defmacro all
+  "(all [a b :- b-KIND ...] body)
+  is equivalent to
+  (let [a [:tv :a]
+        b [:tv :b]
+        ...]
+    [:all [:catn [:a :schema-schema] [:b b-KIND] ...]
+     body])"
   [binder body]
-  (let [syms (map (fn [b]
-                    (if (symbol? b)
-                      b
-                      (first b)))
-                  binder)]
-    `[:all (into [:catn]
-                 (map
-                   (fn [b#]
-                     (if (symbol? b#)
-                       [(keyword b#) :schema-schema]
-                       (update b# 0 keyword))))
-                 '~binder)
+  (when-not (seq binder)
+    (-fail! ::empty-all-binder binder))
+  (let [binder (loop [binder binder
+                      out []]
+                 (if (empty? binder)
+                   out
+                   (let [[sym colon s] binder]
+                     (when-not (simple-symbol? sym)
+                       (-fail! ::non-simple-symbol-binder sym))
+                     (if (= :- colon)
+                       (do (when-not s
+                             (-fail! ::missing-all-bound sym))
+                           (recur (nthnext binder 3)
+                                  (conj [sym s])))
+                       (recur (next binder)
+                              (conj [sym :schema-schema]))))))
+        syms (map first binder)
+        _ (when-not (apply distinct? syms)
+            (-fail! ::repeated-all-variable syms))]
+    `[:all ~(into [:catn] (map #(update % 0 keyword))
+                  binder)
       (let [~@(mapcat (fn [b]
                         [b [:tv (keyword b)]])
                       syms)]
