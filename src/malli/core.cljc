@@ -1717,6 +1717,53 @@
           (-regex-transformer [this _ _ _] (-fail! ::uninstantiated-tv this))
           (-regex-min-max [this _] (-fail! ::uninstantiated-tv this)))))))
 
+(defn -dotted-pretype-schema []
+  ^{:type ::into-schema}
+  (reify
+    AST
+    (-from-ast [parent ast options] (-from-value-ast parent ast options))
+    IntoSchema
+    (-type [_] :..)
+    (-type-properties [_])
+    (-into-schema [parent properties children options]
+      (-check-children! :.. properties children 2 2)
+      (let [[pretype bound :as children] (-vmap #(schema % options) children)
+            _ (when-not (= :tv (type bound))
+                (-fail! ::invalid-dotted-variable bound))
+            form (delay (-simple-form parent properties children identity options))
+            cache (-create-cache options)]
+        ^{:type ::schema}
+        (reify
+          AST
+          (-to-ast [this _] (-to-value-ast this))
+          Schema
+          (-validator [this] (-fail! ::uninstantiated-... this))
+          (-explainer [this path] (-fail! ::uninstantiated-... this))
+          (-parser [this] (-fail! ::uninstantiated-... this))
+          (-unparser [this] (-fail! ::uninstantiated-... this))
+          (-transformer [this transformer method options] (-fail! ::uninstantiated-... this))
+          (-walk [this walker path options] (-walk-leaf this walker path options))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] @form)
+          Cached
+          (-cache [_] cache)
+          ;LensSchema
+          ;(-get [_ key default] (if (= key 0) (-pointer tv (rf) options) default))
+          ;(-keep [_])
+          ;(-set [this key value] (if (= key 0) (-set-children this [value])
+          ;                                     (-fail! ::index-out-of-bounds {:schema this, :key key})))
+          RegexSchema
+          (-regex-op? [_] false)
+          (-regex-validator [this] (-fail! ::uninstantiated-... this))
+          (-regex-explainer [this _] (-fail! ::uninstantiated-... this))
+          (-regex-parser [this] (-fail! ::uninstantiated-... this))
+          (-regex-unparser [this] (-fail! ::uninstantiated-... this))
+          (-regex-transformer [this _ _ _] (-fail! ::uninstantiated-... this))
+          (-regex-min-max [this _] (-fail! ::uninstantiated-... this)))))))
+
 (defn -schema-schema [{:keys [id raw]}]
   ^{:type ::into-schema}
   (let [internal (or id raw)
@@ -2638,6 +2685,7 @@
    :tv (-tv-schema)
    :schema (-schema-schema nil)
    :Schema (-schema-schema-schema)
+   :.. (-dotted-pretype-schema)
    ::schema (-schema-schema {:raw true})})
 
 (defn default-schemas []
