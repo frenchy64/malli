@@ -3193,3 +3193,8 @@
            (m/-subst-tv (m/all [a] [:=> [:cat a] a])
                         {:a :any}
                         nil)))))
+
+(deftest Schema-test
+  (is (m/validate :Schema :any))
+  ;; FIXME we need to figure out a better kind for regexes
+  (is (m/explain :Schema [:* :any])))
