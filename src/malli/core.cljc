@@ -721,7 +721,10 @@
 ;; the schema of all schemas
 ;; TODO hardcoding upper/lower bounds to :any/:never. when adding that support, make sure
 ;; `function-checker` is updated.
-(defn -schema-schema-schema [] (-simple-schema {:type :Schema, :pred schema?}))
+(defn -schema-schema-schema [] (-simple-schema {:type :Schema, :pred (fn [?schema]
+                                                                       (let [s (schema ?schema)]
+                                                                         (and (boolean s)
+                                                                              (not (-regex-op? s)))))}))
 
 (defn -and-schema []
   ^{:type ::into-schema}
