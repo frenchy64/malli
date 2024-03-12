@@ -2835,6 +2835,10 @@
 
 ;;TODO kind annotations. try [:sequential :Schema] for non-uniform variable arity polymorphism,
 ;; #'nat-int for dependently typed functions.
+;; idea: dependent :cat? not very promising, raises too many questions.
+;; [:dcat :int [:string {:min [:tv 0], :max 4}]]
+;; [:dcatn [:i :int],
+;;         [:m {:depends [:i]} (fn [{:keys [i]}] [:string {:min i, :max 4}])]]
 ;; e.g., schema for variable-arity map
 #_
 (all [a :- :Schema
