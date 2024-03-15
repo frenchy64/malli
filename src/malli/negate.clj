@@ -24,21 +24,24 @@
       [:multi {:dispatch #'map?}
        [true (-> [:multi {:dispatch `(fn [~'x]
                                        (cond
-                                         ~@(mapcat (fn [[k]]
-                                                     `[(contains? ~'x '~k) '~k])
+                                         ~@(mapcat (fn [[k s :as e]]
+                                                     (when-not (-> e -last m/properties :optional)
+                                                       `[(not (contains? ~'x '~k)) '~k]))
                                                    entries)
                                          :else ::default))}]
                  (into (map (fn [[k s :as e]]
                               [k (into [:map]
-                                       (map (fn [[k' s :as e]]
-                                              (-> [k']
-                                                  (cond-> (not= k k') (conj {:optional true}))
-                                                  (conj (negate (-> s m/children first) options)))))
+                                       (keep (fn [[k' s :as e]]
+                                               (assert (not (-> e -last m/properties :optional))
+                                                       "TODO")
+                                               [k' {:optional true} (if (= k k') :never :any)]))
                                        entries)]))
                        entries)
                  (conj [::default (into [:map]
-                                        (map (fn [[k]]
-                                               [k {:optional true} :never]))
+                                        (map (fn [[k s :as e]]
+                                               (assert (not (-> e -last m/properties :optional))
+                                                       "TODO")
+                                               [k (negate (first (m/children s)) options)]))
                                         entries)]))]
        [false [:not #'map?]]])))
 

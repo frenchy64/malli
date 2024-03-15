@@ -70,10 +70,10 @@
            :negated [:multi {:dispatch #'clojure.core/map?}
                      [true [:multi {:dispatch '(clojure.core/fn [x]
                                                  (clojure.core/cond
-                                                   (clojure.core/contains? x (quote :a)) (quote :a)
-                                                   :else ::mn/default))}
-                            [:a [:map [:a [:not= 1]]]]
-                            [::mn/default [:map [:a {:optional true} :never]]]]]
+                                                   (clojure.core/not (clojure.core/contains? x (quote :a))) (quote :a)
+                                                   :else :malli.negate/default))}
+                            [:a [:map [:a {:optional true} :never]]]
+                            [:malli.negate/default [:map [:a [:not= 1]]]]]]
                      [false [:not #'clojure.core/map?]]]
            :no-double-negation true})
     (negs {:schema [:map
@@ -84,23 +84,36 @@
            :negated [:multi {:dispatch #'clojure.core/map?}
                      [true [:multi {:dispatch '(clojure.core/fn [x]
                                                  (clojure.core/cond
-                                                   (clojure.core/contains? x (quote :a)) (quote :a)
-                                                   (clojure.core/contains? x (quote :b)) (quote :b)
-                                                   :else ::mn/default))}
-                            [:a [:map [:a [:not= 1]] [:b {:optional true} [:not= 2]]]]
-                            [:b [:map [:a {:optional true} [:not= 1]] [:b [:not= 2]]]]
-                            [::mn/default [:map [:a {:optional true} :never] [:b {:optional true} :never]]]]]
+                                                   (clojure.core/not (clojure.core/contains? x (quote :a))) (quote :a)
+                                                   (clojure.core/not (clojure.core/contains? x (quote :b))) (quote :b)
+                                                   :else :malli.negate/default))}
+                            [:a [:map [:a {:optional true} :never] [:b {:optional true} :any]]]
+                            [:b [:map [:a {:optional true} :any] [:b {:optional true} :never]]]
+                            [:malli.negate/default [:map [:a [:not= 1]] [:b [:not= 2]]]]]]
                      [false [:not #'clojure.core/map?]]]
            :no-double-negation true})
     (negs {:schema [:map [:a {:optional true} [:= 1]]]
-           :pass [{:a 1} {}]
+           :pass [{:a 1} {} {:a 1} {:b 2}]
            :fail [{:a 2} 1 nil]
            :negated [:multi {:dispatch #'clojure.core/map?}
-                     [true [:multi {:dispatch '(clojure.core/fn [x] (clojure.core/or (clojure.core/contains? x (quote :a))))}
-                            [true [:map [:a {:optional true} [:not= 1]]]]
-                            [false [:map-of [:enum :a] :any]]]]
-                     [false :any]]
-           :no-double-negation true}))
+                     [true [:map [:a [:not= 1]]]]
+                     [false [:not #'clojure.core/map?]]]
+           :no-double-negation true})
+    (negs {:schema [:map
+                    [:a {:optional true} [:= 1]]
+                    [:b [:= 2]]]
+           :pass [{:a 1 :b 2} {:b 2}]
+           :fail [{:a 2} {:b 1} 1 nil]
+           :negated [:multi {:dispatch #'clojure.core/map?}
+                     [true [:multi {:dispatch '(clojure.core/fn [x]
+                                                 (clojure.core/cond
+                                                   (clojure.core/not (clojure.core/contains? x (quote :b))) (quote :b)
+                                                   :else :malli.negate/default))}
+                            [:b [:map [:a {:optional true} :never] [:b {:optional true} :any]]]
+                            [::mn/default [:map [:a [:not= 1]]]]]]
+                     [false [:not #'clojure.core/map?]]]
+           :no-double-negation true})
+    )
   )
 
 (comment
