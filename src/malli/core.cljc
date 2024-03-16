@@ -1306,7 +1306,8 @@
                  (cond
                    (not (vector? x)) (conj acc (miu/-error path in this x ::invalid-type))
                    (not= (count x) size) (conj acc (miu/-error path in this x ::tuple-size))
-                   :else (when (pos? size)
+                   :else (if (zero? size)
+                           acc
                            (loop [acc acc, i 0, [x & xs] x, [e & es] explainers]
                              (cond-> (e x (conj in i) acc) xs (recur (inc i) xs es))))))))
            (-parser [_] (->parser -parser))
