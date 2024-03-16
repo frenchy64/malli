@@ -15,35 +15,14 @@
 (defmethod -negate-schema :not [schema options] (first (m/children schema)))
 (defmethod -negate-schema :not= [schema options] (m/schema [:= (first (m/children schema))] options))
 (defmethod -negate-schema :map [schema options]
-  (let [entries (m/entries schema)]
-    (if (every? #(-> % -last m/properties :optional)
-                entries)
-      [:fn {:error/message {:en "should not be a map"}}
-       `(fn [~'x] (not (map? ~'x)))]
-      ;;TODO closed?
-      [:multi {:dispatch #'map?}
-       [true (-> [:multi {:dispatch `(fn [~'x]
-                                       (cond
-                                         ~@(mapcat (fn [[k s :as e]]
-                                                     (when-not (-> e -last m/properties :optional)
-                                                       `[(not (contains? ~'x '~k)) '~k]))
-                                                   entries)
-                                         :else ::default))}]
-                 (into (map (fn [[k s :as e]]
-                              [k (into [:map]
-                                       (keep (fn [[k' s :as e]]
-                                               (assert (not (-> e -last m/properties :optional))
-                                                       "TODO")
-                                               [k' {:optional true} (if (= k k') :never :any)]))
-                                       entries)]))
-                       entries)
-                 (conj [::default (into [:map]
-                                        (map (fn [[k s :as e]]
-                                               (assert (not (-> e -last m/properties :optional))
-                                                       "TODO")
-                                               [k (negate (first (m/children s)) options)]))
-                                        entries)]))]
-       [false [:not #'map?]]])))
+  (-> [:or [:not #'clojure.core/map?]]
+      (into (keep (fn [[k :as e]]
+                    (when (-> e -last m/properties :optional not)
+                      [:map [k {:optional true} :never]])))
+            (m/entries schema))
+      (into (mapcat (fn [[k s :as e]]
+                      [[:map [k (negate (-> s m/children first) options)]]]))
+            (m/entries schema))))
 
 (defn negate
   ([?schema] (negate ?schema nil))

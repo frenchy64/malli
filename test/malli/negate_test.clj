@@ -62,56 +62,57 @@
     (negs {:schema [:map]
            :pass [{} {:a 1}]
            :fail [1 nil]
-           :negated -not-map-spec
+           :negated [:or [:not #'clojure.core/map?]]
            :no-double-negation true})
     (negs {:schema [:map [:a [:= 1]]]
            :pass [{:a 1} {:a 1 :extra 42}]
            :fail [{} {:a 2} 1 nil]
-           :negated [:multi {:dispatch #'clojure.core/map?}
-                     [true [:multi {:dispatch '(clojure.core/fn [x]
-                                                 (clojure.core/cond
-                                                   (clojure.core/not (clojure.core/contains? x (quote :a))) (quote :a)
-                                                   :else :malli.negate/default))}
-                            [:a [:map [:a {:optional true} :never]]]
-                            [:malli.negate/default [:map [:a [:not= 1]]]]]]
-                     [false [:not #'clojure.core/map?]]]
+           :negated [:or
+                     [:not #'clojure.core/map?]
+                     ;; missing :a
+                     [:map [:a {:optional true} :never]]
+                     ;; bad :a
+                     [:map [:a [:not= 1]]]]
            :no-double-negation true})
     (negs {:schema [:map
                     [:a [:= 1]]
                     [:b [:= 2]]]
            :pass [{:a 1 :b 2}]
            :fail [{} {:a 1} {:a 2} {:a 2 :b 1} 1 nil]
-           :negated [:multi {:dispatch #'clojure.core/map?}
-                     [true [:multi {:dispatch '(clojure.core/fn [x]
-                                                 (clojure.core/cond
-                                                   (clojure.core/not (clojure.core/contains? x (quote :a))) (quote :a)
-                                                   (clojure.core/not (clojure.core/contains? x (quote :b))) (quote :b)
-                                                   :else :malli.negate/default))}
-                            [:a [:map [:a {:optional true} :never] [:b {:optional true} :any]]]
-                            [:b [:map [:a {:optional true} :any] [:b {:optional true} :never]]]
-                            [:malli.negate/default [:map [:a [:not= 1]] [:b [:not= 2]]]]]]
-                     [false [:not #'clojure.core/map?]]]
+           :negated [:or
+                     [:not #'clojure.core/map?]
+                     ;; missing :a
+                     [:map [:a {:optional true} :never]]
+                     ;; missing :b
+                     [:map [:b {:optional true} :never]]
+                     ;; bad :a
+                     [:map [:a [:not= 1]]]
+                     ;; bad :b
+                     [:map [:b [:not= 2]]]
+                     ]
            :no-double-negation true})
     (negs {:schema [:map [:a {:optional true} [:= 1]]]
            :pass [{:a 1} {} {:a 1} {:b 2}]
-           :fail [{:a 2} 1 nil]
-           :negated [:multi {:dispatch #'clojure.core/map?}
-                     [true [:map [:a [:not= 1]]]]
-                     [false [:not #'clojure.core/map?]]]
+           :fail [{:a 2} {:a 2 :b 1} 1 nil]
+           :negated [:or
+                     [:not #'clojure.core/map?]
+                     ;; bad :a
+                     [:map [:a [:not= 1]]]]
            :no-double-negation true})
     (negs {:schema [:map
                     [:a {:optional true} [:= 1]]
                     [:b [:= 2]]]
            :pass [{:a 1 :b 2} {:b 2}]
-           :fail [{:a 2} {:b 1} 1 nil]
-           :negated [:multi {:dispatch #'clojure.core/map?}
-                     [true [:multi {:dispatch '(clojure.core/fn [x]
-                                                 (clojure.core/cond
-                                                   (clojure.core/not (clojure.core/contains? x (quote :b))) (quote :b)
-                                                   :else :malli.negate/default))}
-                            [:b [:map [:a {:optional true} :never] [:b {:optional true} :any]]]
-                            [::mn/default [:map [:a [:not= 1]]]]]]
-                     [false [:not #'clojure.core/map?]]]
+           :fail [{:a 2} {:b 1} {} 1 nil]
+           :negated [:or
+                     ;; non map
+                     [:not #'clojure.core/map?]
+                     ;; missing :b
+                     [:map [:b {:optional true} :never]]
+                     ;; bad :a
+                     [:map [:a [:not= 1]]]
+                     ;; bad :b
+                     [:map [:b [:not= 2]]]]
            :no-double-negation true})
     )
   )
