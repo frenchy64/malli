@@ -31,10 +31,12 @@
               (m/entries schema)))))
 
 (defmethod -negate-schema :map-of [schema options]
-  (let [{:keys [min max]} (m/properties schema options)
+  (let [{:keys [min max] gen-min :gen/min gen-max :gen/max} (m/properties schema options)
         [ks vs] (m/children schema options)]
     (assert (and (not max) (not min))
             "TODO :min/:max + :map-of")
+    (assert (and (not gen-max) (not gen-min))
+            "TODO :gen-min/:gen-max + :map-of")
     [:or
      [:not #'clojure.core/map?]
      [:map-of {:min 1} (negate ks options) :any]
@@ -45,6 +47,16 @@
 
 (defmethod -negate-schema :any [_ _] :never)
 (defmethod -negate-schema :never [_ _] :any)
+
+(defmethod -negate-schema :string [schema options]
+  (let [{:keys [min max] gen-min :gen/min gen-max :gen/max} (m/properties schema options)]
+    (assert (and (not gen-min) (not gen-max))
+            "TODO :gen-min/:gen-max + :string")
+    (cond-> [:or [:not :string]]
+      (and min max (pos? min)) (conj [:string {:max (dec min)}]
+                                     [:string {:min (inc max)}])
+      (and (not min) max) (conj [:string {:min (inc max)}])
+      (and min (not max) (pos? min)) (conj [:string {:max (dec min)}]))))
 
 (defn negate
   ([?schema] (negate ?schema nil))

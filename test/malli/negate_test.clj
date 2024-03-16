@@ -132,7 +132,40 @@
     (negs {:schema :any
            :pass [{} 1 :a "asdf"]
            :fail []
-           :negated :never})))
+           :negated :never}))
+  (testing ":string"
+    (negs {:schema :string
+           :pass ["asdf" ""]
+           :fail [{} 1 :a]
+           :negated [:or [:not :string]]
+           :no-double-negation true})
+    (negs {:schema [:string {:min 0}]
+           :pass ["asdf" ""]
+           :fail [{} 1 :a]
+           :negated [:or [:not :string]]
+           :no-double-negation true})
+    (negs {:schema [:string {:min 1}]
+           :pass ["asdf" "b"]
+           :fail ["" {} 1 :a]
+           :negated [:or
+                     [:not :string]
+                     [:string {:max 0}]]
+           :no-double-negation true})
+    (negs {:schema [:string {:max 10}]
+           :pass ["asdf" "b" ""]
+           :fail ["12345678910" {} 1 :a]
+           :negated [:or
+                     [:not :string]
+                     [:string {:min 11}]]
+           :no-double-negation true})
+    (negs {:schema [:string {:min 5 :max 10}]
+           :pass ["12345" "6543210"]
+           :fail ["asdf" "b" "" "12345678910" {} 1 :a]
+           :negated [:or
+                     [:not :string]
+                     [:string {:max 4}]
+                     [:string {:min 11}]]
+           :no-double-negation true})))
 
 (comment
   (m/validate [:map] {})
