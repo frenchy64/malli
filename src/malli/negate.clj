@@ -70,11 +70,27 @@
 (defmethod -negate-schema :uuid [_ _] [:not :uuid])
 
 (defmethod -negate-schema :ref [schema options] (negate (m/deref schema) options))
+;;FIXME wrap in `:schema`?
 (defmethod -negate-schema :schema [schema options] (negate (m/deref schema) options))
 (defmethod -negate-schema ::m/schema [schema options] (negate (m/deref schema) options))
 
 (defmethod -negate-schema :maybe [schema options]
   [:and (negate (first (m/children schema)) options) :some])
+
+(defmethod -negate-schema :tuple [schema options]
+  (let [children (m/children schema)
+        nchildren (count children)]
+    (-> [:or [:not #'vector?]]
+        (into (map (fn [i]
+                     (into [:tuple]
+                           (map-indexed
+                             (fn [i' s]
+                               (if (= i i')
+                                 (negate s options)
+                                 :any)))
+                           children)))
+              (range nchildren))
+        (conj [:vector {:min (inc nchildren)} :any]))))
 
 (defn negate
   ([?schema] (negate ?schema nil))
