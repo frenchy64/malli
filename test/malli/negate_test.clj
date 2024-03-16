@@ -245,8 +245,42 @@
            :fail [:a 'a false "a" {} []]
            :negated [:and [:or [:not :int]] :some]
            :no-double-negation true}))
-#_
+  (testing ":tuple"
+    (negs {:schema [:tuple]
+           :pass [[]]
+           :fail [[1] [:a false] :a 'a false "a"]
+           :negated [:or
+                     [:not #'vector?]
+                     [:vector {:min 1} :any]]
+           :no-double-negation true})
+    (negs {:schema [:tuple :int]
+           :pass [[1]]
+           :fail [[] [:a] [:a false] :a 'a false "a"]
+           :negated [:or
+                     [:not #'vector?]
+                     [:tuple [:or [:not :int]]]
+                     [:vector {:max 0} :any]
+                     [:vector {:min 2} :any]]
+           :no-double-negation true})
+    (negs {:schema [:tuple [:= 1] [:= 2]]
+           :pass [[1 2]]
+           :fail [[] [:a] [1 1] [2 2] [2 1] [:a false] [4 1 2 5 4] :a 'a false "a"]
+           :negated [:or
+                     [:not #'vector?]
+                     [:tuple [:not= 1] :any]
+                     [:tuple :any [:not= 2]]
+                     [:vector {:max 1} :any]
+                     [:vector {:min 3} :any]]
+           :no-double-negation true}))
   (testing ":ref"
+    (negs {:schema [:schema
+                    {:registry {::simple :int}}
+                    ::simple]
+           :pass [1 2]
+           :fail [nil :a]
+           :negated [:or [:not :int]]
+           :no-double-negation true})
+#_
     (negs {:schema [:schema
                     {:registry {::ping [:maybe [:tuple [:= "ping"] [:ref ::pong]]]
                                 ::pong [:maybe [:tuple [:= "pong"] [:ref ::ping]]]}}
@@ -293,5 +327,7 @@
                      [false :any]]]
               [false :any]]
               1)
+  (m/validate [:tuple] [])
+  (m/validate [:tuple] [])
   )
 

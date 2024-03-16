@@ -90,6 +90,9 @@
                                  :any)))
                            children)))
               (range nchildren))
+        (cond->
+          (pos? nchildren)
+          (conj [:vector {:max (dec nchildren)} :any]))
         (conj [:vector {:min (inc nchildren)} :any]))))
 
 (defn negate
