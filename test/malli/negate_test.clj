@@ -129,9 +129,7 @@
     (negs {:schema [:vector [:= 1]]
            :pass [[] [1] [1 1] [1 1 1]]
            :fail [[:a] nil 1 :a
-                  ;FIXME
                   [1 :b]
-                  ;FIXME
                   [2 3 1 5]
                   [1 2 1]
                   [2 1 2]

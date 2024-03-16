@@ -41,6 +41,21 @@
      [:map-of {:min 1} (negate* ks options) :any]
      [:map-of {:min 1} :any (negate* vs options)]]))
 
+(defmethod -negate-schema :vector [schema options]
+  (let [{:keys [min max] gen-min :gen/min gen-max :gen/max} (m/properties schema options)
+        [es] (m/children schema options)]
+    (assert (and (not max) (not min))
+            "TODO :min/:max + :vector")
+    (assert (and (not gen-max) (not gen-min))
+            "TODO :gen-min/:gen-max + :vector")
+    [:or
+     [:not #'clojure.core/vector?]
+     [:and [:cat {:gen/fmap #'vec}
+            [:* :any]
+            [:+ (negate es options)]
+            [:* :any]]
+      #'vector?]]))
+
 (defmethod -negate-schema :nil [_ _] :some)
 (defmethod -negate-schema :some [_ _] :nil)
 
