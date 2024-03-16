@@ -113,9 +113,26 @@
                      [:map [:a [:not= 1]]]
                      ;; bad :b
                      [:map [:b [:not= 2]]]]
-           :no-double-negation true})
-    )
-  )
+           :no-double-negation true}))
+  (testing ":map-of"
+    (negs {:schema [:map-of [:= 1] [:= 2]]
+           :pass [{} {1 2}]
+           :fail [{:a "foo"} {1 1} {2 2} {2 1} nil 1 :a]
+           :negated [:or
+                     [:not #'clojure.core/map?]
+                     [:map-of {:min 1} [:not= 1] :any]
+                     [:map-of {:min 1} :any [:not= 2]]]
+           :no-double-negation true}))
+  (testing ":nil + :some"
+    (negs {:schema :nil
+           :pass [nil]
+           :fail [{} 1 :a "asdf"]
+           :negated :some}))
+  (testing ":any + :never"
+    (negs {:schema :any
+           :pass [{} 1 :a "asdf"]
+           :fail []
+           :negated :never})))
 
 (comment
   (m/validate [:map] {})

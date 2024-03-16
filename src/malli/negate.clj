@@ -30,7 +30,23 @@
                         [[:map [k (negate (-> s m/children first) options)]]]))
               (m/entries schema)))))
 
+(defmethod -negate-schema :map-of [schema options]
+  (let [{:keys [min max]} (m/properties schema options)
+        [ks vs] (m/children schema options)]
+    (assert (and (not max) (not min))
+            "TODO :min/:max + :map-of")
+    [:or
+     [:not #'clojure.core/map?]
+     [:map-of {:min 1} (negate ks options) :any]
+     [:map-of {:min 1} :any (negate vs options)]]))
+
+(defmethod -negate-schema :nil [_ _] :some)
+(defmethod -negate-schema :some [_ _] :nil)
+
+(defmethod -negate-schema :any [_ _] :never)
+(defmethod -negate-schema :never [_ _] :any)
+
 (defn negate
   ([?schema] (negate ?schema nil))
   ([?schema options]
-   (-negate-schema (m/schema ?schema options) options)))
+   (m/schema (-negate-schema (m/schema ?schema options) options))))
