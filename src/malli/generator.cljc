@@ -9,6 +9,7 @@
             [clojure.test.check.rose-tree :as rose]
             [malli.core :as m]
             [malli.registry :as mr]
+            [malli.impl.ref :refer [-identify-ref-schema]]
             [malli.impl.util :refer [-last -merge]]
             #?(:clj [borkdude.dynaload :as dynaload])))
 
@@ -308,10 +309,6 @@
 ;;    [:schema {:registry {::b :int}}
 ;;     ;; (1)
 ;;     [:or [:ref ::a] [:ref ::b]]]]
-
-(defn- -identify-ref-schema [schema]
-  {:scope (-> schema m/-options m/-registry mr/-schemas)
-   :name (m/-ref schema)})
 
 (defn -ref-gen [schema options]
   (let [ref-id (-identify-ref-schema schema)]

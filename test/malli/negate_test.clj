@@ -287,7 +287,24 @@
                     ::ping]
            :pass [nil ["ping" ["pong" nil]]]
            :fail [["ping" ["ping" nil]]]
-           :negated [:schema
+           :negated [:schema {:registry {::ping [:and
+                                                 [:or
+                                                  [:not #'vector?]
+                                                  [:tuple [:not= "ping"] :any]
+                                                  [:tuple :any [:and
+                                                                [:or
+                                                                 [:not #'vector?]
+                                                                 [:tuple [:not= "pong"] :any]
+                                                                 [:tuple :any [:ref ::ping]]
+                                                                 [:vector {:max 1} :any]
+                                                                 [:vector {:min 3} :any]]
+                                                                :some]]
+                                                  [:vector {:max 1} :any]
+                                                  [:vector {:min 3} :any]]
+                                                 :some]}}
+                     ::ping]
+           #_
+           [:schema
                      {:registry {::ping [:and
                                          [:or
                                           [:not #'vector?]
