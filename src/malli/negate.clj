@@ -3,7 +3,7 @@
             [malli.impl.ref :refer [-identify-ref-schema]]
             [malli.impl.util :refer [-last]]))
 
-(declare negate* -and)
+(declare negate* -and -or)
 
 (defmulti -negate-schema (fn [schema options] (m/type schema options)) :default ::default)
 (defmethod -negate-schema :and [schema options] (-or (into [] (map #(negate* % options))
@@ -62,7 +62,7 @@
        (-and 
          [[:cat {:gen/fmap #'vec}
            [:* :any]
-           [:+ (negate es options)]
+           [:+ (negate* es options)]
            [:* :any]]
           #'vector?])])))
 
