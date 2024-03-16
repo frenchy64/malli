@@ -1177,6 +1177,79 @@
            (-get [_ key default] (get children key default))
            (-set [this key value] (-set-assoc-children this key value))))))))
 
+(defn -into-map-schema
+  ([]
+   (-into-map-schema {}))
+  ([opts]
+   ^{:type ::into-schema}
+   (reify
+     AST
+     (-from-ast [parent ast options]
+       (-into-schema parent (:properties ast) [(from-ast (:entries ast) options)] options))
+     IntoSchema
+     (-type [_] (:type opts :into-map))
+     (-type-properties [_] (:type-properties opts))
+     (-properties-schema [_ _])
+     (-children-schema [_ _])
+     (-into-schema [parent properties children options]
+       (-check-children! :into-map properties children 1 1)
+       (let [[entries-schema :as children] (-vmap #(schema % options) children)
+             form (delay (-simple-form parent properties children -form options))
+             cache (-create-cache options)
+             ->parser (fn [f]
+                        (let [entries-parser (f entries-schema)]
+                          (fn [x]
+                            (if (map? x)
+                              (let [es* (entries-parser (map vec x))]
+                                (if (miu/-invalid? es*)
+                                  ::invalid
+                                  (into {} es*)))
+                              ::invalid))))]
+         ^{:type ::schema}
+         (reify
+           AST
+           (-to-ast [_ _]
+             (-ast {:type :into-map, :entries (ast entries-schema)} properties options))
+           Schema
+           (-validator [_]
+             (let [entries-valid? (-validator entries-schema)]
+               (fn [m]
+                 (and (map? m)
+                      (entries-valid? (map vec m))))))
+           (-explainer [this path]
+             (let [entries-explainer (-explainer entries-schema (conj path 0))]
+               (fn explain [m in acc]
+                 (if-not (map? m)
+                   (conj acc (miu/-error path in this m ::invalid-type))
+                   (entries-explainer (map vec m) in acc)))))
+           (-parser [_] (->parser -parser))
+           (-unparser [_] (->parser -unparser))
+           (-transformer [this transformer method options]
+             (assert nil "FIXME")
+             #_
+             (let [this-transformer (-value-transformer transformer this method options)
+                   ->key (-transformer key-schema transformer method options)
+                   ->child (-transformer value-schema transformer method options)
+                   ->key-child (cond
+                                 (and ->key ->child) #(assoc %1 (->key %2) (->child %3))
+                                 ->key #(assoc %1 (->key %2) %3)
+                                 ->child #(assoc %1 %2 (->child %3)))
+                   apply->key-child (when ->key-child #(reduce-kv ->key-child (empty %) %))
+                   apply->key-child (-guard map? apply->key-child)]
+               (-intercepting this-transformer apply->key-child)))
+           (-walk [this walker path options] (-walk-indexed this walker path options))
+           (-properties [_] properties)
+           (-options [_] options)
+           (-children [_] children)
+           (-parent [_] parent)
+           (-form [_] @form)
+           Cached
+           (-cache [_] cache)
+           LensSchema
+           (-keep [_])
+           (-get [_ key default] (get children key default))
+           (-set [this key value] (-set-assoc-children this key value))))))))
+
 (defn -collection-schema [props]
   (if (fn? props)
     (do (-deprecated! "-collection-schema doesn't take fn-props, use :compiled property instead")
@@ -2498,6 +2571,7 @@
    :not (-not-schema)
    :map (-map-schema)
    :map-of (-map-of-schema)
+   :into-map (-into-map-schema)
    :vector (-collection-schema {:type :vector, :pred vector?, :empty []})
    :sequential (-collection-schema {:type :sequential, :pred sequential?})
    :set (-collection-schema {:type :set, :pred set?, :empty #{}, :in (fn [_ x] x)})
@@ -2635,3 +2709,5 @@
                            info (apply (:f info) args)
                            varargs-info (if (< arity (:min varargs-info)) (report-arity) (apply (:f varargs-info) args))
                            :else (report-arity))))))))))
+
+(validate [:cat [:tuple :int :int]] (map vec {1 1}))

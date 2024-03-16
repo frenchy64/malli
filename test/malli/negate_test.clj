@@ -118,25 +118,19 @@
     (negs {:schema [:map-of [:= 1] [:= 2]]
            :pass [{} {1 2}]
            :fail [{:a "foo"} {1 1} {2 2} {2 1} nil 1 :a
-                  ;;FIXME needs something like:
-                  ;[:or
-                  ; [:map-of {:min 1}
-                  ;  [:cat
-                  ;   [:* :any]
-                  ;   [:+ [:not= 1]]
-                  ;   [:* :any]]
-                  ;  :any]
-                  ; [:map-of {:min 1}
-                  ;  :any
-                  ;  [:cat
-                  ;   [:* :any]
-                  ;   [:+ [:not= 1]]
-                  ;   [:* :any]]]]
-                  #_{1 1 2 2}]
+                  {1 1 2 2}]
            :negated [:or
                      [:not #'clojure.core/map?]
-                     [:map-of {:min 1} [:not= 1] :any]
-                     [:map-of {:min 1} :any [:not= 2]]]
+                     [:into-map
+                      [:cat
+                       [:* [:tuple :any :any]]
+                       [:+ [:tuple [:not= 1] :any]]
+                       [:* [:tuple :any :any]]]]
+                     [:into-map
+                      [:cat
+                       [:* [:tuple :any :any]]
+                       [:+ [:tuple :any [:not= 2]]]
+                       [:* [:tuple :any :any]]]]]
            :no-double-negation true}))
   (testing ":vector"
     (negs {:schema [:vector [:= 1]]

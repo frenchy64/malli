@@ -38,8 +38,16 @@
             "TODO :gen-min/:gen-max + :map-of")
     [:or
      [:not #'clojure.core/map?]
-     [:map-of {:min 1} (negate* ks options) :any]
-     [:map-of {:min 1} :any (negate* vs options)]]))
+     [:into-map
+      [:cat
+       [:* [:tuple :any :any]]
+       [:+ [:tuple (negate* ks options) :any]]
+       [:* [:tuple :any :any]]]]
+     [:into-map
+      [:cat
+       [:* [:tuple :any :any]]
+       [:+ [:tuple :any (negate* vs options)]]
+       [:* [:tuple :any :any]]]]]))
 
 (defmethod -negate-schema :vector [schema options]
   (let [{:keys [min max] gen-min :gen/min gen-max :gen/max} (m/properties schema options)
