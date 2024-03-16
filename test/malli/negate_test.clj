@@ -285,10 +285,26 @@
                     {:registry {::ping [:maybe [:tuple [:= "ping"] [:ref ::pong]]]
                                 ::pong [:maybe [:tuple [:= "pong"] [:ref ::ping]]]}}
                     ::ping]
-           :pass [["ping" ["pong" nil]]]
+           :pass [nil ["ping" ["pong" nil]]]
            :fail [["ping" ["ping" nil]]]
-           :negated :any}))
-)
+           :negated [:schema
+                     {:registry {::ping [:and
+                                         [:or
+                                          [:not #'vector?]
+                                          [:tuple [:not= "ping"] :any]
+                                          [:tuple :any [:ref ::pong]]
+                                          [:vector {:max 1} :any]
+                                          [:vector {:min 3} :any]]
+                                         :some]
+                                 ::pong [:and
+                                         [:or
+                                          [:not #'vector?]
+                                          [:tuple [:not= "pong"] :any]
+                                          [:tuple :any [:ref ::ping]]
+                                          [:vector {:max 1} :any]
+                                          [:vector {:min 3} :any]]
+                                         :some]}}
+                     ::ping]})))
 
 (comment
   (m/validate [:map] {})
