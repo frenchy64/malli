@@ -62,7 +62,7 @@
     (negs {:schema [:map]
            :pass [{} {:a 1}]
            :fail [1 nil]
-           :negated [:or [:not #'clojure.core/map?]]
+           :negated [:not #'clojure.core/map?]
            :no-double-negation true})
     (negs {:schema [:map [:a [:= 1]]]
            :pass [{:a 1} {:a 1 :extra 42}]
@@ -164,12 +164,12 @@
     (negs {:schema :string
            :pass ["asdf" ""]
            :fail [{} 1 :a]
-           :negated [:or [:not :string]]
+           :negated [:not :string]
            :no-double-negation true})
     (negs {:schema [:string {:min 0}]
            :pass ["asdf" ""]
            :fail [{} 1 :a]
-           :negated [:or [:not :string]]
+           :negated [:not :string]
            :no-double-negation true})
     (negs {:schema [:string {:min 1}]
            :pass ["asdf" "b"]
@@ -197,12 +197,12 @@
     (negs {:schema :int
            :pass [4 0]
            :fail [{} "a" :a]
-           :negated [:or [:not :int]]
+           :negated [:not :int]
            :no-double-negation true})
     (negs {:schema [:int {:min 0}]
            :pass [4 0]
            :fail [{} "a" :a]
-           :negated [:or [:not :int]]
+           :negated [:not :int]
            :no-double-negation true})
     (negs {:schema [:int {:min 1}]
            :pass [4 1]
@@ -260,7 +260,7 @@
     (negs {:schema [:maybe :nil]
            :pass [nil]
            :fail [1 :a 'a false "a" {} []]
-           :negated [:and :some :some]
+           :negated :some
            :no-double-negation true})
     (negs {:schema [:maybe :some]
            :pass [nil 1 :a 'a false "a" {} []]
@@ -270,7 +270,7 @@
     (negs {:schema [:maybe :int]
            :pass [nil 1]
            :fail [:a 'a false "a" {} []]
-           :negated [:and [:or [:not :int]] :some]
+           :negated [:and [:not :int] :some]
            :no-double-negation true}))
   (testing ":tuple"
     (negs {:schema [:tuple]
@@ -285,7 +285,7 @@
            :fail [[] [:a] [:a false] :a 'a false "a"]
            :negated [:or
                      [:not #'vector?]
-                     [:tuple [:or [:not :int]]]
+                     [:tuple [:not :int]]
                      [:vector {:max 0} :any]
                      [:vector {:min 2} :any]]
            :no-double-negation true})
@@ -305,7 +305,7 @@
                     ::simple]
            :pass [1 2]
            :fail [nil :a]
-           :negated [:or [:not :int]]
+           :negated [:not :int]
            :no-double-negation true})
     (negs {:schema [:schema
                     {:registry {::ping [:maybe [:tuple [:= "ping"] [:ref ::pong]]]
