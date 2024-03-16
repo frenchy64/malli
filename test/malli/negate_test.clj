@@ -117,11 +117,33 @@
   (testing ":map-of"
     (negs {:schema [:map-of [:= 1] [:= 2]]
            :pass [{} {1 2}]
-           :fail [{:a "foo"} {1 1} {2 2} {2 1} nil 1 :a]
+           :fail [{:a "foo"} {1 1} {2 2} {2 1} nil 1 :a
+                  ;;FIXME
+                  #_{1 1 2 2}]
            :negated [:or
                      [:not #'clojure.core/map?]
                      [:map-of {:min 1} [:not= 1] :any]
                      [:map-of {:min 1} :any [:not= 2]]]
+           :no-double-negation true}))
+  (testing ":vector"
+    (negs {:schema [:vector [:= 1]]
+           :pass [[] [1] [1 1] [1 1 1]]
+           :fail [[:a] nil 1 :a
+                  ;FIXME
+                  [1 :b]
+                  ;FIXME
+                  [2 3 1 5]
+                  [1 2 1]
+                  [2 1 2]
+                  [2 1 1 1 1 2]
+                  [1 2 1 2 1 2 1]]
+           :negated [:or
+                     [:not #'vector?]
+                     [:and [:cat {:gen/fmap #'vec}
+                            [:* :any]
+                            [:+ [:not= 1]]
+                            [:* :any]]
+                      #'vector?]]
            :no-double-negation true}))
   (testing ":nil + :some"
     (negs {:schema :nil
@@ -362,5 +384,43 @@
               1)
   (m/validate [:tuple] [])
   (m/validate [:tuple] [])
+  (m/validate
+    [:cat
+     [:* [:= 1]]
+     [:+ [:not= 1]]
+     [:* [:= 1]]]
+    [2 3 1 5])
+  (m/explain
+    [:cat
+     [:* [:= 1]]
+     [:+ [:not= 1]]
+     [:* [:= 1]]]
+    [2 3 1 5])
+  (mg/generate
+    [:or
+     ;[:not #'vector?]
+     [:and [:cat {:gen/fmap #'vec}
+            [:alt
+             [:cat
+              [:+ :any]
+              [:* [:not= 1]]
+              [:* :any]]
+             [:cat
+              [:* :any]
+              [:* [:not= 1]]
+              [:+ :any]]]]
+      #'vector?]]
+    {:size 1})
+
+  (m/explain
+    [:or
+     [:not #'vector?]
+     [:and [:cat {:gen/fmap #'vec}
+            [:* :any]
+            [:+ [:not= 1]]
+            [:* :any]]
+      #'vector?]]
+    [1 2 1 2 1])
   )
+
 
