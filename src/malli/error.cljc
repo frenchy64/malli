@@ -360,27 +360,3 @@
   ([explanation {mask ::mask-valid-values :as options}]
    (cond->> (-error-value explanation options)
      mask (-masked mask (:value explanation)))))
-
-[:not [:map ["a" [:map ["b" [:= "1"]]]]]]
-
-(humanize
-  (m/explain [:multi {:dispatch map?}
-              [true [:multi {:dispatch #(contains? % "a")}
-                     [true [:map ["a" [:multi {:dispatch #(contains? % "b")}
-                                       [true [:map ["b" [:not= "1"]]]]
-                                       [false :any]]]]]
-                     [false :any]]]
-              [false :any]]
-             {"a" {"b" "1"}}))
-{"a" {"b" ["should not be 1"]}}
-
-(humanize
-  (m/explain [:multi {:dispatch map?}
-              [true [:multi {:dispatch #(contains? % "a")}
-                     [true [:map ["a" [:multi {:dispatch #(contains? % "b")}
-                                       [true [:map ["b" [:not= "1"]]]]
-                                       [false :any]]]]]
-                     [false :any]]]
-              [false :any]]
-             {"a" {"b" nil}}))
-{"a" {"b" ["should not be 1"]}}

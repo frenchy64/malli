@@ -2709,5 +2709,3 @@
                            info (apply (:f info) args)
                            varargs-info (if (< arity (:min varargs-info)) (report-arity) (apply (:f varargs-info) args))
                            :else (report-arity))))))))))
-
-(validate [:cat [:tuple :int :int]] (map vec {1 1}))
