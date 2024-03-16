@@ -1225,7 +1225,7 @@
            (-parser [_] (->parser -parser))
            (-unparser [_] (->parser -unparser))
            (-transformer [this transformer method options]
-             (assert nil "FIXME")
+             (-fail! ::FIXME {})
              #_
              (let [this-transformer (-value-transformer transformer this method options)
                    ->key (-transformer key-schema transformer method options)
