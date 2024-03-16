@@ -165,7 +165,96 @@
                      [:not :string]
                      [:string {:max 4}]
                      [:string {:min 11}]]
-           :no-double-negation true})))
+           :no-double-negation true}))
+  (testing ":int"
+    (negs {:schema :int
+           :pass [4 0]
+           :fail [{} "a" :a]
+           :negated [:or [:not :int]]
+           :no-double-negation true})
+    (negs {:schema [:int {:min 0}]
+           :pass [4 0]
+           :fail [{} "a" :a]
+           :negated [:or [:not :int]]
+           :no-double-negation true})
+    (negs {:schema [:int {:min 1}]
+           :pass [4 1]
+           :fail [0 {} :a]
+           :negated [:or
+                     [:not :int]
+                     [:int {:max 0}]]
+           :no-double-negation true})
+    (negs {:schema [:int {:max 10}]
+           :pass [4 1 0]
+           :fail [11 {} "a" :a]
+           :negated [:or
+                     [:not :int]
+                     [:int {:min 11}]]
+           :no-double-negation true})
+    (negs {:schema [:int {:min 5 :max 10}]
+           :pass [5 7]
+           :fail [4 1 0 11 {} "a" :a]
+           :negated [:or
+                     [:not :int]
+                     [:int {:max 4}]
+                     [:int {:min 11}]]
+           :no-double-negation true}))
+  (testing ":boolean"
+    (negs {:schema :boolean
+           :pass [true false]
+           :fail [{} "a" 1 :a]
+           :negated [:not :boolean]}))
+  (testing ":keyword"
+    (negs {:schema :keyword
+           :pass [:true :false :a/b]
+           :fail [{} "a" 1 true 'a]
+           :negated [:not :keyword]}))
+  (testing ":symbol"
+    (negs {:schema :symbol
+           :pass ['foo 'bar 'foo/bar]
+           :fail [{} "a" 1 :a true]
+           :negated [:not :symbol]}))
+  (testing ":qualified-keyword"
+    (negs {:schema :qualified-keyword
+           :pass [:a/b]
+           :fail [:true :false {} "a" 1 true 'a]
+           :negated [:not :qualified-keyword]}))
+  (testing ":qualified-symbol"
+    (negs {:schema :qualified-symbol
+           :pass ['foo/bar]
+           :fail ['foo 'bar {} "a" 1 :a true]
+           :negated [:not :qualified-symbol]}))
+  (testing ":uuid"
+    (negs {:schema :uuid
+           :pass [(random-uuid)]
+           :fail ['foo 'bar {} "a" 1 :a true]
+           :negated [:not :uuid]}))
+  (testing ":maybe"
+    (negs {:schema [:maybe :nil]
+           :pass [nil]
+           :fail [1 :a 'a false "a" {} []]
+           :negated [:and :some :some]
+           :no-double-negation true})
+    (negs {:schema [:maybe :some]
+           :pass [nil 1 :a 'a false "a" {} []]
+           :fail []
+           :negated [:and :nil :some]
+           :no-double-negation true})
+    (negs {:schema [:maybe :int]
+           :pass [nil 1]
+           :fail [:a 'a false "a" {} []]
+           :negated [:and [:or [:not :int]] :some]
+           :no-double-negation true}))
+#_
+  (testing ":ref"
+    (negs {:schema [:schema
+                    {:registry {::ping [:maybe [:tuple [:= "ping"] [:ref ::pong]]]
+                                ::pong [:maybe [:tuple [:= "pong"] [:ref ::ping]]]}}
+                    ::ping]
+           :pass [["ping" ["pong" nil]]]
+           :fail [["ping" ["ping" nil]]]
+           :negated :any}))
+)
 
 (comment
   (m/validate [:map] {})

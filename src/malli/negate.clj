@@ -48,15 +48,33 @@
 (defmethod -negate-schema :any [_ _] :never)
 (defmethod -negate-schema :never [_ _] :any)
 
-(defmethod -negate-schema :string [schema options]
-  (let [{:keys [min max] gen-min :gen/min gen-max :gen/max} (m/properties schema options)]
+(defn -min-max [schema options]
+  (let [{:keys [min max] gen-min :gen/min gen-max :gen/max} (m/properties schema options)
+        t (m/type schema)]
     (assert (and (not gen-min) (not gen-max))
-            "TODO :gen-min/:gen-max + :string")
-    (cond-> [:or [:not :string]]
-      (and min max (pos? min)) (conj [:string {:max (dec min)}]
-                                     [:string {:min (inc max)}])
-      (and (not min) max) (conj [:string {:min (inc max)}])
-      (and min (not max) (pos? min)) (conj [:string {:max (dec min)}]))))
+            "TODO :gen-min/:gen-max")
+    (cond-> [:or [:not t]]
+      (and min max (pos? min)) (conj [t {:max (dec min)}]
+                                     [t {:min (inc max)}])
+      (and (not min) max) (conj [t {:min (inc max)}])
+      (and min (not max) (pos? min)) (conj [t {:max (dec min)}]))))
+
+(defmethod -negate-schema :string [schema options] (-min-max schema options))
+(defmethod -negate-schema :int [schema options] (-min-max schema options))
+
+(defmethod -negate-schema :boolean [_ _] [:not :boolean])
+(defmethod -negate-schema :keyword [_ _] [:not :keyword])
+(defmethod -negate-schema :symbol [_ _] [:not :symbol])
+(defmethod -negate-schema :qualified-keyword [_ _] [:not :qualified-keyword])
+(defmethod -negate-schema :qualified-symbol [_ _] [:not :qualified-symbol])
+(defmethod -negate-schema :uuid [_ _] [:not :uuid])
+
+(defmethod -negate-schema :ref [schema options] (negate (m/deref schema) options))
+(defmethod -negate-schema :schema [schema options] (negate (m/deref schema) options))
+(defmethod -negate-schema ::m/schema [schema options] (negate (m/deref schema) options))
+
+(defmethod -negate-schema :maybe [schema options]
+  [:and (negate (first (m/children schema)) options) :some])
 
 (defn negate
   ([?schema] (negate ?schema nil))
