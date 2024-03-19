@@ -2999,6 +2999,15 @@
     (-fail! ::tfn-symbol-binder))
   `[:tfn '~binder (-check-scope '~binder (fn ~binder ~body))])
 
+;; TODO continue with *tv-scope* to parse free variables
+;; 1. syntax is written as simple symbols like `a`
+;; 2. they are parsed into `:fv` schemas using dynamic binding for scoping
+;; 3. TODO walk entire schema while dynamic binding is in effect to parse
+;;    fv's in registries defined in local properties. might need to allow
+;;    invalid refs, then immediately return the m/form back as the result
+;;    of the ref.
+;; 4. figure out how to print a fv. should we print a gensym then rewrite
+;;    prettier if possible? or pass down a map (dynamically?) of which name to use? or something else?
 (defmacro all [binder body]
   (when-not (seq binder)
     (-fail! ::empty-all-binder binder))
