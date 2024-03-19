@@ -3148,12 +3148,38 @@
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
 
-#_
+#_ ;; old syntax
 (deftest all-syntax-test
   (is (= [:all [:catn [:a :Schema]]
           [:=> [:cat [:tv :a]] [:tv :a]]]
          (m/all [a] [:=> [:cat a] a])
          (m/all [a :- :Schema] [:=> [:cat a] a])))
+  (is (= [:all [:catn [:a [:* :Schema]]]
+          [:=> [:cat [:tv :a]] [:tv :a]]]
+         (m/all [a :- [:* :Schema]] [:=> [:cat a] a])))
+  (= [:all [:catn [:a [:* :Schema]] [:b :Schema]]
+      [:=> [:catn
+            [:f [:=> [:catn [:pairwise-elements [:.. [:tv :a] [:tv :a]]]] [:tv :b]]]
+            [:colls [:.. [:sequential [:tv :a]] [:tv :a]]]]
+       [:sequential [:tv :b]]]]
+     (m/form
+       (m/all [a :- [:* :Schema], b]
+              [:=> [:catn
+                    [:f [:=> [:catn [:pairwise-elements [:.. a a]]]
+                         b]]
+                    [:colls [:.. [:sequential a] a]]]
+               [:sequential b]]))))
+
+(m/schema [:schema {:registry {::foo :any}}
+           ::foo])
+
+[:tv {:options options} a]
+
+(deftest all-syntax-test
+  (is (= '[:all [a]
+           [:=> [:cat a] a]]
+         (m/all [a] [:=> [:cat a] a])
+         #_(m/all [a :- :Schema] [:=> [:cat a] a])))
   (is (= [:all [:catn [:a [:* :Schema]]]
           [:=> [:cat [:tv :a]] [:tv :a]]]
          (m/all [a :- [:* :Schema]] [:=> [:cat a] a])))
