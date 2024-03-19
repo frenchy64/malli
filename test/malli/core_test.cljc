@@ -3216,10 +3216,16 @@
                         {'b123 :any}
                         nil))))
   ;;FIXME
-  (is (= (m/all [a0] [:=> [:cat a0] 'a])
+  (is (= (m/all [a] [:=> [:cat a] 'a123])
          (m/form
            (m/-subst-tv (m/all [a] [:=> [:cat a] [::m/local 'b123]])
-                        {'b123 [::m/local 'a]}
+                        {'b123 [::m/local {:original-name 'a} 'a123]}
+                        nil))))
+  ;;FIXME
+  (is (= (m/all [a] [:=> [:cat a] 'b])
+         (m/form
+           (m/-subst-tv (m/all [a] [:=> [:cat a] [::m/local 'b123]])
+                        {'b123 [::m/local {:original-name 'b} 'a123]}
                         nil)))))
 
 #_
