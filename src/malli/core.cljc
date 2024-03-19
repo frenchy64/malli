@@ -1685,16 +1685,16 @@
 
 (def ^:dynamic *tv-scope* #{})
 
-(defn -fv-schema []
+(defn -local-schema []
   ^{:type ::into-schema}
   (reify
     AST
     (-from-ast [parent ast options] (-from-value-ast parent ast options))
     IntoSchema
-    (-type [_] :fv)
+    (-type [_] ::local)
     (-type-properties [_])
     (-into-schema [parent properties [id tv-info :as children] options]
-      (-check-children! :fv properties children 1 1)
+      (-check-children! ::local properties children 1 1)
       (when-not (simple-symbol? id)
         (-fail! ::invalid-tv {:id id}))
       (let [children (vec children)
@@ -1750,7 +1750,7 @@
       (-check-children! :.. properties children 2 2)
       (let [[pretype bound :as children] (-vmap #(schema % options) children)
             ;bound (or bound pretype)
-            _ (when-not (= :fv (type bound))
+            _ (when-not (= ::local (type bound))
                 (-fail! ::invalid-dotted-variable bound))
             form (delay (-simple-form parent properties children identity options))
             cache (-create-cache options)]
@@ -2180,12 +2180,16 @@
                          (if (or (nil? ?p) (map? ?p))
                            (into-schema t ?p (when (< 2 n) (subvec ?schema 2 n)) options)
                            (into-schema t nil (when (< 1 n) (subvec ?schema 1 n)) options)))
-     :else (if-let [?schema' (and (-reference? ?schema) (-lookup ?schema options))]
-             (-pointer ?schema (schema ?schema' options) options)
-             (if-some [tv-info (when (-local? ?schema)
-                                 (*tv-scope* ?schema))]
-               (-into-schema (-fv-schema) nil [?schema tv-info] options)
-               (-> ?schema (-lookup! ?schema nil false options) (recur options)))))))
+     :else (if (-local? ?schema)
+             (let [_ (when (::local-disallowed options)
+                       (-fail! ::local-schema-disallowed {:schema ?schema}))
+                   tv-info (or (*tv-scope* ?schema)
+                               (-fail! ::unscoped-local-schema {:schema ?schema}))]
+               (-into-schema (-local-schema) nil [?schema tv-info] options))
+             (let [options (assoc options ::local-disallowed)]
+                 (if-let [?schema' (and (-reference? ?schema) (-lookup ?schema options))]
+                   (-pointer ?schema (schema ?schema' options) options)
+                   (-> ?schema (-lookup! ?schema nil false options) (recur options))))))))
 
 (defn form
   "Returns the Schema form"
@@ -2640,14 +2644,14 @@
             gsyms (mapv gensym syms)
             sym->gsym (zipmap syms gsyms)
             bounds (mapv #(if (symbol? %) :Schema (nth % 2)) (-children binder))
-            nbound (count ks)
+            nbound (count syms)
             instrumenting-binder (mapv #(case %
                                           :Schema :any
                                           :* [:* :any]
                                           :+ [:* :any])
                                        bounds)
             body (binding [*tv-scope* (into *tv-scope* sym->gsym)]
-                   (schema body options))
+                   (schema body-syntax options))
             body-fv (-fv body)
             form [:all binder (form body)]
             cache (-create-cache options)
@@ -2721,7 +2725,7 @@
    :=> (-=>-schema)
    :function (-function-schema nil)
    :all (-all-schema)
-   :fv (-fv-schema)
+   ::local (-local-schema)
    :schema (-schema-schema nil)
    :Schema (-schema-schema-schema)
    :.. (-dotted-pretype-schema)
@@ -2871,9 +2875,9 @@
                (inner this s p options))
              (-outer [_ s p c {::keys [bound-tvs] :as options}]
                (case (type s)
-                 :fv (let [k (first c)]
-                       (when-not (contains? bound-tvs k)
-                         (swap! fvs conj k)))
+                 ::local (let [k (first c)]
+                           (when-not (contains? bound-tvs k)
+                             (swap! fvs conj k)))
                  ;;TODO think harder about :..
                  nil)
                s))
@@ -2900,10 +2904,10 @@
         outer (fn [s path children {::keys [tv->schema] :as options}]
                 (let [s (-set-children s children)]
                   (case (type s)
-                    :fv (let [tv (first children)]
-                          (if-some [[_ v] (find tv->schema tv)]
-                            v
-                            s))
+                    ::local (let [tv (first children)]
+                              (if-some [[_ v] (find tv->schema tv)]
+                                v
+                                s))
                     ::val (first children)
                     s)))]
     (inner
@@ -2924,7 +2928,7 @@
 ;;TODO kind annotations. try [:sequential :Schema] for non-uniform variable arity polymorphism,
 ;; #'nat-int for dependently typed functions.
 ;; idea: dependent :cat? not very promising, raises too many questions.
-;; [:dcat :int [:string {:min [:fv 0], :max 4}]]
+;; [:dcat :int [:string {:min [:local 0], :max 4}]]
 ;; [:dcatn [:i :int],
 ;;         [:m {:depends [:i]} (fn [{:keys [i]}] [:string {:min i, :max 4}])]]
 ;; e.g., schema for variable-arity map
@@ -2945,63 +2949,18 @@
                 b]]
            [:colls [:.. [:sequential a] a]]]
       [:sequential b]])
-#_
-(defmacro all
-  "(all [a b :- b-KIND ...] body)
-  is equivalent to
-  (let [a [:fv :a]
-        b [ftv :b]
-        ...]
-    [:all [:catn [:a :Schema] [:b b-KIND] ...]
-     body])"
-  [binder body]
-  (when-not (seq binder)
-    (-fail! ::empty-all-binder binder))
-  (let [binder (loop [binder binder
-                      out []]
-                 (if (empty? binder)
-                   out
-                   (let [[sym colon s] binder]
-                     (when-not (simple-symbol? sym)
-                       (-fail! ::non-simple-symbol-binder sym))
-                     (if (= :- colon)
-                       (do (when-not s
-                             (-fail! ::missing-all-bound sym))
-                           (recur (nthnext binder 3)
-                                  (conj out [sym s])))
-                       (recur (next binder)
-                              (conj out [sym :Schema]))))))
-        syms (map first binder)
-        _ (when-not (apply distinct? syms)
-            (-fail! ::repeated-all-variable syms))]
-    `[:all ~(into [:catn] (map #(update % 0 keyword))
-                  binder)
-      (let [~@(mapcat (fn [b]
-                        [b [:fv (keyword b)]])
-                      syms)]
-        ~body)]))
-
-(defn -check-scope [syms f]
-  (let [erased (apply f (repeat (count syms) :any))
-        syms-set (set syms)]
-    (walk/postwalk (fn [v]
-                     (when (and (simple-symbol? v)
-                                (syms-set v))
-                       (-fail! ::scope-conflict {:sym v}))
-                     v)
-                   erased)
-    (apply f syms)))
-
 (defmacro tfn [binder body]
   (when-not (vector? binder)
     (-fail! ::tfn-vector-binder))
   (when-not (every? simple-symbol? binder)
     (-fail! ::tfn-symbol-binder))
-  `[:tfn '~binder (-check-scope '~binder (fn ~binder ~body))])
+  `[:tfn '~binder (let [~@(mapcat (fn [s] [s (list 'quote s)])
+                                  binder)]
+                    ~body)])
 
 ;; TODO continue with *tv-scope* to parse free variables
 ;; 1. syntax is written as simple symbols like `a`
-;; 2. they are parsed into `:fv` schemas using dynamic binding for scoping
+;; 2. they are parsed into `::local` schemas using dynamic binding for scoping
 ;; 3. TODO walk entire schema while dynamic binding is in effect to parse
 ;;    fv's in registries defined in local properties. might need to allow
 ;;    invalid refs, then immediately return the m/form back as the result
@@ -3031,4 +2990,6 @@
         syms (mapv first binder)
         _ (when-not (apply distinct? syms)
             (-fail! ::repeated-all-variable syms))]
-    `[:all '~binder (-check-scope '~syms (fn ~syms ~body))]))
+    `[:all '~binder (let [~@(mapcat (fn [s] [s (list 'quote s)])
+                                    syms)]
+                      ~body)]))

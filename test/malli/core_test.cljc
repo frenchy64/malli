@@ -3151,17 +3151,17 @@
 #_ ;; old syntax
 (deftest all-syntax-test
   (is (= [:all [:catn [:a :Schema]]
-          [:=> [:cat [:fv :a]] [:fv :a]]]
+          [:=> [:cat [::m/local :a]] [::m/local :a]]]
          (m/all [a] [:=> [:cat a] a])
          (m/all [a :- :Schema] [:=> [:cat a] a])))
   (is (= [:all [:catn [:a [:* :Schema]]]
-          [:=> [:cat [:fv :a]] [:fv :a]]]
+          [:=> [:cat [::m/local :a]] [::m/local :a]]]
          (m/all [a :- [:* :Schema]] [:=> [:cat a] a])))
   (= [:all [:catn [:a [:* :Schema]] [:b :Schema]]
       [:=> [:catn
-            [:f [:=> [:catn [:pairwise-elements [:.. [:fv :a] [:fv :a]]]] [:fv :b]]]
-            [:colls [:.. [:sequential [:fv :a]] [:fv :a]]]]
-       [:sequential [:fv :b]]]]
+            [:f [:=> [:catn [:pairwise-elements [:.. [::m/local :a] [::m/local :a]]]] [::m/local :b]]]
+            [:colls [:.. [:sequential [::m/local :a]] [::m/local :a]]]]
+       [:sequential [::m/local :b]]]]
      (m/form
        (m/all [a :- [:* :Schema], b]
               [:=> [:catn
@@ -3173,7 +3173,7 @@
 (m/schema [:schema {:registry {::foo :any}}
            ::foo])
 
-[:fv {:options options} a]
+[::m/local {:options options} a]
 
 (deftest all-syntax-test
   (is (= '[:all [a]
@@ -3181,13 +3181,13 @@
          (m/all [a] [:=> [:cat a] a])
          #_(m/all [a :- :Schema] [:=> [:cat a] a])))
   (is (= [:all [:catn [:a [:* :Schema]]]
-          [:=> [:cat [:fv :a]] [:fv :a]]]
+          [:=> [:cat [::m/local :a]] [::m/local :a]]]
          (m/all [a :- [:* :Schema]] [:=> [:cat a] a])))
   (= [:all [:catn [:a [:* :Schema]] [:b :Schema]]
       [:=> [:catn
-            [:f [:=> [:catn [:pairwise-elements [:.. [:fv :a] [:fv :a]]]] [:fv :b]]]
-            [:colls [:.. [:sequential [:fv :a]] [:fv :a]]]]
-       [:sequential [:fv :b]]]]
+            [:f [:=> [:catn [:pairwise-elements [:.. [::m/local :a] [::m/local :a]]]] [::m/local :b]]]
+            [:colls [:.. [:sequential [::m/local :a]] [::m/local :a]]]]
+       [:sequential [::m/local :b]]]]
      (m/form
        (m/all [a :- [:* :Schema], b]
               [:=> [:catn
@@ -3197,22 +3197,22 @@
                [:sequential b]]))))
 
 (deftest fv-test
-  (is (= #{:a} (m/-fv [:fv :a] nil)))
-  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:fv :b]]) nil)))
-  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:.. [:fv :b] [:fv :b]]]) nil))))
+  (is (= #{:a} (m/-fv [::m/local :a] nil)))
+  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [::m/local :b]]) nil)))
+  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:.. [::m/local :b] [::m/local :b]]]) nil))))
 
 (deftest subst-tv-test
-  (is (= :any (m/-subst-tv [:fv :a]
+  (is (= :any (m/-subst-tv [::m/local :a]
                            {:a :any}
                            nil)))
   (is (= [:sequential :any]
          (m/form
-           (m/-subst-tv [:sequential [:fv :a]]
+           (m/-subst-tv [:sequential [::m/local :a]]
                         {:a :any}
                         nil))))
   (is (= [:catn [:foo :any]]
          (m/form
-           (m/-subst-tv [:catn [:foo [:fv :a]]]
+           (m/-subst-tv [:catn [:foo [::m/local :a]]]
                         {:a :any}
                         nil))))
   (is (= (m/all [a] [:=> [:cat a] a])
