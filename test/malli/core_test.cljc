@@ -3151,17 +3151,17 @@
 #_ ;; old syntax
 (deftest all-syntax-test
   (is (= [:all [:catn [:a :Schema]]
-          [:=> [:cat [:tv :a]] [:tv :a]]]
+          [:=> [:cat [:fv :a]] [:fv :a]]]
          (m/all [a] [:=> [:cat a] a])
          (m/all [a :- :Schema] [:=> [:cat a] a])))
   (is (= [:all [:catn [:a [:* :Schema]]]
-          [:=> [:cat [:tv :a]] [:tv :a]]]
+          [:=> [:cat [:fv :a]] [:fv :a]]]
          (m/all [a :- [:* :Schema]] [:=> [:cat a] a])))
   (= [:all [:catn [:a [:* :Schema]] [:b :Schema]]
       [:=> [:catn
-            [:f [:=> [:catn [:pairwise-elements [:.. [:tv :a] [:tv :a]]]] [:tv :b]]]
-            [:colls [:.. [:sequential [:tv :a]] [:tv :a]]]]
-       [:sequential [:tv :b]]]]
+            [:f [:=> [:catn [:pairwise-elements [:.. [:fv :a] [:fv :a]]]] [:fv :b]]]
+            [:colls [:.. [:sequential [:fv :a]] [:fv :a]]]]
+       [:sequential [:fv :b]]]]
      (m/form
        (m/all [a :- [:* :Schema], b]
               [:=> [:catn
@@ -3173,7 +3173,7 @@
 (m/schema [:schema {:registry {::foo :any}}
            ::foo])
 
-[:tv {:options options} a]
+[:fv {:options options} a]
 
 (deftest all-syntax-test
   (is (= '[:all [a]
@@ -3181,13 +3181,13 @@
          (m/all [a] [:=> [:cat a] a])
          #_(m/all [a :- :Schema] [:=> [:cat a] a])))
   (is (= [:all [:catn [:a [:* :Schema]]]
-          [:=> [:cat [:tv :a]] [:tv :a]]]
+          [:=> [:cat [:fv :a]] [:fv :a]]]
          (m/all [a :- [:* :Schema]] [:=> [:cat a] a])))
   (= [:all [:catn [:a [:* :Schema]] [:b :Schema]]
       [:=> [:catn
-            [:f [:=> [:catn [:pairwise-elements [:.. [:tv :a] [:tv :a]]]] [:tv :b]]]
-            [:colls [:.. [:sequential [:tv :a]] [:tv :a]]]]
-       [:sequential [:tv :b]]]]
+            [:f [:=> [:catn [:pairwise-elements [:.. [:fv :a] [:fv :a]]]] [:fv :b]]]
+            [:colls [:.. [:sequential [:fv :a]] [:fv :a]]]]
+       [:sequential [:fv :b]]]]
      (m/form
        (m/all [a :- [:* :Schema], b]
               [:=> [:catn
@@ -3197,22 +3197,22 @@
                [:sequential b]]))))
 
 (deftest fv-test
-  (is (= #{:a} (m/-fv [:tv :a] nil)))
-  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:tv :b]]) nil)))
-  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:.. [:tv :b] [:tv :b]]]) nil))))
+  (is (= #{:a} (m/-fv [:fv :a] nil)))
+  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:fv :b]]) nil)))
+  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:.. [:fv :b] [:fv :b]]]) nil))))
 
 (deftest subst-tv-test
-  (is (= :any (m/-subst-tv [:tv :a]
+  (is (= :any (m/-subst-tv [:fv :a]
                            {:a :any}
                            nil)))
   (is (= [:sequential :any]
          (m/form
-           (m/-subst-tv [:sequential [:tv :a]]
+           (m/-subst-tv [:sequential [:fv :a]]
                         {:a :any}
                         nil))))
   (is (= [:catn [:foo :any]]
          (m/form
-           (m/-subst-tv [:catn [:foo [:tv :a]]]
+           (m/-subst-tv [:catn [:foo [:fv :a]]]
                         {:a :any}
                         nil))))
   (is (= (m/all [a] [:=> [:cat a] a])

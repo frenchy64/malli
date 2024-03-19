@@ -1685,16 +1685,16 @@
 
 (def ^:dynamic *tv-scope* #{})
 
-(defn -tv-schema []
+(defn -fv-schema []
   ^{:type ::into-schema}
   (reify
     AST
     (-from-ast [parent ast options] (-from-value-ast parent ast options))
     IntoSchema
-    (-type [_] :tv)
+    (-type [_] :fv)
     (-type-properties [_])
     (-into-schema [parent properties [id tv-info :as children] options]
-      (-check-children! :tv properties children 1 1)
+      (-check-children! :fv properties children 1 1)
       (when-not (simple-symbol? id)
         (-fail! ::invalid-tv {:id id}))
       (let [children (vec children)
@@ -1750,7 +1750,7 @@
       (-check-children! :.. properties children 2 2)
       (let [[pretype bound :as children] (-vmap #(schema % options) children)
             ;bound (or bound pretype)
-            _ (when-not (= :tv (type bound))
+            _ (when-not (= :fv (type bound))
                 (-fail! ::invalid-dotted-variable bound))
             form (delay (-simple-form parent properties children identity options))
             cache (-create-cache options)]
@@ -2184,7 +2184,7 @@
              (-pointer ?schema (schema ?schema' options) options)
              (if-some [tv-info (when (-local? ?schema)
                                  (*tv-scope* ?schema))]
-               (-into-schema (-tv-schema) nil [?schema tv-info] options)
+               (-into-schema (-fv-schema) nil [?schema tv-info] options)
                (-> ?schema (-lookup! ?schema nil false options) (recur options)))))))
 
 (defn form
@@ -2721,7 +2721,7 @@
    :=> (-=>-schema)
    :function (-function-schema nil)
    :all (-all-schema)
-   :tv (-tv-schema)
+   :fv (-fv-schema)
    :schema (-schema-schema nil)
    :Schema (-schema-schema-schema)
    :.. (-dotted-pretype-schema)
@@ -2871,7 +2871,7 @@
                (inner this s p options))
              (-outer [_ s p c {::keys [bound-tvs] :as options}]
                (case (type s)
-                 :tv (let [k (first c)]
+                 :fv (let [k (first c)]
                        (when-not (contains? bound-tvs k)
                          (swap! fvs conj k)))
                  ;;TODO think harder about :..
@@ -2900,7 +2900,7 @@
         outer (fn [s path children {::keys [tv->schema] :as options}]
                 (let [s (-set-children s children)]
                   (case (type s)
-                    :tv (let [tv (first children)]
+                    :fv (let [tv (first children)]
                           (if-some [[_ v] (find tv->schema tv)]
                             v
                             s))
@@ -2924,7 +2924,7 @@
 ;;TODO kind annotations. try [:sequential :Schema] for non-uniform variable arity polymorphism,
 ;; #'nat-int for dependently typed functions.
 ;; idea: dependent :cat? not very promising, raises too many questions.
-;; [:dcat :int [:string {:min [:tv 0], :max 4}]]
+;; [:dcat :int [:string {:min [:fv 0], :max 4}]]
 ;; [:dcatn [:i :int],
 ;;         [:m {:depends [:i]} (fn [{:keys [i]}] [:string {:min i, :max 4}])]]
 ;; e.g., schema for variable-arity map
@@ -2949,8 +2949,8 @@
 (defmacro all
   "(all [a b :- b-KIND ...] body)
   is equivalent to
-  (let [a [:tv :a]
-        b [:tv :b]
+  (let [a [:fv :a]
+        b [ftv :b]
         ...]
     [:all [:catn [:a :Schema] [:b b-KIND] ...]
      body])"
@@ -2977,7 +2977,7 @@
     `[:all ~(into [:catn] (map #(update % 0 keyword))
                   binder)
       (let [~@(mapcat (fn [b]
-                        [b [:tv (keyword b)]])
+                        [b [:fv (keyword b)]])
                       syms)]
         ~body)]))
 
