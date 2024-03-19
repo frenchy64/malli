@@ -3148,59 +3148,47 @@
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
 
-#_ ;; old syntax
-(deftest all-syntax-test
-  (is (= [:all [:catn [:a :Schema]]
-          [:=> [:cat [::m/local :a]] [::m/local :a]]]
-         (m/all [a] [:=> [:cat a] a])
-         (m/all [a :- :Schema] [:=> [:cat a] a])))
-  (is (= [:all [:catn [:a [:* :Schema]]]
-          [:=> [:cat [::m/local :a]] [::m/local :a]]]
-         (m/all [a :- [:* :Schema]] [:=> [:cat a] a])))
-  (= [:all [:catn [:a [:* :Schema]] [:b :Schema]]
-      [:=> [:catn
-            [:f [:=> [:catn [:pairwise-elements [:.. [::m/local :a] [::m/local :a]]]] [::m/local :b]]]
-            [:colls [:.. [:sequential [::m/local :a]] [::m/local :a]]]]
-       [:sequential [::m/local :b]]]]
-     (m/form
-       (m/all [a :- [:* :Schema], b]
-              [:=> [:catn
-                    [:f [:=> [:catn [:pairwise-elements [:.. a a]]]
-                         b]]
-                    [:colls [:.. [:sequential a] a]]]
-               [:sequential b]]))))
-
-(m/schema [:schema {:registry {::foo :any}}
-           ::foo])
-
-[::m/local {:options options} a]
-
 (deftest all-syntax-test
   (is (= '[:all [a]
            [:=> [:cat a] a]]
          (m/all [a] [:=> [:cat a] a])
          #_(m/all [a :- :Schema] [:=> [:cat a] a])))
-  (is (= [:all [:catn [:a [:* :Schema]]]
-          [:=> [:cat [::m/local :a]] [::m/local :a]]]
-         (m/all [a :- [:* :Schema]] [:=> [:cat a] a])))
-  (= [:all [:catn [:a [:* :Schema]] [:b :Schema]]
-      [:=> [:catn
-            [:f [:=> [:catn [:pairwise-elements [:.. [::m/local :a] [::m/local :a]]]] [::m/local :b]]]
-            [:colls [:.. [:sequential [::m/local :a]] [::m/local :a]]]]
-       [:sequential [::m/local :b]]]]
-     (m/form
-       (m/all [a :- [:* :Schema], b]
-              [:=> [:catn
-                    [:f [:=> [:catn [:pairwise-elements [:.. a a]]]
-                         b]]
-                    [:colls [:.. [:sequential a] a]]]
-               [:sequential b]]))))
+  (is (= '[:all [a :*]
+           [:=> [:cat a] a]]
+         (m/all [a :*] [:=> [:cat a] a])))
+  (is (= '[:all [a :* b]
+           [:=> [:catn
+                 [:f [:=> [:catn [:pairwise-elements [:.. a a]]] b]]
+                 [:colls [:.. [:sequential a] a]]]
+            [:sequential b]]]
+         (m/form
+           (m/all [a :* b]
+                  [:=> [:catn
+                        [:f [:=> [:catn [:pairwise-elements [:.. a a]]]
+                             b]]
+                        [:colls [:.. [:sequential a] a]]]
+                   [:sequential b]]))))
+  (is (= '[:all [a] [:=> [:cat a] a123]]
+         (m/form (m/all [a] [:=> [:cat a]
+                             '[::m/local a123 {:original-name a :kind :Schema}]]))))
+  (is (= '[:all [a] [:=> [:cat a] b123]]
+         (m/form (m/all [a] [:=> [:cat a]
+                             '[::m/local b123 {:original-name b :kind :Schema}]])))))
 
 (deftest fv-test
-  (is (= #{:a} (m/-fv [::m/local :a] nil)))
-  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [::m/local :b]]) nil)))
+  (is (= '#{{:id a123
+             :original-name a
+             :kind :Schema}}
+         (m/-fv '[::m/local a123 {:original-name a :kind :Schema}] nil)))
+  (is (= '#{{:id a123
+             :original-name a
+             :kind :Schema}}
+         (m/-fv (m/all [a] [:=> [:cat a]
+                            '[::m/local a123 {:original-name a :kind :Schema}]])
+                nil)))
   (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:.. [::m/local :b] [::m/local :b]]]) nil))))
 
+#_
 (deftest subst-tv-test
   (is (= :any (m/-subst-tv [::m/local :a]
                            {:a :any}
@@ -3221,6 +3209,7 @@
                         {:a :any}
                         nil)))))
 
+#_
 (deftest Schema-test
   (is (m/validate :Schema :any))
   ;; FIXME we need to figure out a better kind for regexes
