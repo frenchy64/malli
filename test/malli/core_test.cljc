@@ -3148,6 +3148,7 @@
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
 
+#_
 (deftest all-syntax-test
   (is (= [:all [:catn [:a :Schema]]
           [:=> [:cat [:tv :a]] [:tv :a]]]

@@ -65,3 +65,87 @@
 (deftest map-test
   (is-all-good map-spec good-maps)
   (is-all-bad map-spec bad-maps))
+
+(def memoize-spec (m/all [a :.. b]
+                         [:=>
+                          [:cat [:=> [:cat [:.. a]] b]]
+                          [:=> [:cat [:.. a]] b]]))
+
+(comment
+  (inst memoize-spec [:* :int] :int)
+  (inst memoize-spec :int :int)
+  (inst memoize-spec [:+ :int] :int)
+  [:=>
+   [:cat [:=> [:cat [:cat :int :bool]] b]]
+   [:=> [:cat [:cat :int :bool]] b]]
+  [:=>
+   [:cat [:=> [:cat [:* :int]] b]]
+   [:=> [:cat [:* :int]] b]]
+  [:=>
+   [:cat [:=> [:cat [:+ :int]] b]]
+   [:=> [:cat [:+ :int]] b]]
+
+  [:all [:.. :Schema]
+   `(fn [a# b#]
+      [:=>
+       [:cat [:=> [:cat [:.. a]] b]]
+       [:=> [:cat [:.. a]] b]])]
+
+  (let [a 'a b 'b]
+    `[:all [~a :.. ~b]
+      [:=>
+       [:cat [:=> [:cat [:.. ~a]] ~b]]
+       [:=> [:cat [:.. ~a]] ~b]
+       :fn '(fn [~'x] ~a)]])
+
+  (m/all [a :.. b]
+         [:=>
+          [:cat [:=> [:cat [:.. a]] b]]
+          [:=> [:cat [:.. a]] b]
+          :fn '(fn [x] ~a)])
+
+  (m/all [a :.. b]
+         [:=>
+          [:cat [:=> [:cat [:.. a]] b]]
+          [:=> [:cat [:.. a]] b]
+          :fn `(fn [x] ~a)])
+
+  (m/all2 [a b]
+          [:=>
+           [:cat [:=> [:cat [:.. a]] b]]
+           [:=> [:cat [:.. a]] b]
+           :fn `(fn [~'x] ~a)])
+
+  '[:all [a :.. b]
+    (fn [a b]
+      [:=>
+       [:cat [:=> [:cat [:.. a]] b]]
+       [:=> [:cat [:.. a]] b]
+       :fn `(fn [x] ~a)])]
+  [:=>
+   [:cat [:=> [:cat [:.. ?A]] ?B]]
+   [:=> [:cat [:.. ?A]] ?B]
+   :fn `(fn [x] ~?A)]
+
+  ;; reducer
+  (m/tfn [a b]
+         [:=>
+          [:cat b a]
+          [:or b [#_:reduced :tuple a]]])
+  [:schema {:registry {::Reducer (m/tfn [a b]
+                                        [:function
+                                         [:=> [:cat [:? b]] b]
+                                         [:=> [:cat b a] [:or b #_[#_:reduced :tuple a]]]])
+                       ::Transducer (m/tfn [in out]
+                                           (m/all [r]
+                                                  [:=> [:cat [:tapp [:ref ::Reducer] out r]]
+                                                   [:cat [:tapp [:ref ::Reducer] in r]]]))
+                       `map (m/all2 [a #_:+ b c]
+                                    [:function
+                                     [:=> [:cat [:=> [:cat b] c]] [:ref ::Transducer b c]]
+                                     [:=> [:cat
+                                           [:=> [:cat a] b]
+                                           [:.. [:sequential a] a]]
+                                      [:sequential b]]])}}
+   [:ref `map]]
+  )

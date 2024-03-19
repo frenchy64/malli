@@ -172,6 +172,14 @@
 
 (defn -pointer [id schema options] (-into-schema (-schema-schema {:id id}) nil [schema] options))
 
+;; failed idea: can we have a lexically scoped registry?
+;; no, because options are passed around dynamically.
+;; e.g.,
+;; [:let [a :any] [:schema {:registry {::FOO a} [:ref ::FOO]]]
+;; vs 
+;; [:schema {:registry {::FOO a} [:let [a :any] [:ref ::FOO]]]
+;; you only encounter an occurrence of `a` dynamically so there's no way to
+;; know which lexical binding it corresponds to.
 (defn -reference? [?schema] (or (string? ?schema) (qualified-ident? ?schema) (var? ?schema)))
 
 (defn -lazy [ref options] (-into-schema (-ref-schema {:lazy true}) nil [ref] options))
@@ -1731,6 +1739,7 @@
     (-into-schema [parent properties children options]
       (-check-children! :.. properties children 2 2)
       (let [[pretype bound :as children] (-vmap #(schema % options) children)
+            ;bound (or bound pretype)
             _ (when-not (= :tv (type bound))
                 (-fail! ::invalid-dotted-variable bound))
             form (delay (-simple-form parent properties children identity options))
@@ -2913,6 +2922,7 @@
                 b]]
            [:colls [:.. [:sequential a] a]]]
       [:sequential b]])
+#_
 (defmacro all
   "(all [a b :- b-KIND ...] body)
   is equivalent to
@@ -2947,3 +2957,43 @@
                         [b [:tv (keyword b)]])
                       syms)]
         ~body)]))
+
+(defn -check-scope [syms f]
+  (let [erased (apply f (repeat (count syms) :any))
+        syms-set (set syms)]
+    (walk/postwalk (fn [v]
+                     (when (and (simple-symbol? v)
+                                (syms-set v))
+                       (-fail! ::scope-conflict {:sym v}))
+                     v)
+                   erased)
+    (apply f syms)))
+
+(defmacro tfn [binder body]
+  (when-not (vector? binder)
+    (-fail! ::tfn-vector-binder))
+  (when-not (every? simple-symbol? binder)
+    (-fail! ::tfn-symbol-binder))
+  `[:tfn '~binder (-check-scope '~binder (fn ~binder ~body))])
+
+(defmacro all [binder body]
+  (when-not (seq binder)
+    (-fail! ::empty-all-binder binder))
+  (let [binder (loop [binder binder
+                      out []]
+                 (if (empty? binder)
+                   out
+                   (let [[sym colon s] binder]
+                     (when-not (simple-symbol? sym)
+                       (-fail! ::non-simple-symbol-binder sym))
+                     (if (= :- colon)
+                       (do (when-not s
+                             (-fail! ::missing-all-bound sym))
+                           (recur (nthnext binder 3)
+                                  (conj out [sym s])))
+                       (recur (next binder)
+                              (conj out [sym :Schema]))))))
+        syms (mapv first binder)
+        _ (when-not (apply distinct? syms)
+            (-fail! ::repeated-all-variable syms))]
+    `[:all '~syms (-check-scope '~syms (fn ~syms ~body))]))
