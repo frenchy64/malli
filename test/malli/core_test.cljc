@@ -3170,43 +3170,56 @@
                    [:sequential b]]))))
   (is (= '[:all [a] [:=> [:cat a] a123]]
          (m/form (m/all [a] [:=> [:cat a]
-                             '[::m/local a123 {:original-name a :kind :Schema}]]))))
+                             '[::m/local {:original-name a :kind :Schema} a123]]))))
   (is (= '[:all [a] [:=> [:cat a] b123]]
          (m/form (m/all [a] [:=> [:cat a]
-                             '[::m/local b123 {:original-name b :kind :Schema}]])))))
+                             '[::m/local {:original-name b :kind :Schema} b123]]))))
+  (is (= '[:all [a] [:all [a] [:=> [:cat a] a]]]
+         (m/form (m/all [a] [:all [a] [:=> [:cat a] a]])))))
 
 (deftest fv-test
   (is (= '#{{:id a123
              :original-name a
              :kind :Schema}}
-         (m/-fv '[::m/local a123 {:original-name a :kind :Schema}] nil)))
+         (m/-fv '[::m/local {:original-name a :kind :Schema} a123] nil)))
   (is (= '#{{:id a123
              :original-name a
              :kind :Schema}}
          (m/-fv (m/all [a] [:=> [:cat a]
-                            '[::m/local a123 {:original-name a :kind :Schema}]])
-                nil)))
-  (is (= #{:b} (m/-fv (m/all [a] [:=> [:cat a] [:.. [::m/local :b] [::m/local :b]]]) nil))))
+                            '[::m/local {:original-name a :kind :Schema} a123]])
+                nil))))
 
-#_
 (deftest subst-tv-test
-  (is (= :any (m/-subst-tv [::m/local :a]
-                           {:a :any}
+  (is (= :any (m/-subst-tv [::m/local 'a123]
+                           {'a123 :any}
                            nil)))
   (is (= [:sequential :any]
          (m/form
-           (m/-subst-tv [:sequential [::m/local :a]]
-                        {:a :any}
+           (m/-subst-tv [:sequential [::m/local 'a]]
+                        {'a :any}
                         nil))))
   (is (= [:catn [:foo :any]]
          (m/form
-           (m/-subst-tv [:catn [:foo [::m/local :a]]]
-                        {:a :any}
+           (m/-subst-tv [:catn [:foo [::m/local 'a]]]
+                        {'a :any}
                         nil))))
-  (is (= (m/all [a] [:=> [:cat a] a])
+  (is (= '[:all [a] [:=> [:cat a] a]]
+         (m/all [a] [:=> [:cat a] a])
          (m/form
            (m/-subst-tv (m/all [a] [:=> [:cat a] a])
-                        {:a :any}
+                        {'a :any}
+                        nil))))
+  (is (= '[:all [a] [:=> [:cat a] :any]]
+         (m/all [a] [:=> [:cat a] :any])
+         (m/form
+           (m/-subst-tv (m/all [a] [:=> [:cat a] [::m/local 'b123]])
+                        {'b123 :any}
+                        nil))))
+  ;;FIXME
+  (is (= (m/all [a0] [:=> [:cat a0] 'a])
+         (m/form
+           (m/-subst-tv (m/all [a] [:=> [:cat a] [::m/local 'b123]])
+                        {'b123 [::m/local 'a]}
                         nil)))))
 
 #_

@@ -1692,17 +1692,15 @@
     IntoSchema
     (-type [_] ::local)
     (-type-properties [_])
-    (-into-schema [parent properties [id tv-info :as children] options]
-      (-check-children! ::local properties children 2 2)
+    (-into-schema [parent properties [id :as children] options]
+      (-check-children! ::local properties children 1 1)
       (when-not (simple-symbol? id)
-        (-fail! ::invalid-local {:id id}))
+        (-fail! ::invalid-local {:id id
+                                 :properties properties}))
       (let [children (vec children)
             {:keys [original-name kind]
-             :or {original-name id}} tv-info
+             :or {original-name id}} properties
             kind kind ;(schema kind options) TODO
-            _ (when-not (simple-symbol? id)
-                (-fail! ::internal-error-bad-tv-uid {:original-name original-name
-                                                     :id id}))
             cache (-create-cache options)]
         ^{:type ::schema}
         (reify
@@ -2186,9 +2184,9 @@
                (-pointer ?schema (schema ?schema' options) options-no-locals)
                (if (-local? ?schema)
                  (let [{::keys [local-scope]} options
-                       tv-info (or (get local-scope ?schema)
-                                   (-fail! ::unscoped-local-binding {:schema ?schema}))]
-                   (-into-schema (-local-schema) nil [?schema tv-info] options))
+                       local-info (or (get local-scope ?schema)
+                                      (-fail! ::unscoped-local-binding {:schema ?schema}))]
+                   (-into-schema (-local-schema) local-info [?schema] options))
                  (-> ?schema (-lookup! ?schema nil false options) (recur options))))))))
 
 (defn form
@@ -2632,7 +2630,6 @@
     (-into-schema [parent properties children {::keys [function-checker] :as options}]
       (-check-children! :all properties children 2 2)
       (let [[binder-syntax body-syntax] children
-            _ (prn "binder-syntax" binder-syntax)
             {:keys [binder syms]} (-parse-binder binder-syntax)
             gsyms (mapv #(symbol (str (name %) "__" (random-uuid))) syms)
             bounds (mapv second binder)
@@ -2653,7 +2650,6 @@
             body (schema body-syntax (update options ::local-scope (fnil into {})
                                              sym->local-info))
             body-fv (-fv body options)
-            _ (prn "all body-fv" body-fv)
             ;; TODO inspect free variables and determine whether it's safe to
             ;; use the original names
             form [:all binder-syntax (form body)]
@@ -2685,7 +2681,7 @@
           (-transformer [_ _ _ _])
           (-walk [this walker path options]
             (when (-accept walker schema path options)
-              (-outer walker this path [(-inner walker body (conj path ::body) options)] options)))
+              (-outer walker this path [binder-syntax (-inner walker body (conj path ::body) options)] options)))
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] children)
@@ -2880,7 +2876,7 @@
                (case (type s)
                  ::local (let [id (first c)]
                            (when-not (contains? bound-tvs id)
-                             (swap! fvs conj (assoc (second c) :id id))))
+                             (swap! fvs conj (assoc (-properties s) :id id))))
                  ;;TODO think harder about :..
                  nil)
                s))
@@ -2907,8 +2903,8 @@
         outer (fn [s path children {::keys [tv->schema] :as options}]
                 (let [s (-set-children s children)]
                   (case (type s)
-                    ::local (let [tv (first children)]
-                              (if-some [[_ v] (find tv->schema tv)]
+                    ::local (let [[id] children]
+                              (if-some [[_ v] (find tv->schema id)]
                                 v
                                 s))
                     ::val (first children)
@@ -2935,18 +2931,26 @@
                  (if (empty? binder)
                    out
                    (let [[sym colon s] binder]
-                     (when-not (simple-symbol? sym)
-                       (-fail! ::non-simple-symbol-binder sym))
-                     (if-some [k (#{:+ :*} colon)]
-                       (recur (nthnext binder 2)
-                              (conj out [sym k]))
-                       (if (= :- colon)
-                         (do (when-not s
-                               (-fail! ::missing-all-bound sym))
-                             (recur (nthnext binder 3)
-                                    (conj out [sym s])))
+                     (if (vector? sym)
+                       (let [[sym kind :as all] sym]
+                         (when (not= 2 (count all))
+                           (-fail! ::binder-non-pair all))
+                         (when-not (simple-symbol? sym)
+                           (-fail! ::non-simple-symbol-binder sym))
                          (recur (next binder)
-                                (conj out [sym :Schema])))))))
+                                (conj out all)))
+                       (do (when-not (simple-symbol? sym)
+                             (-fail! ::non-simple-symbol-binder sym))
+                           (if-some [k (#{:+ :*} colon)]
+                             (recur (nthnext binder 2)
+                                    (conj out [sym k]))
+                             (if (= :- colon)
+                               (do (when-not s
+                                     (-fail! ::missing-all-bound sym))
+                                   (recur (nthnext binder 3)
+                                          (conj out [sym s])))
+                               (recur (next binder)
+                                      (conj out [sym :Schema])))))))))
         syms (mapv first binder)]
     (when-not (apply distinct? syms)
       (-fail! ::repeated-bound-local syms))
