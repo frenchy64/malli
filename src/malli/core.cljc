@@ -2452,7 +2452,7 @@
                          :re-transformer (fn [_ [child]] (re/?-transformer child))
                          :re-min-max (fn [_ [child]] {:min 0, :max (:max (-regex-min-max child true))})})
    :repeat (-sequence-schema {:type :repeat, :child-bounds {:min 1, :max 1}, :keep true
-                              :re-validator (fn [{:keys [min max] :or {min 0, max ##Inf}} [child]] (re/repeat-validator min max child))
+                              :re-validator (fn [{:keys [min max] :or {min 0, #_#_max ##Inf}} [child]] (re/repeat-validator min max child))
                               :re-explainer (fn [{:keys [min max] :or {min 0, max ##Inf}} [child]] (re/repeat-explainer min max child))
                               :re-parser (fn [{:keys [min max] :or {min 0, max ##Inf}} [child]] (re/repeat-parser min max child))
                               :re-unparser (fn [{:keys [min max] :or {min 0, max ##Inf}} [child]] (re/repeat-unparser min max child))
