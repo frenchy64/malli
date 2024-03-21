@@ -367,7 +367,9 @@
                       :coll coll
                       :max max}
                      driver)
-              (if (< (peek regs) max)
+              (if (and (< (peek regs) max)
+                       (or (pos? min)
+                           (empty? coll)))
                 (do
                   (park-validator! driver rep-epsilon regs pos coll k) ; remember fallback
                   (p driver regs pos coll
