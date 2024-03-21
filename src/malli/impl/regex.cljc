@@ -279,9 +279,16 @@
 
 ;;;; ## Kleene Star
 
+(def fuel (atom 1000))
+(defn fuel! [msg driver]
+  (prn msg)
+  (assert (pos? (swap! fuel dec))
+          (vec (.stack driver))))
+
 (defn *-validator [p]
   (let [*p-epsilon (cat-validator)]
     (fn *p [driver regs pos coll k]
+      (fuel! {:fn `*-validator} driver)
       (park-validator! driver *p-epsilon regs pos coll k) ; remember fallback
       (p driver regs pos coll (fn [pos coll] (park-validator! driver *p regs pos coll k)))))) ; TCO
 
@@ -336,15 +343,30 @@
 (defn repeat-validator [min max p]
   (let [rep-epsilon (cat-validator)]
     (letfn [(compulsories [driver regs pos coll k]
+              (fuel! {:fn `repeat-validator$compulsories
+                      :regs regs
+                      :pos pos
+                      :coll coll}
+                     driver)
               (if (< (peek regs) min)
                 (p driver regs pos coll
                    (fn [pos coll]
                      (noncaching-park-validator! driver
                                                  (fn [driver stack pos coll k]
+                                                   (fuel! {:fn `repeat-validator$compulsories$inner
+                                                           :coll coll
+                                                           :pos pos}
+                                                          driver)
                                                    (compulsories driver (conj (pop stack) (inc (peek stack))) pos coll k))
                                                  regs pos coll k))) ; TCO
                 (optionals driver regs pos coll k)))
             (optionals [driver regs pos coll k]
+              (fuel! {:fn `repeat-validator$optionals
+                      :regs regs
+                      :pos pos
+                      :coll coll
+                      :max max}
+                     driver)
               (if (< (peek regs) max)
                 (do
                   (park-validator! driver rep-epsilon regs pos coll k) ; remember fallback
@@ -352,6 +374,10 @@
                      (fn [pos coll]
                        (noncaching-park-validator! driver
                                                    (fn [driver regs pos coll k]
+                                                     (fuel! {:fn `repeat-validator$optionals$inner
+                                                             :regs regs
+                                                             :pos pos
+                                                             :coll coll} driver)
                                                      (optionals driver (conj (pop regs) (inc (peek regs))) pos coll k))
                                                    regs pos coll k)))) ; TCO
                 (k pos coll)))]
@@ -360,15 +386,30 @@
 (defn repeat-explainer [min max p]
   (let [rep-epsilon (cat-explainer)]
     (letfn [(compulsories [driver regs pos coll k]
+              (fuel! {:fn `repeat-explainer$compulsories
+                      :regs regs
+                      :pos pos
+                      :coll coll}
+                     driver)
               (if (< (peek regs) min)
                 (p driver regs pos coll
                    (fn [pos coll]
                      (noncaching-park-explainer! driver
                                                  (fn [driver regs pos coll k]
+                                                   (fuel! {:fn `repeat-explainer$compulsories$inner
+                                                           :regs regs
+                                                           :pos pos
+                                                           :coll coll}
+                                                          driver)
                                                    (compulsories driver (conj (pop regs) (inc (peek regs))) pos coll k))
                                                  regs pos coll k))) ; TCO
                 (optionals driver regs pos coll k)))
             (optionals [driver regs pos coll k]
+              (fuel! {:fn `repeat-explainer$optionals
+                      :regs regs
+                      :pos pos
+                      :coll coll}
+                     driver)
               (if (< (peek regs) max)
                 (do
                   (park-explainer! driver rep-epsilon regs pos coll k) ; remember fallback
@@ -376,6 +417,11 @@
                      (fn [pos coll]
                        (noncaching-park-explainer! driver
                                                    (fn [driver regs pos coll k]
+                                                     (fuel! {:fn `repeat-explainer$optionals$inner
+                                                             :regs regs
+                                                             :pos pos
+                                                             :coll coll}
+                                                            driver)
                                                      (optionals driver (conj (pop regs) (inc (peek regs))) pos coll k))
                                                    regs pos coll k)))) ; TCO
                 (k pos coll)))]
