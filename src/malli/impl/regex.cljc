@@ -342,6 +342,14 @@
 
 ;;;; ## Repeat
 
+;; eagerly repeat a child until either:
+;; - the child consumes no elements
+;;   - then bail to check for remaining elements
+;; - we run out of repetitions via :max
+;;   - then bail to check for remaining elements
+;; - we have repeated at least :min times and the coll is empty
+;;   - success case
+
 (defn repeat-validator [min max p]
   (let [rep-epsilon (cat-validator)]
     (letfn [(compulsories [driver regs pos coll k]
