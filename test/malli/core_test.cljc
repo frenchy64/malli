@@ -1779,19 +1779,27 @@
       (is (m/validate [:repeat :int] []))
       (is (nil? (m/explain [:repeat :int] [])))
       (is (m/validate [:repeat [:* :int]] []))
+      (is (nil? (m/explain [:repeat [:* :int]] [])))
       (is (m/validate [:repeat {:min 0 :max 0} [:* :int]] []))
+      (is (nil? (m/explain [:repeat {:min 0 :max 0} [:* :int]] [])))
       (is (m/validate [:repeat {:min 0 :max 1} [:* :int]] []))
+      (is (nil? (m/explain [:repeat {:min 0 :max 1} [:* :int]] [])))
       (is (m/validate [:repeat {:min 1 :max 1} [:* :int]] []))
+      (is (nil? (m/explain [:repeat {:min 1 :max 1} [:* :int]] [])))
       (is (nil? (m/explain [:repeat [:+ :int]] [])))
-      ;;FIXME
       (is (m/validate [:repeat {:min 1} [:repeat :int]] [1 2 3 4 5]))
+      (is (nil? (m/explain [:repeat {:min 1} [:repeat :int]] [1 2 3 4 5])))
+      (is (not (m/validate [:repeat {:min 1} [:repeat :int]] [1 2 3 4 5 nil])))
+      (is (m/explain [:repeat {:min 1} [:repeat :int]] [1 2 3 4 5 nil]))
       (is (m/validate [:repeat {:min 1} [:repeat {:min 1} :int]] [1 2 3 4 5]))
       (is (m/validate [:repeat [:repeat {:min 1} :int]] [1 2 3 4 5]))
       (is (m/validate [:repeat {:min 0} [:repeat :int]] [1 2 3 4 5]))
       (is (m/validate [:repeat [:repeat :int]] [1 2 3 4 5]))
       (is (nil? (m/explain [:repeat [:repeat :int]] [1 2 3 4])))
+      (is (m/explain [:repeat :int] [:a :b :c :d]))
       ;;FIXME
-      (is (nil? (m/explain [:repeat [:repeat :int]] [:a :b :c :d])))
+      (is (m/explain [:repeat [:repeat :int]] [:a :b :c :d]))
+      (is (not (m/validate [:repeat [:repeat :int]] [:a :b :c :d])))
       (is (nil? (m/explain [:repeat [:repeat [:repeat :int]]] [1 2 3 4])))
       ;;FIXME
       (is (not (m/validate [:repeat [:repeat :int]] [1 2 3 4 5 nil])))
@@ -1805,18 +1813,23 @@
       (is (not (m/validate [:* [:repeat :int]] [[1 2 3] [4 5]])))
       ;;FIXME
       (is (m/explain [:repeat [:* :int]] [[1 2 3] [4 5]]))
-      (is (m/explain [:repeat [:sequential :int]] [[1 2 3] [4 5]]))
+      (is (m/validate [:repeat [:sequential :int]] [[1 2 3] [4 5]]))
+      (is (nil? (m/explain [:repeat [:sequential :int]] [[1 2 3] [4 5]])))
       ;;FIXME
       (is (not (m/validate [:repeat [:repeat :int]] [[1 2 3] [4 5]])))
+      (is (m/explain [:repeat [:repeat :int]] [[1 2 3] [4 5]]))
       (is (not (m/validate [:repeat :int] [1 nil])))
       (is (not (m/validate [:repeat [:repeat :int]] [1 nil])))
+      (is (m/explain [:repeat [:repeat :int]] [1 nil]))
+      (is (m/explain [:repeat {:min 1, :max 3} string?] ["foo" 0]))
       (let [s [:repeat {:min 1, :max 3} string?]]
         (are [v errs]
           (let [es errs]
-            (and (= (m/validate s v) (nil? es))
-                 (results= (m/explain s v) (and es {:schema s, :value v, :errors es}))
-                 (= (m/parse s v) (if (nil? es) v ::m/invalid))
-                 (or (some? es) (= (m/unparse s v) v))))
+            (and (is (= (m/validate s v) (nil? es)))
+                 (is (results= (m/explain s v) (and es {:schema s, :value v, :errors es})))
+                 (is (= (m/parse s v) (if (nil? es) v ::m/invalid)))
+                 (is (or (some? es) (= (m/unparse s v) v)))
+                 true))
 
           0 [{:path [], :in [], :schema s, :value 0, :type ::m/invalid-type}]
           "foo" [{:path [], :in [], :schema s, :value "foo", :type ::m/invalid-type}]
@@ -2817,6 +2830,14 @@
   (is (= ::m/invalid (m/unparse [:cat string? int? string?] [1 2 3])))
   (is (= ::m/invalid (m/unparse [:catn [:a string?] [:b int?] [:c string?]] {:a 1 :b 2 :c 3}))))
 
+(deftest repeat-unparse-test
+  (is (m/validate [:repeat {:min 1 :max 2} [:cat :int :int]] [1 2 3 4]))
+  (is (= [[1 2] [3 4]] (m/parse [:repeat {:min 1 :max 2} [:cat :int :int]] [1 2 3 4])))
+  (is (= [1 2 3 4] (m/unparse [:repeat {:min 1 :max 2} [:cat :int :int]] [[1 2] [3 4]])))
+  (is (= ::m/invalid (m/unparse [:repeat {:min 1 :max 1} [:cat :int :int]] [[1 2] [3 4]])))
+  (is (= ::m/invalid (m/unparse [:repeat {:max 1} [:cat :int :int]] [[1 2] [3 4]])))
+  (is (= ::m/invalid (m/unparse [:repeat {:min 3} [:cat :int :int]] [[1 2] [3 4]])))
+  (is (= ::m/invalid (m/unparse [:repeat {:min 3} [:cat :int :int]] [[1 2] [3 4]]))))
 
 (deftest issue-451-test
   (testing "registry -in schema vector syntax"
