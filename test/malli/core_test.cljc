@@ -2851,7 +2851,9 @@
   (is (= [[1 2 3 4]] (m/parse [:* [:repeat :int]] [1 2 3 4])))
   (is (= [1 2 3 4] (m/unparse [:* [:repeat :int]] [[1 2 3 4]])))
   (is (= [[1 2 3 4]] (m/parse [:repeat [:repeat :int]] [1 2 3 4])))
-  (is (= [1 2 3 4] (m/unparse [:repeat [:repeat :int]] [[1 2 3 4]]))))
+  (is (= [1 2 3 4] (m/unparse [:repeat [:repeat :int]] [[1 2 3 4]])))
+  (is (= ::m/invalid (m/parse [:repeat [:repeat :int]] [1 nil 3 4])))
+  (is (= ::m/invalid (m/unparse [:repeat [:repeat :int]] [[1 nil 3 4]]))))
 
 (deftest issue-451-test
   (testing "registry -in schema vector syntax"
