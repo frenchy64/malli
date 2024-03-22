@@ -281,7 +281,7 @@
 
 ;;;; ## Kleene Star
 
-(def fuel (atom 10000))
+(def fuel (atom 10000000))
 (defn fuel! [msg driver]
   (prn msg)
   (assert (pos? (swap! fuel dec))
