@@ -109,6 +109,7 @@
           (k (conj coll* v) (inc pos) (rest coll)))))))
 
 (defn item-transformer [method validator t]
+  (prn `item-transformer method t)
   (case method
     :encode (item-encoder validator t)
     :decode (item-decoder t validator)))
@@ -496,6 +497,7 @@
               (optionals driver regs coll* pos coll k)))
           (optionals [driver regs coll* pos coll k]
             (if (and (< (peek regs) max)
+                     #_ ;???
                      (seq coll*))
               (p driver regs coll* pos coll
                  (fn [coll* pos coll]

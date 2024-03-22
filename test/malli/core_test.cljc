@@ -2845,7 +2845,13 @@
   (is (= ::m/invalid (m/unparse [:repeat {:min 1 :max 1} [:cat :int :int]] [[1 2] [3 4]])))
   (is (= ::m/invalid (m/unparse [:repeat {:max 1} [:cat :int :int]] [[1 2] [3 4]])))
   (is (= ::m/invalid (m/unparse [:repeat {:min 3} [:cat :int :int]] [[1 2] [3 4]])))
-  (is (= ::m/invalid (m/unparse [:repeat {:min 3} [:cat :int :int]] [[1 2] [3 4]]))))
+  (is (= ::m/invalid (m/unparse [:repeat {:min 3} [:cat :int :int]] [[1 2] [3 4]])))
+  (is (= [[1 2 3 4]] (m/parse [:repeat [:* :int]] [1 2 3 4])))
+  (is (= [1 2 3 4] (m/unparse [:repeat [:* :int]] [[1 2 3 4]])))
+  (is (= [[1 2 3 4]] (m/parse [:* [:repeat :int]] [1 2 3 4])))
+  (is (= [1 2 3 4] (m/unparse [:* [:repeat :int]] [[1 2 3 4]])))
+  (is (= [[1 2 3 4]] (m/parse [:repeat [:repeat :int]] [1 2 3 4])))
+  (is (= [1 2 3 4] (m/unparse [:repeat [:repeat :int]] [[1 2 3 4]]))))
 
 (deftest issue-451-test
   (testing "registry -in schema vector syntax"
