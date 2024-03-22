@@ -420,14 +420,17 @@
                       :pos pos
                       :coll coll}
                      driver)
-              (if (and ;; not allowed to try again, go to end-explainer
+              (if (and ;; not allowed to try again, go to end-explainer to determine
+                       ;; if there's input remaining.
                        (< (peek regs) max)
                        ;; the child regex succeeded but consumed no input.
-                       ;; we will diverge if we continue.
-                       ;; TODO can we nudge the collection/pos forward to try and
-                       ;; find more errors?
+                       ;; we will diverge if we continue. we cannot look for
+                       ;; more errors because we don't know how many elements
+                       ;; the child regex could consume, so we can't nudge the
+                       ;; collection forward.
                        (<= (peek regs) pos)
                        ;; we've satisfied the minimum if empty, go to end-explainer
+                       ;; to succeed.
                        (seq coll))
                 (p driver regs pos coll
                    (fn [pos coll]
