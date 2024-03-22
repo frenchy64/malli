@@ -1785,12 +1785,15 @@
       (is (nil? (m/explain [:repeat [:+ :int]] [])))
       ;;FIXME
       (is (m/validate [:repeat {:min 1} [:repeat :int]] [1 2 3 4 5]))
+      (is (m/validate [:repeat {:min 1} [:repeat {:min 1} :int]] [1 2 3 4 5]))
       (is (m/validate [:repeat [:repeat {:min 1} :int]] [1 2 3 4 5]))
       (is (m/validate [:repeat {:min 0} [:repeat :int]] [1 2 3 4 5]))
       (is (m/validate [:repeat [:repeat :int]] [1 2 3 4 5]))
-      ;;FIXME
       (is (nil? (m/explain [:repeat [:repeat :int]] [1 2 3 4])))
+      ;;FIXME
+      (is (nil? (m/explain [:repeat [:repeat :int]] [:a :b :c :d])))
       (is (nil? (m/explain [:repeat [:repeat [:repeat :int]]] [1 2 3 4])))
+      ;;FIXME
       (is (not (m/validate [:repeat [:repeat :int]] [1 2 3 4 5 nil])))
       (is (m/explain [:repeat [:repeat :int]] [1 2 3 4 5 nil]))
       ;;FIXME

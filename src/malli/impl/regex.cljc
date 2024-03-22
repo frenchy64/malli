@@ -70,6 +70,7 @@
 
 (defn item-validator [valid?]
   (fn [_ _ pos coll k]
+    (prn `item-validator pos coll (valid? (first coll)))
     (when (and (seq coll) (valid? (first coll)))
       (k (inc pos) (rest coll)))))
 
@@ -351,6 +352,7 @@
               (if (< (peek regs) min)
                 (p driver regs pos coll
                    (fn [pos coll]
+                     (prn "noncaching-park-validator!" pos coll)
                      (noncaching-park-validator! driver
                                                  (fn [driver stack pos coll k]
                                                    (fuel! {:fn `repeat-validator$compulsories$inner
@@ -415,7 +417,9 @@
                       :pos pos
                       :coll coll}
                      driver)
-              (if (< (peek regs) max)
+              (if (and (< (peek regs) max)
+                       (or (pos? min)
+                           (seq coll)))
                 (do
                   (park-explainer! driver rep-epsilon regs pos coll k) ; remember fallback
                   (p driver regs pos coll
