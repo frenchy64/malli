@@ -342,7 +342,7 @@
 
 (defn repeat-validator [min max p]
   (let [rep-epsilon (cat-validator)]
-    (letfn [(compulsories [driver regs pos coll max k]
+    (letfn [(compulsories [driver regs pos coll k]
               (fuel! {:fn `repeat-validator$compulsories
                       :regs regs
                       :pos pos
@@ -357,10 +357,10 @@
                                                            :coll coll
                                                            :pos pos}
                                                           driver)
-                                                   (compulsories driver (conj (pop stack) (inc (peek stack))) pos coll max k))
+                                                   (compulsories driver (conj (pop stack) (inc (peek stack))) pos coll k))
                                                  regs pos coll k))) ; TCO
-                (optionals driver regs pos coll max k)))
-            (optionals [driver regs pos coll max k]
+                (optionals driver regs pos coll k)))
+            (optionals [driver regs pos coll k]
               (fuel! {:fn `repeat-validator$optionals
                       :regs regs
                       :pos pos
@@ -383,10 +383,10 @@
                                                              :regs regs
                                                              :pos pos
                                                              :coll coll} driver)
-                                                     (optionals driver (conj (pop regs) (inc (peek regs))) pos coll max k))
+                                                     (optionals driver (conj (pop regs) (inc (peek regs))) pos coll k))
                                                    regs pos coll k)))) ; TCO
                 (k pos coll)))]
-      (fn [driver regs pos coll k] (compulsories driver (conj regs 0) pos coll (or max ##Inf) k)))))
+      (fn [driver regs pos coll k] (compulsories driver (conj regs 0) pos coll k)))))
 
 (defn repeat-explainer [min max p]
   (let [rep-epsilon (cat-explainer)]
