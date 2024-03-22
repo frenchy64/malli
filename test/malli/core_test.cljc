@@ -1823,12 +1823,12 @@
       (is (m/explain [:repeat [:repeat :int]] [1 nil]))
       (is (m/explain [:repeat {:min 1, :max 3} string?] ["foo" 0]))
       (let [s [:repeat {:min 1, :max 3} string?]]
-        (are [v errs]
-          (let [es errs]
-            (and (is (= (m/validate s v) (nil? es)))
-                 (is (results= (m/explain s v) (and es {:schema s, :value v, :errors es})))
-                 (is (= (m/parse s v) (if (nil? es) v ::m/invalid)))
-                 (is (or (some? es) (= (m/unparse s v) v)))
+        (are [?v ?errs]
+          (let [es# ?errs]
+            (and (is (= (m/validate s ?v) (nil? es#)))
+                 (is (results= (m/explain s ?v) (and es# {:schema s, :value ?v, :errors es#})))
+                 (is (= (m/parse s ?v) (if (nil? es#) ?v ::m/invalid)))
+                 (is (or (some? es#) (= (m/unparse s ?v) ?v)))
                  true))
 
           0 [{:path [], :in [], :schema s, :value 0, :type ::m/invalid-type}]
