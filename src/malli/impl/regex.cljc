@@ -344,29 +344,26 @@
 
 (defn repeat-validator [min max p]
   (let [rep-epsilon (cat-validator)]
-    (letfn [(compulsories [driver regs pos prev-coll coll k]
+    (letfn [(compulsories [driver regs pos coll k]
               (fuel! {:fn `repeat-validator$compulsories
                       :regs regs
                       :pos pos
                       :coll coll}
                      driver)
-              (if (and (< (peek regs) min)
-                       #_(<= (peek regs) pos)
-                       #_
-                       (not (identical? prev-coll coll)))
+              (if (< (peek regs) min)
                 (p driver regs pos coll
                    (fn [pos coll]
                      (prn "noncaching-park-validator!" pos coll)
                      (noncaching-park-validator! driver
-                                                 (fn [driver stack pos coll' k]
+                                                 (fn [driver stack pos coll k]
                                                    (fuel! {:fn `repeat-validator$compulsories$inner
-                                                           :coll coll'
+                                                           :coll coll
                                                            :pos pos}
                                                           driver)
-                                                   (compulsories driver (conj (pop stack) (inc (peek stack))) pos coll coll' k))
+                                                   (compulsories driver (conj (pop stack) (inc (peek stack))) pos coll k))
                                                  regs pos coll k))) ; TCO
-                (optionals driver regs pos prev-coll coll k)))
-            (optionals [driver regs pos prev-coll coll k]
+                (optionals driver regs pos coll k)))
+            (optionals [driver regs pos coll k]
               (fuel! {:fn `repeat-validator$optionals
                       :regs regs
                       :pos pos
@@ -376,77 +373,71 @@
                       :max max}
                      driver)
               (if (and (< (peek regs) max)
+                       ;;FIXME needed?
                        #_
                        (<= (peek regs) pos)
-                       #_
-                       (not (identical? prev-coll coll))
                        (seq coll))
                 (p driver regs pos coll
                    (fn [pos coll]
                      (noncaching-park-validator! driver
-                                                 (fn [driver regs pos coll' k]
+                                                 (fn [driver regs pos coll k]
                                                    (fuel! {:fn `repeat-validator$optionals$inner
                                                            :regs regs
                                                            :pos pos
-                                                           :coll coll'} driver)
-                                                   (optionals driver (conj (pop regs) (inc (peek regs))) pos coll coll' k))
+                                                           :coll coll} driver)
+                                                   (optionals driver (conj (pop regs) (inc (peek regs))) pos coll k))
                                                  regs pos coll k))) ; TCO
                 (k pos coll)))]
       (fn [driver regs pos coll k]
         (prn `repeat-validator$entry regs pos coll)
-        (compulsories driver (conj regs 0) pos (Object.) coll k)))))
+        (compulsories driver (conj regs 0) pos coll k)))))
 
 (defn repeat-explainer [min max p]
   (let [rep-epsilon (cat-explainer)]
-    (letfn [(compulsories [driver regs pos prev-coll coll k]
+    (letfn [(compulsories [driver regs pos coll k]
               (fuel! {:fn `repeat-explainer$compulsories
                       :regs regs
                       :pos pos
                       :coll coll}
                      driver)
-              (if (and (< (peek regs) min)
-                       #_ 
-                       (<= (peek regs) pos)
-                       #_
-                       (not (identical? prev-coll coll)))
+              (if (< (peek regs) min)
                 (p driver regs pos coll
                    (fn [pos coll]
                      (noncaching-park-explainer! driver
-                                                 (fn [driver regs pos coll' k]
+                                                 (fn [driver regs pos coll k]
                                                    (fuel! {:fn `repeat-explainer$compulsories$inner
                                                            :regs regs
                                                            :pos pos
-                                                           :coll coll'}
+                                                           :coll coll}
                                                           driver)
-                                                   (compulsories driver (conj (pop regs) (inc (peek regs))) pos coll coll' k))
+                                                   (compulsories driver (conj (pop regs) (inc (peek regs))) pos coll k))
                                                  regs pos coll k))) ; TCO
-                (optionals driver regs pos prev-coll coll k)))
-            (optionals [driver regs pos prev-coll coll k]
+                (optionals driver regs pos coll k)))
+            (optionals [driver regs pos coll k]
               (fuel! {:fn `repeat-explainer$optionals
                       :regs regs
                       :pos pos
                       :coll coll}
                      driver)
               (if (and (< (peek regs) max)
+                       ;;FIXME needed?
                        (<= (peek regs) pos)
-                       #_
-                       (not (identical? prev-coll coll))
                        (seq coll))
                 (p driver regs pos coll
                    (fn [pos coll]
                      (noncaching-park-explainer! driver
-                                                 (fn [driver regs pos coll' k]
+                                                 (fn [driver regs pos coll k]
                                                    (fuel! {:fn `repeat-explainer$optionals$inner
                                                            :regs regs
                                                            :pos pos
-                                                           :coll coll'}
+                                                           :coll coll}
                                                           driver)
-                                                   (optionals driver (conj (pop regs) (inc (peek regs))) pos coll coll' k))
+                                                   (optionals driver (conj (pop regs) (inc (peek regs))) pos coll k))
                                                  regs pos coll k))) ; TCO
                 (k pos coll)))]
       (fn [driver regs pos coll k]
         (prn `repeat-explainer$entry regs pos coll)
-        (compulsories driver (conj regs 0) pos (Object.) coll k)))))
+        (compulsories driver (conj regs 0) pos coll k)))))
 
 (defn repeat-parser [min max p]
   (let [rep-epsilon (fn [_ _ coll* pos coll k] (k coll* pos coll))]
