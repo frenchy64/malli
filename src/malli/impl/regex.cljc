@@ -405,6 +405,7 @@
                       :coll coll}
                      driver)
               (if (and (< (peek regs) min)
+                       #_ 
                        (<= (peek regs) pos)
                        #_
                        (not (identical? prev-coll coll)))

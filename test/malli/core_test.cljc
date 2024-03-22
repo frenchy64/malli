@@ -1837,11 +1837,9 @@
           [] [{:path [0], :in [0], :schema string?, :value nil, :type ::m/end-of-input}]
           ["foo"] nil
           [0] [{:path [0], :in [0], :schema string?, :value 0}]
-          ["foo" 0] [{:path [0], :in [1], :schema string?, :value 0}
-                     {:path [], :in [1], :schema s, :value 0, :type ::m/input-remaining}]
+          ["foo" 0] [{:path [0], :in [1], :schema string?, :value 0}]
           ["foo" "bar"] nil
-          ["foo" "bar" 0] [{:path [0], :in [2], :schema string?, :value 0}
-                           {:path [], :in [2], :schema s, :value 0, :type ::m/input-remaining}]
+          ["foo" "bar" 0] [{:path [0], :in [2], :schema string?, :value 0}]
           ["foo" "bar" "baz"] nil
           ["foo" "bar" "baz" "quux"] [{:path [], :in [3], :schema s, :value "quux", :type ::m/input-remaining}])))
 
