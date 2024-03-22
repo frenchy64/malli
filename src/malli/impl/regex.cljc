@@ -386,7 +386,7 @@
                                                      (optionals driver (conj (pop regs) (inc (peek regs))) pos coll max k))
                                                    regs pos coll k)))) ; TCO
                 (k pos coll)))]
-      (fn [driver regs pos coll k] (compulsories driver (conj regs 0) pos coll (or max (count coll)) k)))))
+      (fn [driver regs pos coll k] (compulsories driver (conj regs 0) pos coll (or max ##Inf) k)))))
 
 (defn repeat-explainer [min max p]
   (let [rep-epsilon (cat-explainer)]

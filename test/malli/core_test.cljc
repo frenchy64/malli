@@ -1788,10 +1788,12 @@
       (is (m/validate [:repeat [:repeat :int]] [1 2 3 4 5]))
       ;;FIXME
       (is (nil? (m/explain [:repeat [:repeat :int]] [1 2 3 4])))
+      (is (nil? (m/explain [:repeat [:repeat [:repeat :int]]] [1 2 3 4])))
       (is (not (m/validate [:repeat [:repeat :int]] [1 2 3 4 5 nil])))
+      (is (m/explain [:repeat [:repeat :int]] [1 2 3 4 5 nil]))
       ;;FIXME
-      (is (nil? (m/explain [:repeat [:repeat :int]] [1 2 3 4 5 nil])))
       (is (nil? (m/explain [:repeat :int] [1 2 3 4 5])))
+      (is (m/validate [:repeat :int] [1 2 3 4 5]))
       (is (m/explain [:repeat :int] [1 2 3 4 nil]))
       (is (not (m/validate [:repeat [:repeat :int]] [[1 2 3] [4 5]])))
       (is (m/explain [:* [:repeat :int]] [[1 2 3] [4 5]]))
@@ -1801,8 +1803,8 @@
       (is (m/explain [:repeat [:sequential :int]] [[1 2 3] [4 5]]))
       ;;FIXME
       (is (not (m/validate [:repeat [:repeat :int]] [[1 2 3] [4 5]])))
-      (is (m/validate [:repeat :int] [1 nil]))
-      (is (m/validate [:repeat [:repeat :int]] [1 nil]))
+      (is (not (m/validate [:repeat :int] [1 nil])))
+      (is (not (m/validate [:repeat [:repeat :int]] [1 nil])))
       (let [s [:repeat {:min 1, :max 3} string?]]
         (are [v errs]
           (let [es errs]
