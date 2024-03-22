@@ -467,6 +467,7 @@
               (optionals driver regs coll* pos coll k)))
           (optionals [driver regs coll* pos coll k]
             (if (and (< (peek regs) max)
+                     (<= (peek regs) pos)
                      (seq coll))
               (p driver regs pos coll
                  (fn [v pos coll]
@@ -497,7 +498,7 @@
               (optionals driver regs coll* pos coll k)))
           (optionals [driver regs coll* pos coll k]
             (if (and (< (peek regs) max)
-                     #_ ;???
+                     (<= (peek regs) pos)
                      (seq coll*))
               (p driver regs coll* pos coll
                  (fn [coll* pos coll]

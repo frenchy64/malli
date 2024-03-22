@@ -283,6 +283,12 @@
     (testing "decode"
       ;;FIXME
       (is (= [1 2] (m/decode [:repeat {:min 2, :max 4} int?] ["1" "2"] mt/string-transformer)))
+      ;;FIXME
+      (is (= [1 2] (m/decode [:repeat [:repeat int?]] ["1" "2"] mt/string-transformer)))
+      ;;FIXME
+      (is (= [1 2] (m/decode [:* [:repeat int?]] ["1" "2"] mt/string-transformer)))
+      ;;FIXME
+      (is (= [1 2] (m/decode [:repeat [:* int?]] ["1" "2"] mt/string-transformer)))
       (are [s v v*]
         (= v* (m/decode s v mt/string-transformer))
 
