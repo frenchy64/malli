@@ -1838,9 +1838,15 @@
           ["foo"] nil
           [0] [{:path [0], :in [0], :schema string?, :value 0}]
           ["foo" 0] [{:path [0], :in [1], :schema string?, :value 0}]
+          ["foo" 0 1] [{:path [0], :in [1], :schema string?, :value 0}
+                       #_ ;;FIXME?
+                       {:path [0], :in [2], :schema string?, :value 1}]
           ["foo" "bar"] nil
           ["foo" "bar" 0] [{:path [0], :in [2], :schema string?, :value 0}]
           ["foo" "bar" "baz"] nil
+          ["foo" 0 "bar" 1] [{:path [0], :in [1], :schema string?, :value 0}
+                             #_ ;;FIXME?
+                             {:path [], :in [3], :schema s, :value "quux", :type ::m/input-remaining}]
           ["foo" "bar" "baz" "quux"] [{:path [], :in [3], :schema s, :value "quux", :type ::m/input-remaining}])))
 
     (testing ":schema wrap"

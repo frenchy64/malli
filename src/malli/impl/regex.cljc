@@ -373,9 +373,10 @@
                       :max max}
                      driver)
               (if (and (< (peek regs) max)
-                       ;;FIXME needed?
-                       #_
+                       ;; a repetition failed, no need to continue.
+                       ;; remaining input caught by end-validator
                        (<= (peek regs) pos)
+                       ;; we've satisfied the minimum, go to end-validator
                        (seq coll))
                 (p driver regs pos coll
                    (fn [pos coll]
@@ -420,8 +421,10 @@
                       :coll coll}
                      driver)
               (if (and (< (peek regs) max)
-                       ;;FIXME needed?
+                       ;; the child regex succeeded but consumed no input.
+                       ;; we will diverge if we continue.
                        (<= (peek regs) pos)
+                       ;; we've satisfied the minimum if empty, go to end-explainer
                        (seq coll))
                 (p driver regs pos coll
                    (fn [pos coll]
