@@ -365,8 +365,8 @@
                       :regs regs
                       :pos pos
                       :coll coll
-                      :pos-or-empty (or (pos? min)
-                                        (empty? coll))
+                      :pos-or-seq (or (pos? min)
+                                      (seq coll))
                       :min min
                       :max max}
                      driver)
