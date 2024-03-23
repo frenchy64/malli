@@ -70,7 +70,6 @@
 
 (defn item-validator [valid?]
   (fn [_ _ pos coll k]
-    ;(prn `item-validator pos coll valid? (first coll))
     (when (and (seq coll) (valid? (first coll)))
       (k (inc pos) (rest coll)))))
 
@@ -79,7 +78,6 @@
     (let [in (value-path driver pos)]
       (if (seq coll)
         (let [errors (schema-explainer (first coll) in [])]
-          ;(prn `item-explainer pos coll (schema-explainer (first coll) in []))
           (if (seq errors)
             (fail! driver pos errors)
             (k (inc pos) (rest coll))))
@@ -109,7 +107,6 @@
           (k (conj coll* v) (inc pos) (rest coll)))))))
 
 (defn item-transformer [method validator t]
-  (prn `item-transformer method t)
   (case method
     :encode (item-encoder validator t)
     :decode (item-decoder t validator)))
@@ -643,7 +640,6 @@
             (loop []
               (if-some [thunk (pop-thunk! driver)]
                 (do
-                  (prn `pop-thunk!)
                   (thunk)
                   (if (succeeded? driver) (success-result driver) (recur)))
                 coll))))
