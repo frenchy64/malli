@@ -282,16 +282,9 @@
 
 ;;;; ## Kleene Star
 
-(def fuel (atom 1000))
-(defn fuel! [msg driver]
-  (prn msg)
-  (assert (pos? (swap! fuel dec))
-          (vec (.stack driver))))
-
 (defn *-validator [p]
   (let [*p-epsilon (cat-validator)]
     (fn *p [driver regs pos coll k]
-      (fuel! {:fn `*-validator} driver)
       (park-validator! driver *p-epsilon regs pos coll k) ; remember fallback
       (p driver regs pos coll (fn [pos coll] (park-validator! driver *p regs pos coll k)))))) ; TCO
 
@@ -353,107 +346,49 @@
 
 (defn repeat-validator [min max p]
   (letfn [(compulsories [driver regs pos coll k]
-            (fuel! {:fn `repeat-validator$compulsories
-                    :regs regs
-                    :pos pos
-                    :coll coll}
-                   driver)
             (if (< (peek regs) min)
               (p driver regs pos coll
                  (fn [pos coll]
-                   (prn "noncaching-park-validator!" pos coll)
                    (noncaching-park-validator! driver
                                                (fn [driver stack pos coll k]
-                                                 (fuel! {:fn `repeat-validator$compulsories$inner
-                                                         :coll coll
-                                                         :pos pos}
-                                                        driver)
                                                  (compulsories driver (conj (pop stack) (inc (peek stack))) pos coll k))
                                                regs pos coll k))) ; TCO
               (optionals driver regs pos coll k)))
           (optionals [driver regs pos coll k]
-            (fuel! {:fn `repeat-validator$optionals
-                    :regs regs
-                    :pos pos
-                    :coll coll
-                    :seq (boolean (seq coll))
-                    :min min
-                    :max max}
-                   driver)
             (if (and (< (peek regs) max)
-                     ;; a repetition failed, no need to continue.
-                     ;; remaining input caught by end-validator
                      (<= (peek regs) pos)
-                     ;; we've satisfied the minimum, go to end-validator
                      (seq coll))
               (p driver regs pos coll
                  (fn [pos coll]
                    (noncaching-park-validator! driver
                                                (fn [driver regs pos coll k]
-                                                 (fuel! {:fn `repeat-validator$optionals$inner
-                                                         :regs regs
-                                                         :pos pos
-                                                         :coll coll} driver)
                                                  (optionals driver (conj (pop regs) (inc (peek regs))) pos coll k))
                                                regs pos coll k))) ; TCO
               (k pos coll)))]
-    (fn [driver regs pos coll k]
-      (prn `repeat-validator$entry regs pos coll)
-      (compulsories driver (conj regs 0) pos coll k))))
+    (fn [driver regs pos coll k] (compulsories driver (conj regs 0) pos coll k))))
 
 (defn repeat-explainer [min max p]
   (letfn [(compulsories [driver regs pos coll k]
-            (fuel! {:fn `repeat-explainer$compulsories
-                    :regs regs
-                    :pos pos
-                    :coll coll}
-                   driver)
             (if (< (peek regs) min)
               (p driver regs pos coll
                  (fn [pos coll]
                    (noncaching-park-explainer! driver
                                                (fn [driver regs pos coll k]
-                                                 (fuel! {:fn `repeat-explainer$compulsories$inner
-                                                         :regs regs
-                                                         :pos pos
-                                                         :coll coll}
-                                                        driver)
                                                  (compulsories driver (conj (pop regs) (inc (peek regs))) pos coll k))
                                                regs pos coll k))) ; TCO
               (optionals driver regs pos coll k)))
           (optionals [driver regs pos coll k]
-            (fuel! {:fn `repeat-explainer$optionals
-                    :regs regs
-                    :pos pos
-                    :coll coll}
-                   driver)
-            (if (and ;; not allowed to try again, go to end-explainer to determine
-                     ;; if there's input remaining.
-                     (< (peek regs) max)
-                     ;; the child regex succeeded but consumed no input.
-                     ;; we will diverge if we continue. we cannot look for
-                     ;; more errors because we don't know how many elements
-                     ;; the child regex could consume, so we can't nudge the
-                     ;; collection forward.
+            (if (and (< (peek regs) max)
                      (<= (peek regs) pos)
-                     ;; we've satisfied the minimum if empty, go to end-explainer
-                     ;; to succeed.
                      (seq coll))
               (p driver regs pos coll
                  (fn [pos coll]
                    (noncaching-park-explainer! driver
                                                (fn [driver regs pos coll k]
-                                                 (fuel! {:fn `repeat-explainer$optionals$inner
-                                                         :regs regs
-                                                         :pos pos
-                                                         :coll coll}
-                                                        driver)
                                                  (optionals driver (conj (pop regs) (inc (peek regs))) pos coll k))
                                                regs pos coll k))) ; TCO
               (k pos coll)))]
-    (fn [driver regs pos coll k]
-      (prn `repeat-explainer$entry regs pos coll)
-      (compulsories driver (conj regs 0) pos coll k))))
+    (fn [driver regs pos coll k] (compulsories driver (conj regs 0) pos coll k))))
 
 (defn repeat-parser [min max p]
   (letfn [(compulsories [driver regs coll* pos coll k]
@@ -488,12 +423,6 @@
 
 (defn repeat-transformer [min max p]
   (letfn [(compulsories [driver regs coll* pos coll k]
-            (fuel! {:fn `repeat-transformer$compulsories
-                    :regs regs
-                    :pos pos
-                    :coll* coll*
-                    :coll coll}
-                   driver)
             (if (< (peek regs) min)
               (p driver regs coll* pos coll
                  (fn [coll* pos coll]
@@ -503,12 +432,6 @@
                                                  regs coll* pos coll k))) ; TCO
               (optionals driver regs coll* pos coll k)))
           (optionals [driver regs coll* pos coll k]
-            (fuel! {:fn `repeat-transformer$optionals
-                    :regs regs
-                    :pos pos
-                    :coll* coll*
-                    :coll coll}
-                   driver)
             (if (and (< (peek regs) max)
                      (<= (peek regs) pos)
                      (seq coll))
