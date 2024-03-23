@@ -282,7 +282,7 @@
 
 ;;;; ## Kleene Star
 
-(def fuel (atom 10000000))
+(def fuel (atom 1000))
 (defn fuel! [msg driver]
   (prn msg)
   (assert (pos? (swap! fuel dec))
@@ -488,6 +488,12 @@
 
 (defn repeat-transformer [min max p]
   (letfn [(compulsories [driver regs coll* pos coll k]
+            (fuel! {:fn `repeat-transformer$compulsories
+                    :regs regs
+                    :pos pos
+                    :coll* coll*
+                    :coll coll}
+                   driver)
             (if (< (peek regs) min)
               (p driver regs coll* pos coll
                  (fn [coll* pos coll]
@@ -497,9 +503,15 @@
                                                  regs coll* pos coll k))) ; TCO
               (optionals driver regs coll* pos coll k)))
           (optionals [driver regs coll* pos coll k]
+            (fuel! {:fn `repeat-transformer$optionals
+                    :regs regs
+                    :pos pos
+                    :coll* coll*
+                    :coll coll}
+                   driver)
             (if (and (< (peek regs) max)
                      (<= (peek regs) pos)
-                     (seq coll*))
+                     (seq coll))
               (p driver regs coll* pos coll
                  (fn [coll* pos coll]
                    (noncaching-park-transformer! driver
@@ -708,6 +720,7 @@
             (loop []
               (if-some [thunk (pop-thunk! driver)]
                 (do
+                  (prn `pop-thunk!)
                   (thunk)
                   (if (succeeded? driver) (success-result driver) (recur)))
                 coll))))
