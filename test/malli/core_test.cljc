@@ -1801,25 +1801,20 @@
       (is (m/validate [:repeat [:repeat :int]] [1 2 3 4 5]))
       (is (nil? (m/explain [:repeat [:repeat :int]] [1 2 3 4])))
       (is (m/explain [:repeat :int] [:a :b :c :d]))
-      ;;FIXME
       (is (m/explain [:repeat [:repeat :int]] [:a :b :c :d]))
       (is (not (m/validate [:repeat [:repeat :int]] [:a :b :c :d])))
       (is (nil? (m/explain [:repeat [:repeat [:repeat :int]]] [1 2 3 4])))
-      ;;FIXME
       (is (not (m/validate [:repeat [:repeat :int]] [1 2 3 4 5 nil])))
       (is (m/explain [:repeat [:repeat :int]] [1 2 3 4 5 nil]))
-      ;;FIXME
       (is (nil? (m/explain [:repeat :int] [1 2 3 4 5])))
       (is (m/validate [:repeat :int] [1 2 3 4 5]))
       (is (m/explain [:repeat :int] [1 2 3 4 nil]))
       (is (not (m/validate [:repeat [:repeat :int]] [[1 2 3] [4 5]])))
       (is (m/explain [:* [:repeat :int]] [[1 2 3] [4 5]]))
       (is (not (m/validate [:* [:repeat :int]] [[1 2 3] [4 5]])))
-      ;;FIXME
       (is (m/explain [:repeat [:* :int]] [[1 2 3] [4 5]]))
       (is (m/validate [:repeat [:sequential :int]] [[1 2 3] [4 5]]))
       (is (nil? (m/explain [:repeat [:sequential :int]] [[1 2 3] [4 5]])))
-      ;;FIXME
       (is (not (m/validate [:repeat [:repeat :int]] [[1 2 3] [4 5]])))
       (is (m/explain [:repeat [:repeat :int]] [[1 2 3] [4 5]]))
       (is (not (m/validate [:repeat :int] [1 nil])))
@@ -1842,15 +1837,11 @@
           ["foo"] nil
           [0] [{:path [0], :in [0], :schema string?, :value 0}]
           ["foo" 0] [{:path [0], :in [1], :schema string?, :value 0}]
-          ["foo" 0 1] [{:path [0], :in [1], :schema string?, :value 0}
-                       #_ ;;FIXME?
-                       {:path [0], :in [2], :schema string?, :value 1}]
+          ["foo" 0 1] [{:path [0], :in [1], :schema string?, :value 0}]
           ["foo" "bar"] nil
           ["foo" "bar" 0] [{:path [0], :in [2], :schema string?, :value 0}]
           ["foo" "bar" "baz"] nil
-          ["foo" 0 "bar" 1] [{:path [0], :in [1], :schema string?, :value 0}
-                             #_ ;;FIXME?
-                             {:path [], :in [3], :schema s, :value "quux", :type ::m/input-remaining}]
+          ["foo" 0 "bar" 1] [{:path [0], :in [1], :schema string?, :value 0}]
           ["foo" "bar" "baz" "quux"] [{:path [], :in [3], :schema s, :value "quux", :type ::m/input-remaining}])))
 
     (testing ":schema wrap"
