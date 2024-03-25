@@ -38,6 +38,10 @@
   ([x :- [:int {:min 0}], y :- :int & zs :- [:* :int]] (apply + x y zs))
   {:more "meta"})
 
+#_
+(mx/defn :all [x] poly1 :- x
+  ([a :- x] a))
+
 (def expectations
   [{:var #'f1
     :calls [[nil 1]
