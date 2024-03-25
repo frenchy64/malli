@@ -1694,7 +1694,7 @@
     (-type-properties [_])
     (-into-schema [parent properties [id :as children] options]
       (-check-children! ::local properties children 1 1)
-      (when-not (simple-symbol? id)
+      (when-not (or (nat-int? id) (simple-symbol? id))
         (-fail! ::invalid-local {:id id
                                  :properties properties}))
       (let [children (vec children)
@@ -2646,7 +2646,6 @@
                                           :* [:* :any]
                                           :+ [:* :any])
                                        bounds)
-            _ (prn "parsing body-syntax" body-syntax)
             body (schema body-syntax (update options ::local-scope (fnil into {})
                                              sym->local-info))
             body-fv (-fv body options)
@@ -2875,6 +2874,7 @@
              (-outer [_ s p c {::keys [bound-tvs] :as options}]
                (case (type s)
                  ::local (let [id (first c)]
+                           ;;TODO when id is simple-symbol?
                            (when-not (contains? bound-tvs id)
                              (swap! fvs conj (assoc (-properties s) :id id))))
                  ;;TODO think harder about :..

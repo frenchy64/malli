@@ -3149,13 +3149,15 @@
                         {:registry registry, ::m/ref-key :id}))))))))
 
 (deftest all-syntax-test
-  (is (= '[:all [a]
-           [:=> [:cat a] a]]
+  (is (= '[:all [a] [:=> [:cat a] a]]
          (m/all [a] [:=> [:cat a] a])
          #_(m/all [a :- :Schema] [:=> [:cat a] a])))
+  (is (= '[:all [a :- :Schema] [:=> [:cat a] a]]
+         (m/all [a :- :Schema] [:=> [:cat a] a])))
   (is (= '[:all [a :*]
            [:=> [:cat a] a]]
          (m/all [a :*] [:=> [:cat a] a])))
+  ;;FIXME
   (is (= '[:all [a :* b]
            [:=> [:catn
                  [:f [:=> [:catn [:pairwise-elements [:.. a a]]] b]]
@@ -3175,7 +3177,19 @@
          (m/form (m/all [a] [:=> [:cat a]
                              '[::m/local {:original-name b :kind :Schema} b123]]))))
   (is (= '[:all [a] [:all [a] [:=> [:cat a] a]]]
-         (m/form (m/all [a] [:all [a] [:=> [:cat a] a]])))))
+         (m/form (m/all [a] [:all [a] [:=> [:cat a] a]]))))
+  (is (= '[:all [a]
+           [:schema {:registry {::Foo a}}
+            [:=> [:cat ::Foo] a]]]
+         (m/form (m/all [a]
+                        [:schema {:registry {::Foo a}}
+                         [:=> [:cat ::Foo] a]]))))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.core/unscoped-local-binding"
+        (m/form [:schema {:registry {::Foo 'a}}
+                 (m/all [a]
+                        [:=> [:cat ::Foo] a])]))))
 
 (deftest fv-test
   (is (= '#{{:id a123
@@ -3215,14 +3229,12 @@
            (m/-subst-tv (m/all [a] [:=> [:cat a] [::m/local 'b123]])
                         {'b123 :any}
                         nil))))
-  ;;FIXME
   (is (= (m/all [a] [:=> [:cat a] 'a123])
          (m/form
            (m/-subst-tv (m/all [a] [:=> [:cat a] [::m/local 'b123]])
                         {'b123 [::m/local {:original-name 'a} 'a123]}
                         nil))))
-  ;;FIXME
-  (is (= (m/all [a] [:=> [:cat a] 'b])
+  (is (= (m/all [a] [:=> [:cat a] 'a123])
          (m/form
            (m/-subst-tv (m/all [a] [:=> [:cat a] [::m/local 'b123]])
                         {'b123 [::m/local {:original-name 'b} 'a123]}
