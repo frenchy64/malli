@@ -3298,7 +3298,7 @@
                                          :user "b"})))
       (is (not (m/validate UserPwGroups {:secret "a"
                                          :user "b"
-                                         :password "c"}))))
+                                         :pass "c"}))))
     (testing "explain"
       (is (nil? (m/explain UserPwGroups {:secret "a"})))
       (is (nil? (m/explain UserPwGroups {:user "a"
@@ -3333,24 +3333,24 @@
                                           :user "b"})
                  with-schema-forms
                  :errors)))
-      (is (= ["must have this combination of keys: [:distinct #{:secret} #{:pass :user}]"]
+      (is (= ["cannot provide both :secret and :user keys"]
              (me/humanize (m/explain UserPwGroups {:secret "a"
                                                    :user "b"}))))
       (is (= [{:path [:groups 1]
                :in []
                :schema (m/form UserPwGroups)
-               :value {:secret "a", :user "b", :password "c"}
+               :value {:secret "a", :user "b", :pass "c"}
                :type :malli.core/group-violation
                :message nil}]
              (-> (m/explain UserPwGroups {:secret "a"
                                           :user "b"
-                                          :password "c"})
+                                          :pass "c"})
                  with-schema-forms
                  :errors)))
-      (is (= ["must have this combination of keys: [:distinct #{:secret} #{:pass :user}]"]
+      (is (= ["since key :secret was provided, the following provided keys are disallowed: :pass :user"]
              (me/humanize (m/explain UserPwGroups {:secret "a"
                                                    :user "b"
-                                                   :password "c"}))))))
+                                                   :pass "c"}))))))
   (testing ":iff"
     (testing "validate"
       (is (m/validate IffGroups {}))

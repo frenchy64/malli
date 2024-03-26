@@ -30,9 +30,24 @@
    ::m/extra-key {:error/message {:en "disallowed key"}}
    ::m/group-violation {:error/fn {:en (fn [{:keys [schema value path]} _]
                                          (let [group (-> schema m/properties :groups (nth (peek path)))]
-                                           ;;TODO convert constraint to english
-                                           (str "must have this combination of keys: "
-                                                #_"should satisfy keys constraint: " (pr-str group))))}}
+                                           (cond
+                                             (= :distinct (first group))
+                                             (let [ksets (vec (next group))
+                                                   [has-group has-k] (some (fn [i]
+                                                                             (when-some [[has-k] (not-empty
+                                                                                                   (filter #(contains? value %)
+                                                                                                           (nth ksets i)))]
+                                                                               [i has-k]))
+                                                                           (range (count ksets)))
+                                                   violating-ks (filterv #(contains? value %)
+                                                                         (apply concat (subvec ksets (inc has-group))))]
+                                               (if (= 1 (count violating-ks))
+                                                 (str "cannot provide both " (pr-str has-k)
+                                                      " and " (pr-str (first violating-ks)) " keys")
+                                                 (str "since key " (pr-str has-k) " was provided," 
+                                                      " the following provided keys are disallowed: "
+                                                      (apply str (interpose " " (map pr-str violating-ks))))))
+                                             :else (str "should satisfy keys constraint: " (pr-str group)))))}}
    :malli.core/invalid-dispatch-value {:error/message {:en "invalid dispatch value"}}
    ::misspelled-key {:error/fn {:en (fn [{::keys [likely-misspelling-of]} _]
                                       (str "should be spelled " (str/join " or " (map last likely-misspelling-of))))}}

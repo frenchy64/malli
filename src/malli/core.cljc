@@ -4,6 +4,7 @@
   (:require #?(:clj [clojure.walk :as walk])
             [clojure.core :as c]
             [clojure.math.combinatorics :as comb]
+            [clojure.set :as set]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
@@ -968,14 +969,18 @@
                 :xor (let [ps (mapv -key-group-validator (next group))]
                        ;;TODO short circuit
                        #(= 1 (count (filterv (fn [p] (p %)) ps))))
-                :distinct (let [ps (mapv (fn [ks]
+                :distinct (let [ksets (next group)
+                                ps (mapv (fn [ks]
                                            (when-not (set? ks)
                                              (-fail! ::distinct-group-takes-sets-of-keys {:group group}))
                                            #(boolean
                                               (some (fn [k]
                                                       (contains? % k))
                                                     ks)))
-                                         (next group))]
+                                         ksets)
+                                _ (let [in-multiple (apply set/intersection ksets)]
+                                    (when (seq in-multiple)
+                                      (-fail! ::distinct-groups-must-be-distinct {:in-multiple-groups in-multiple})))]
                             ;; TODO if one passes, all others must fail
                             ;;TODO rewrite in terms of reduce, short circuit rs on first success
                             #(let [rs (into [] (keep-indexed (fn [i p]
