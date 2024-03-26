@@ -181,19 +181,21 @@
                                {k :required}))
                      required)
           p (m/-key-group-validator key-group options)]
-      (into [] (comp (keep (fn [[optionals nevers]]
-                             (let [candidate (-> base
-                                                 (into (map (fn [[k]]
-                                                              {k :required}))
-                                                       optionals)
-                                                 (into (map (fn [[k]]
-                                                              {k :never}))
-                                                       nevers))]
-                               (prn "candidate" candidate (p candidate))
-                               (when (p candidate)
-                                 candidate))))
+      (prn "base" base)
+      (into [] (comp (keep (fn [optionals]
+                             (let [example (-> base
+                                               (into (map (fn [[k]]
+                                                            {k :required}))
+                                                     optionals))]
+                               (prn "candidate" example (p example))
+                               (when (p example)
+                                 (into example
+                                       (map (fn [[k]]
+                                              (when-not (example k)
+                                                {k :never})))
+                                       optional)))))
                      (distinct))
-            (comb/partitions optional)))))
+            (comb/subsets optional)))))
 
 (defn -map-gen* [schema classify-entry options]
   (loop [[[k s :as e] & entries] (m/entries schema)
@@ -227,6 +229,7 @@
   (if-some [key-groups (-valid-key-groups schema options)]
     (do (assert (seq key-groups)
                 (str "Unsatisfiable key groups: " (m/form schema)))
+        (prn "key-groups" key-groups)
         (gen/bind gen/nat
                   (fn [i]
                     (let [key-group (nth key-groups (mod i (count key-groups)))]

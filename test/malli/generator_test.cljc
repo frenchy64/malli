@@ -934,12 +934,23 @@
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])
 
+(def ImpliesGroups
+  [:map
+   {:groups [[:implies :a1 :a2 :a3]]}
+   [:a1 {:optional true} string?]
+   [:a2 {:optional true} string?]
+   [:a3 {:optional true} string?]])
+
 (deftest map-groups-generator-test
-  (is (= '({:a1 "", :a2 ""} {:a1 "6"} {:a1 "sJ", :a2 "w"} {:a1 "", :a2 "76"} {:a1 "24b7"})
+  (is (= '({:a1 ""} {:a2 "4"} {:a1 "h"} {:a1 ""} {:a1 "99"} {:a1 "tW1", :a2 "8J"} {:a2 "c"})
          (mg/sample NonEmptyMapGroup
-                    {:seed 0
-                     :size 5})))
+                    {:seed 1
+                     :size 7})))
   #_
   (mg/generate UserPwGroups
                {:seed 0})
+  (is (= '({} {:a2 ""} {:a3 "L"} {:a2 "2P", :a3 "06"} {:a3 "r4Wn"})
+         (mg/sample ImpliesGroups
+                    {:seed 3
+                     :size 5})))
   )
