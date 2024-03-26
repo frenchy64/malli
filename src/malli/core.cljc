@@ -3,6 +3,7 @@
   #?(:cljs (:require-macros malli.core))
   (:require #?(:clj [clojure.walk :as walk])
             [clojure.core :as c]
+            [clojure.math.combinatorics :as comb]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
@@ -952,32 +953,6 @@
            (-ref [_])
            (-deref [_] schema)))))))
 
-(defn -valid-key-groups [schema options]
-  (when-some [groups (:groups (m/properties schema))]
-    (let [{required false
-           optional true} (group-by #(-> % -last m/properties :optional)
-                                    (m/entries schema))
-          key-group (into [:and] groups)
-          base (into {} (map (fn [k]
-                               {k :required}))
-                     required)
-          p (m/-key-group-validator key-group options)]
-      (prn "base" base)
-      (into [] (comp (keep (fn [optionals]
-                             (let [example (-> base
-                                               (into (map (fn [[k]]
-                                                            {k :required}))
-                                                     optionals))]
-                               (prn "candidate" example (p example))
-                               (when (p example)
-                                 (into example
-                                       (map (fn [[k]]
-                                              (when-not (example k)
-                                                {k :never})))
-                                       optional)))))
-                     (distinct))
-            (comb/subsets optional)))))
-
 (defn -key-group-validator [group options]
   (letfn [(-key-group-validator [group]
             (if (vector? group)
@@ -1023,6 +998,30 @@
                 (-fail! ::unknown-group {:group group}))
               #(contains? % group)))]
     (-key-group-validator group)))
+
+(defn -valid-key-groups [schema options]
+  (when-some [groups (:groups (-properties schema))]
+    (let [{required false
+           optional true} (group-by #(-> % miu/-last -properties :optional)
+                                    (-entries schema))
+          key-group (into [:and] groups)
+          base (into {} (map (fn [k]
+                               {k :required}))
+                     required)
+          p (-key-group-validator key-group options)]
+      (into [] (comp (keep (fn [optionals]
+                             (let [example (-> base
+                                               (into (map (fn [[k]]
+                                                            {k :required}))
+                                                     optionals))]
+                               (when (p example)
+                                 (into example
+                                       (map (fn [[k]]
+                                              (when-not (example k)
+                                                {k :never})))
+                                       optional)))))
+                     (distinct))
+            (comb/subsets optional)))))
 
 (defn -map-schema
   ([]
