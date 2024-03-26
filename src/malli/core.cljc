@@ -2114,11 +2114,8 @@
   ([type properties children options]
    (let [properties' (when properties (when (pos? (count properties)) properties))
          r (when properties' (properties' :registry))
-         options-no-locals (dissoc options ::local-scope)
-         options (cond-> options
-                   r (-update :registry #(mr/composite-registry r (or % (-registry options-no-locals)))))
-         properties (cond-> properties'
-                      r (assoc :registry (-property-registry r options-no-locals identity)))]
+         options (if r (-update options :registry #(mr/composite-registry r (or % (-registry options)))) options)
+         properties (if r (assoc properties' :registry (-property-registry r options identity)) properties')]
      (-into-schema (-lookup! type [type properties children] into-schema? false options) properties children options))))
 
 (defn type
