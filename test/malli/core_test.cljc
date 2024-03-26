@@ -3240,6 +3240,13 @@
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
+(def ImpliesGroups
+  [:map
+   {:groups [[:implies :a1 :a2 :a3]]}
+   [:a1 {:optional true} string?]
+   [:a2 {:optional true} string?]
+   [:a3 {:optional true} string?]])
+
 (deftest keys-groups-test
   (testing ":distinct"
     (is (m/validate UserPwGroups {:secret "a"}))
@@ -3263,4 +3270,13 @@
     (is (not (m/validate IffGroups {:a1 "a"})))
     (is (not (m/validate IffGroups {:a2 "b"})))
     (is (not (m/validate IffGroups {:a3 "c"}))))
-  )
+  (testing ":implies"
+    (is (m/validate ImpliesGroups {}))
+    (is (m/validate ImpliesGroups {:a1 "a" :a2 "b" :a3 "c"}))
+    (is (m/validate ImpliesGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
+    (is (not (m/validate ImpliesGroups {:a1 "a" :a2 "b"})))
+    (is (not (m/validate ImpliesGroups {:a1 "a" :a3 "c"})))
+    (is (m/validate ImpliesGroups {:a2 "b" :a3 "c"}))
+    (is (not (m/validate ImpliesGroups {:a1 "a"})))
+    (is (m/validate ImpliesGroups {:a2 "b"}))
+    (is (m/validate ImpliesGroups {:a3 "c"}))))
