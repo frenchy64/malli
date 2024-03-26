@@ -3260,6 +3260,13 @@
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
+(def FlatNotGroup
+  [:map
+   {:groups [[:not :a3]]}
+   [:a1 {:optional true} string?]
+   [:a2 {:optional true} string?]
+   [:a3 {:optional true} string?]])
+
 (def NotGroups
   [:map
    {:groups [[:or [:and :a1 :a2] [:not :a3]]]}
@@ -3312,7 +3319,8 @@
                :type :malli.core/group-violation
                :message nil}]
             (:errors (with-schema-forms (m/explain UserPwGroups {:user "a"})))))
-      (is (= ["must have this combination of keys: [:or :secret [:and :user :pass]]"]
+      ;;TODO
+      (is (= ["should satisfy keys constraint: [:or :secret [:and :user :pass]]"]
              (me/humanize (m/explain UserPwGroups {:user "a"}))))
       (is (= [{:path [:groups 0]
                :in []
@@ -3323,7 +3331,8 @@
              (-> (m/explain UserPwGroups {})
                  with-schema-forms
                  :errors)))
-      (is (= ["must have this combination of keys: [:or :secret [:and :user :pass]]"]
+      ;;TODO
+      (is (= ["should satisfy keys constraint: [:or :secret [:and :user :pass]]"]
              (me/humanize (m/explain UserPwGroups {}))))
       (is (= [{:path [:groups 1]
                :in []
@@ -3433,6 +3442,10 @@
       (is (nil? (m/explain XOrGroups {:a3 "c"})))))
   (testing ":not"
     (testing "validate"
+      (is (m/validate FlatNotGroup {}))
+      (is (m/validate FlatNotGroup {:a1 "b"}))
+      (is (m/validate FlatNotGroup {:a1 "b" :a2 "c"}))
+      (is (not (m/validate FlatNotGroup {:a1 "b" :a2 "c" :a3 "d"})))
       (is (m/validate NotGroups {}))
       (is (m/validate NotGroups {:a1 "a" :a2 "b" :a3 "c"}))
       (is (m/validate NotGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
@@ -3443,14 +3456,23 @@
       (is (m/validate NotGroups {:a2 "b"}))
       (is (not (m/validate NotGroups {:a3 "c"}))))
     (testing "explain"
+      (is (nil? (m/explain FlatNotGroup {})))
+      (is (nil? (m/explain FlatNotGroup {:a1 "b"})))
+      (is (nil? (m/explain FlatNotGroup {:a1 "b" :a2 "c"})))
+      (is (= ["not allowed to provide :a3 key"]
+             (me/humanize (m/explain FlatNotGroup {:a1 "b" :a2 "c" :a3 "d"}))))
       (is (nil? (m/explain NotGroups {})))
       (is (nil? (m/explain NotGroups {:a1 "a" :a2 "b" :a3 "c"})))
       (is (nil? (m/explain NotGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
       (is (nil? (m/explain NotGroups {:a1 "a" :a2 "b"})))
       ;;TODO msgs
-      (is (m/explain NotGroups {:a1 "a" :a3 "c"}))
-      (is (m/explain NotGroups {:a2 "b" :a3 "c"}))
+      (is (= ["should satisfy keys constraint: [:or [:and :a1 :a2] [:not :a3]]"]
+             (me/humanize (m/explain NotGroups {:a1 "a" :a3 "c"}))))
+      ;;TODO msgs
+      (is (= ["should satisfy keys constraint: [:or [:and :a1 :a2] [:not :a3]]"]
+             (me/humanize (m/explain NotGroups {:a2 "b" :a3 "c"}))))
       (is (nil? (m/explain NotGroups {:a1 "a"})))
       (is (nil? (m/explain NotGroups {:a2 "b"})))
       ;;TODO msgs
-      (is (m/explain NotGroups {:a3 "c"})))))
+      (is (= ["should satisfy keys constraint: [:or [:and :a1 :a2] [:not :a3]]"]
+             (me/humanize (m/explain NotGroups {:a3 "c"})))))))
