@@ -269,7 +269,7 @@
   ([opts] (or (when opts (mr/registry (opts :registry))) default-registry)))
 
 (defn -property-registry [m options f]
-  (let [options (assoc options ::allow-invalid-refs true)]
+  (let [options (-> options (assoc ::allow-invalid-refs true) (dissoc ::local-scope))]
     (reduce-kv (fn [acc k v] (assoc acc k (f (schema v options)))) {} m)))
 
 (defn -delayed-registry [m f]
