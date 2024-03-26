@@ -3269,10 +3269,24 @@
 
 (deftest map-groups-test
   (testing ":or"
-    (is (m/validate NonEmptyMapGroup {:a1 "a"}))
-    (is (m/validate NonEmptyMapGroup {:a1 "a" :a2 "b"}))
-    (is (m/validate NonEmptyMapGroup {:a1 "a" :a2 "b" :a3 "c"}))
-    (is (not (m/validate NonEmptyMapGroup {}))))
+    (testing "validate"
+      (is (m/validate NonEmptyMapGroup {:a1 "a"}))
+      (is (m/validate NonEmptyMapGroup {:a1 "a" :a2 "b"}))
+      (is (m/validate NonEmptyMapGroup {:a1 "a" :a2 "b" :a3 "c"}))
+      (is (not (m/validate NonEmptyMapGroup {}))))
+    (testing "explain"
+      (is (nil? (m/explain NonEmptyMapGroup {:a1 "a"})))
+      (is (nil? (m/explain NonEmptyMapGroup {:a1 "a" :a2 "b"})))
+      (is (nil? (m/explain NonEmptyMapGroup {:a1 "a" :a2 "b" :a3 "c"})))
+      (is (= '{:schema [:map {:groups [[:or :a1 :a2]]} [:a1 {:optional true} string?] [:a2 {:optional true} string?]]
+               :value {}
+               :errors ({:path [[:or :a1 :a2]]
+                         :in []
+                         :schema [:map {:groups [[:or :a1 :a2]]} [:a1 {:optional true} string?] [:a2 {:optional true} string?]]
+                         :value {}
+                         :type :malli.core/group-violation
+                         :message nil})}
+             (with-schema-forms (m/explain NonEmptyMapGroup {}))))))
   (testing ":distinct"
     (is (m/validate UserPwGroups {:secret "a"}))
     (is (m/validate UserPwGroups {:user "a"

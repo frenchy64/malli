@@ -1075,6 +1075,7 @@
                (fn [m] (and (pred? m) (validate m)))))
            (-explainer [this path]
              (let [keyset (-entry-keyset (-entry-parser this))
+                   group->validator (some->> groups (mapv #(vector % (-key-group-validator % options))))
                    default-explainer (some-> @default-schema (-explainer (conj path ::default)))
                    explainers (cond-> (-vmap
                                        (fn [[key {:keys [optional]} schema]]
@@ -1092,13 +1093,22 @@
                                          (reduce (fn [acc k] (dissoc acc k)) x (keys keyset))
                                          in acc)))
                                 (and closed (not default-explainer))
+
                                 (conj (fn [x in acc]
                                         (reduce-kv
-                                         (fn [acc k v]
-                                           (if (contains? keyset k)
+                                          (fn [acc k v]
+                                            (if (contains? keyset k)
+                                              acc
+                                              (conj acc (miu/-error (conj path k) (conj in k) this v ::extra-key))))
+                                          acc x)))
+                                group->validator
+                                (conj (fn [x in acc]
+                                        (reduce
+                                         (fn [acc [group group-validator]]
+                                           (if (group-validator x)
                                              acc
-                                             (conj acc (miu/-error (conj path k) (conj in k) this v ::extra-key))))
-                                         acc x))))]
+                                             (conj acc (miu/-error (conj path group) in this x ::group-violation))))
+                                         acc group->validator))))]
                (fn [x in acc]
                  (if-not (pred? x)
                    (conj acc (miu/-error path in this x ::invalid-type))
