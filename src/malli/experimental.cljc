@@ -50,7 +50,7 @@
         raw-arglists (map :raw-arglist parglists)
         schema (as-> (map ->schema parglists) $ (if single (first $) (into [:function] $)))
         schema (if all
-                 [:all all schema]
+                 [:all (:binder all) schema]
                  schema)
         bodies (map (fn [{:keys [arglist prepost body]}] `(~arglist ~prepost ~@body)) parglists)
         validate? (or (:malli/always var-meta) (:malli/always body-meta))

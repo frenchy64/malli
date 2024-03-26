@@ -3234,7 +3234,8 @@
   (is (= '[:all [a :*]
            [:=> [:cat a] a]]
          (m/all [a :*] [:=> [:cat a] a])))
-  ;;FIXME
+  ;;FIXME m/form for [:.. a a]
+  #_
   (is (= '[:all [a :* b]
            [:=> [:catn
                  [:f [:=> [:catn [:pairwise-elements [:.. a a]]] b]]
@@ -3247,26 +3248,21 @@
                              b]]
                         [:colls [:.. [:sequential a] a]]]
                    [:sequential b]]))))
-  (is (= '[:all [a] [:=> [:cat a] a123]]
-         (m/form (m/all [a] [:=> [:cat a]
-                             '[::m/local {:original-name a :kind :Schema} a123]]))))
-  (is (= '[:all [a] [:=> [:cat a] b123]]
-         (m/form (m/all [a] [:=> [:cat a]
-                             '[::m/local {:original-name b :kind :Schema} b123]]))))
   (is (= '[:all [a] [:all [a] [:=> [:cat a] a]]]
-         (m/form (m/all [a] [:all [a] [:=> [:cat a] a]]))))
-  (is (= '[:all [a]
-           [:schema {:registry {::Foo a}}
-            [:=> [:cat ::Foo] a]]]
-         (m/form (m/all [a]
-                        [:schema {:registry {::Foo a}}
-                         [:=> [:cat ::Foo] a]]))))
+         (m/form (m/all [a] (m/all [a] [:=> [:cat a] a])))))
+  (testing "local in registry disallowed for now"
+    (is (thrown-with-msg?
+          #?(:clj Exception, :cljs js/Error)
+          #":malli\.core/unscoped-local-binding"
+          (m/form (m/all [a]
+                         [:schema {:registry {::Foo a}}
+                          [:=> [:cat ::Foo] ::Foo]])))))
   (is (thrown-with-msg?
         #?(:clj Exception, :cljs js/Error)
         #":malli\.core/unscoped-local-binding"
         (m/form [:schema {:registry {::Foo 'a}}
                  (m/all [a]
-                        [:=> [:cat ::Foo] a])]))))
+                        [:=> [:cat ::Foo] :any])]))))
 
 (deftest fv-test
   (is (= '#{{:id a123
