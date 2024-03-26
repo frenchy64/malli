@@ -3261,7 +3261,7 @@
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
-(deftest keys-groups-test
+(deftest map-groups-test
   (testing ":distinct"
     (is (m/validate UserPwGroups {:secret "a"}))
     (is (m/validate UserPwGroups {:user "a"

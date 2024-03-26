@@ -919,3 +919,27 @@
                        {:seed 2})]
     (is (vector? v))
     (is (seq v))))
+
+(def NonEmptyMapGroup
+  [:map
+   {:groups [[:or :a1 :a2]]}
+   [:a1 {:optional true} string?]
+   [:a2 {:optional true} string?]])
+
+(def UserPwGroups
+  [:map
+   {:groups [[:or :secret [:and :user :pass]]
+             [:distinct #{:secret} #{:user :pass}]]}
+   [:secret {:optional true} string?]
+   [:user {:optional true} string?]
+   [:pass {:optional true} string?]])
+
+(deftest map-groups-generator-test
+  (is (= '({:a1 "", :a2 ""} {:a1 "6"} {:a1 "sJ", :a2 "w"} {:a1 "", :a2 "76"} {:a1 "24b7"})
+         (mg/sample NonEmptyMapGroup
+                    {:seed 0
+                     :size 5})))
+  #_
+  (mg/generate UserPwGroups
+               {:seed 0})
+  )

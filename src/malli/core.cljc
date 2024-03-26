@@ -952,6 +952,52 @@
            (-ref [_])
            (-deref [_] schema)))))))
 
+(defn -key-group-validator [group options]
+  (letfn [(-key-group-validator [group]
+            (if (vector? group)
+              (case (first group)
+                :not (let [[p & ps] (mapv -key-group-validator (next group))]
+                       (when (or (not p) ps)
+                         (-fail! ::not-keys-group-takes-one-child {:group group}))
+                       #(not (p %)))
+                :and (let [ps (mapv -key-group-validator (next group))]
+                       #(every? (fn [p] (p %)) ps))
+                :or (let [ps (mapv -key-group-validator (next group))]
+                      #(boolean (some (fn [p] (p %)) ps)))
+                :xor (let [ps (mapv -key-group-validator (next group))]
+                       ;;TODO short circuit
+                       #(= 1 (count (filterv (fn [p] (p %)) ps))))
+                :distinct (let [ps (mapv (fn [ks]
+                                           #(every? (fn [k]
+                                                      (contains? % k))
+                                                    ks))
+                                         (next group))]
+                            ;; TODO if one passes, all others must fail
+                            ;;TODO rewrite in terms of reduce, short circuit rs on first success
+                            #(let [rs (into [] (keep-indexed (fn [i p]
+                                                               (when (p %)
+                                                                 i)))
+                                            ps)
+                                   cnt (count rs)]
+                               (or (zero? cnt)
+                                   (if (= 1 cnt)
+                                     (not-any? (fn [p] (p %))
+                                               (subvec ps (first rs)))
+                                     false))))
+                :iff (let [[p & ps] (mapv -key-group-validator (next group))]
+                       (when-not p
+                         (-fail! ::empty-iff))
+                       #(let [expect (p %)]
+                          (every? (fn [p] (= expect (p %))) ps)))
+                :implies (let [[p & ps] (mapv -key-group-validator (next group))]
+                           (when-not p
+                             (-fail! ::missing-implies-condition {:group group}))
+                           #(or (not (p %))
+                                (every? (fn [p] (p %)) ps)))
+                (-fail! ::unknown-group {:group group}))
+              #(contains? % group)))]
+    (-key-group-validator group)))
+
 (defn -map-schema
   ([]
    (-map-schema {:naked-keys true}))
@@ -1008,49 +1054,9 @@
            (-validator [this]
              (let [keyset (-entry-keyset (-entry-parser this))
                    groups-validator (when (seq groups)
-                                      ((fn group->validator [group]
-                                         (if (vector? group)
-                                           (case (first group)
-                                             :not (let [[p & ps] (mapv group->validator (next group))]
-                                                    (when (or (not p) ps)
-                                                      (-fail! ::not-keys-group-takes-one-child {:group group}))
-                                                    #(not (p %)))
-                                             :and (let [ps (mapv group->validator (next group))]
-                                                    #(every? (fn [p] (p %)) ps))
-                                             :or (let [ps (mapv group->validator (next group))]
-                                                   #(boolean (some (fn [p] (p %)) ps)))
-                                             :xor (let [ps (mapv group->validator (next group))]
-                                                    #(= 1 (count (filterv (fn [p] (p %)) ps))))
-                                             :distinct (let [ps (mapv (fn [ks]
-                                                                        #(every? (fn [k]
-                                                                                   (contains? % k))
-                                                                                 ks))
-                                                                      (next group))]
-                                                         ;; TODO if one passes, all others must fail
-                                                         ;;TODO rewrite in terms of reduce, short circuit rs on first success
-                                                         #(let [rs (into [] (keep-indexed (fn [i p]
-                                                                                            (when (p %)
-                                                                                              i)))
-                                                                         ps)
-                                                                cnt (count rs)]
-                                                            (or (zero? cnt)
-                                                                (if (= 1 cnt)
-                                                                  (not-any? (fn [p] (p %))
-                                                                            (subvec ps (first rs)))
-                                                                  false))))
-                                             :iff (let [[p & ps] (mapv group->validator (next group))]
-                                                    (when-not p
-                                                      (-fail! ::empty-iff))
-                                                    #(let [expect (p %)]
-                                                       (every? (fn [p] (= expect (p %))) ps)))
-                                             :implies (let [[p & ps] (mapv group->validator (next group))]
-                                                        (when-not p
-                                                          (-fail! ::missing-implies-condition {:group group}))
-                                                        #(or (not (p %))
-                                                             (every? (fn [p] (p %)) ps)))
-                                             (-fail! ::unknown-group {:group group}))
-                                           #(contains? % group)))
-                                       (into [:and] groups)))
+                                      (-key-group-validator
+                                        (into [:and] groups)
+                                        options))
                    default-validator (some-> @default-schema (-validator))
                    validators (cond-> (-vmap
                                        (fn [[key {:keys [optional]} value]]
