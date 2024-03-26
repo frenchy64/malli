@@ -968,9 +968,12 @@
                        ;;TODO short circuit
                        #(= 1 (count (filterv (fn [p] (p %)) ps))))
                 :distinct (let [ps (mapv (fn [ks]
-                                           #(every? (fn [k]
+                                           (when-not (set? ks)
+                                             (-fail! ::distinct-group-takes-sets-of-keys {:group group}))
+                                           #(boolean
+                                              (some (fn [k]
                                                       (contains? % k))
-                                                    ks))
+                                                    ks)))
                                          (next group))]
                             ;; TODO if one passes, all others must fail
                             ;;TODO rewrite in terms of reduce, short circuit rs on first success
@@ -980,10 +983,7 @@
                                             ps)
                                    cnt (count rs)]
                                (or (zero? cnt)
-                                   (if (= 1 cnt)
-                                     (not-any? (fn [p] (p %))
-                                               (subvec ps (first rs)))
-                                     false))))
+                                   (= 1 cnt))))
                 :iff (let [[p & ps] (mapv -key-group-validator (next group))]
                        (when-not p
                          (-fail! ::empty-iff))

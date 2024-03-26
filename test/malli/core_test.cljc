@@ -3225,6 +3225,12 @@
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
 
+(def NonEmptyMapGroup
+  [:map
+   {:groups [[:or :a1 :a2]]}
+   [:a1 {:optional true} string?]
+   [:a2 {:optional true} string?]])
+
 (def UserPwGroups
   [:map
    {:groups [[:or :secret [:and :user :pass]]
@@ -3262,12 +3268,16 @@
    [:a3 {:optional true} string?]])
 
 (deftest map-groups-test
+  (testing ":or"
+    (is (m/validate NonEmptyMapGroup {:a1 "a"}))
+    (is (m/validate NonEmptyMapGroup {:a1 "a" :a2 "b"}))
+    (is (m/validate NonEmptyMapGroup {:a1 "a" :a2 "b" :a3 "c"}))
+    (is (not (m/validate NonEmptyMapGroup {}))))
   (testing ":distinct"
     (is (m/validate UserPwGroups {:secret "a"}))
     (is (m/validate UserPwGroups {:user "a"
                                   :pass "b"}))
     (is (not (m/validate UserPwGroups {:user "a"})))
-    (is (not (m/validate UserPwGroups {:secret "a"})))
     (is (not (m/validate UserPwGroups {})))
     (is (not (m/validate UserPwGroups {:secret "a"
                                        :user "b"})))

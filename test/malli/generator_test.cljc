@@ -941,16 +941,55 @@
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
+(def IffGroups
+  [:map
+   {:groups [[:iff :a1 :a2 :a3]]}
+   [:a1 {:optional true} string?]
+   [:a2 {:optional true} string?]
+   [:a3 {:optional true} string?]])
+
+(def XOrGroups
+  [:map
+   {:groups [[:xor :a1 :a2 :a3]]}
+   [:a1 {:optional true} string?]
+   [:a2 {:optional true} string?]
+   [:a3 {:optional true} string?]])
+
+(def NotGroups
+  [:map
+   {:groups [[:or [:and :a1 :a2] [:not :a3]]]}
+   [:a1 {:optional true} string?]
+   [:a2 {:optional true} string?]
+   [:a3 {:optional true} string?]])
+
 (deftest map-groups-generator-test
-  (is (= '({:a1 ""} {:a2 "4"} {:a1 "h"} {:a1 ""} {:a1 "99"} {:a1 "tW1", :a2 "8J"} {:a2 "c"})
-         (mg/sample NonEmptyMapGroup
-                    {:seed 1
-                     :size 7})))
-  #_
-  (mg/generate UserPwGroups
-               {:seed 0})
-  (is (= '({} {:a2 ""} {:a3 "L"} {:a2 "2P", :a3 "06"} {:a3 "r4Wn"})
-         (mg/sample ImpliesGroups
-                    {:seed 3
-                     :size 5})))
-  )
+  (testing ":or"
+    (is (= '({:a1 ""} {:a2 "4"} {:a1 "h"} {:a1 ""} {:a1 "99"} {:a1 "tW1", :a2 "8J"} {:a2 "c"})
+           (mg/sample NonEmptyMapGroup
+                      {:seed 1
+                       :size 7}))))
+  (testing ":distinct"
+    (is (= '({:secret ""} {:user "", :pass "H"} {:secret "L"} {:user "2P", :pass "06"} {:secret "r4Wn"})
+           (mg/sample UserPwGroups
+                      {:seed 3
+                       :size 5}))))
+  (testing ":implies"
+    (is (= '({} {:a2 ""} {:a3 "L"} {:a2 "2P", :a3 "06"} {:a3 "r4Wn"})
+           (mg/sample ImpliesGroups
+                      {:seed 3
+                       :size 5}))))
+  (testing ":iff"
+    (is (= '({} {:a1 "", :a2 "I", :a3 "1"} {} {:a1 "2P", :a2 "0k", :a3 "I4k"} {})
+           (mg/sample IffGroups
+                      {:seed 3
+                       :size 5}))))
+  (testing ":xor"
+    (is (= '({:a1 ""} {:a2 ""} {:a3 "L"} {:a1 "33"} {:a3 "r4Wn"})
+           (mg/sample XOrGroups
+                      {:seed 3
+                       :size 5}))))
+  (testing ":not"
+    (is (= '({} {:a1 ""} {:a2 "L"} {:a1 "2P", :a2 "06"} {:a2 "r4Wn"})
+           (mg/sample NotGroups
+                      {:seed 3
+                       :size 5})))))
