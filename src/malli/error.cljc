@@ -28,6 +28,11 @@
                                       (str "invalid tuple size " (count value) ", expected " size)))}}
    ::m/invalid-type {:error/message {:en "invalid type"}}
    ::m/extra-key {:error/message {:en "disallowed key"}}
+   ::m/group-violation {:error/fn {:en (fn [{:keys [schema value path]} _]
+                                         (let [group (-> schema m/properties :groups (nth (peek path)))]
+                                           ;;TODO convert constraint to english
+                                           (str "must have this combination of keys: "
+                                                #_"should satisfy keys constraint: " (pr-str group))))}}
    :malli.core/invalid-dispatch-value {:error/message {:en "invalid dispatch value"}}
    ::misspelled-key {:error/fn {:en (fn [{::keys [likely-misspelling-of]} _]
                                       (str "should be spelled " (str/join " or " (map last likely-misspelling-of))))}}

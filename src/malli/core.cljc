@@ -952,6 +952,32 @@
            (-ref [_])
            (-deref [_] schema)))))))
 
+(defn -valid-key-groups [schema options]
+  (when-some [groups (:groups (m/properties schema))]
+    (let [{required false
+           optional true} (group-by #(-> % -last m/properties :optional)
+                                    (m/entries schema))
+          key-group (into [:and] groups)
+          base (into {} (map (fn [k]
+                               {k :required}))
+                     required)
+          p (m/-key-group-validator key-group options)]
+      (prn "base" base)
+      (into [] (comp (keep (fn [optionals]
+                             (let [example (-> base
+                                               (into (map (fn [[k]]
+                                                            {k :required}))
+                                                     optionals))]
+                               (prn "candidate" example (p example))
+                               (when (p example)
+                                 (into example
+                                       (map (fn [[k]]
+                                              (when-not (example k)
+                                                {k :never})))
+                                       optional)))))
+                     (distinct))
+            (comb/subsets optional)))))
+
 (defn -key-group-validator [group options]
   (letfn [(-key-group-validator [group]
             (if (vector? group)
@@ -1075,7 +1101,9 @@
                (fn [m] (and (pred? m) (validate m)))))
            (-explainer [this path]
              (let [keyset (-entry-keyset (-entry-parser this))
-                   group->validator (some->> groups (mapv #(vector % (-key-group-validator % options))))
+                   group->validator (some->> groups (into [] (map-indexed
+                                                               (fn [i group]
+                                                                 [i group (-key-group-validator group options)]))))
                    default-explainer (some-> @default-schema (-explainer (conj path ::default)))
                    explainers (cond-> (-vmap
                                        (fn [[key {:keys [optional]} schema]]
@@ -1093,7 +1121,6 @@
                                          (reduce (fn [acc k] (dissoc acc k)) x (keys keyset))
                                          in acc)))
                                 (and closed (not default-explainer))
-
                                 (conj (fn [x in acc]
                                         (reduce-kv
                                           (fn [acc k v]
@@ -1104,10 +1131,10 @@
                                 group->validator
                                 (conj (fn [x in acc]
                                         (reduce
-                                         (fn [acc [group group-validator]]
+                                         (fn [acc [i group group-validator]]
                                            (if (group-validator x)
                                              acc
-                                             (conj acc (miu/-error (conj path group) in this x ::group-violation))))
+                                             (conj acc (miu/-error (conj path :groups i) in this x ::group-violation))))
                                          acc group->validator))))]
                (fn [x in acc]
                  (if-not (pred? x)

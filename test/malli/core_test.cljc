@@ -3234,7 +3234,7 @@
 (def UserPwGroups
   [:map
    {:groups [[:or :secret [:and :user :pass]]
-             [:distinct #{:secret} #{:user :pass}]]}
+             [:distinct #{:secret} (sorted-set :user :pass)]]}
    [:secret {:optional true} string?]
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])
@@ -3280,7 +3280,7 @@
       (is (nil? (m/explain NonEmptyMapGroup {:a1 "a" :a2 "b" :a3 "c"})))
       (is (= '{:schema [:map {:groups [[:or :a1 :a2]]} [:a1 {:optional true} string?] [:a2 {:optional true} string?]]
                :value {}
-               :errors ({:path [[:or :a1 :a2]]
+               :errors ({:path [:groups 0]
                          :in []
                          :schema [:map {:groups [[:or :a1 :a2]]} [:a1 {:optional true} string?] [:a2 {:optional true} string?]]
                          :value {}
@@ -3288,53 +3288,156 @@
                          :message nil})}
              (with-schema-forms (m/explain NonEmptyMapGroup {}))))))
   (testing ":distinct"
-    (is (m/validate UserPwGroups {:secret "a"}))
-    (is (m/validate UserPwGroups {:user "a"
-                                  :pass "b"}))
-    (is (not (m/validate UserPwGroups {:user "a"})))
-    (is (not (m/validate UserPwGroups {})))
-    (is (not (m/validate UserPwGroups {:secret "a"
-                                       :user "b"})))
-    (is (not (m/validate UserPwGroups {:secret "a"
-                                       :user "b"
-                                       :password "c"}))))
+    (testing "validate"
+      (is (m/validate UserPwGroups {:secret "a"}))
+      (is (m/validate UserPwGroups {:user "a"
+                                    :pass "b"}))
+      (is (not (m/validate UserPwGroups {:user "a"})))
+      (is (not (m/validate UserPwGroups {})))
+      (is (not (m/validate UserPwGroups {:secret "a"
+                                         :user "b"})))
+      (is (not (m/validate UserPwGroups {:secret "a"
+                                         :user "b"
+                                         :password "c"}))))
+    (testing "explain"
+      (is (nil? (m/explain UserPwGroups {:secret "a"})))
+      (is (nil? (m/explain UserPwGroups {:user "a"
+                                         :pass "b"})))
+      (is (= [{:path [:groups 0]
+               :in []
+               :schema (m/form UserPwGroups)
+               :value {:user "a"}
+               :type :malli.core/group-violation
+               :message nil}]
+            (:errors (with-schema-forms (m/explain UserPwGroups {:user "a"})))))
+      (is (= ["must have this combination of keys: [:or :secret [:and :user :pass]]"]
+             (me/humanize (m/explain UserPwGroups {:user "a"}))))
+      (is (= [{:path [:groups 0]
+               :in []
+               :schema (m/form UserPwGroups)
+               :value {}
+               :type :malli.core/group-violation
+               :message nil}]
+             (-> (m/explain UserPwGroups {})
+                 with-schema-forms
+                 :errors)))
+      (is (= ["must have this combination of keys: [:or :secret [:and :user :pass]]"]
+             (me/humanize (m/explain UserPwGroups {}))))
+      (is (= [{:path [:groups 1]
+               :in []
+               :schema (m/form UserPwGroups)
+               :value {:secret "a", :user "b"}
+               :type :malli.core/group-violation
+               :message nil}]
+             (-> (m/explain UserPwGroups {:secret "a"
+                                          :user "b"})
+                 with-schema-forms
+                 :errors)))
+      (is (= ["must have this combination of keys: [:distinct #{:secret} #{:pass :user}]"]
+             (me/humanize (m/explain UserPwGroups {:secret "a"
+                                                   :user "b"}))))
+      (is (= [{:path [:groups 1]
+               :in []
+               :schema (m/form UserPwGroups)
+               :value {:secret "a", :user "b", :password "c"}
+               :type :malli.core/group-violation
+               :message nil}]
+             (-> (m/explain UserPwGroups {:secret "a"
+                                          :user "b"
+                                          :password "c"})
+                 with-schema-forms
+                 :errors)))
+      (is (= ["must have this combination of keys: [:distinct #{:secret} #{:pass :user}]"]
+             (me/humanize (m/explain UserPwGroups {:secret "a"
+                                                   :user "b"
+                                                   :password "c"}))))))
   (testing ":iff"
-    (is (m/validate IffGroups {}))
-    (is (m/validate IffGroups {:a1 "a" :a2 "b" :a3 "c"}))
-    (is (m/validate IffGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
-    (is (not (m/validate IffGroups {:a1 "a" :a2 "b"})))
-    (is (not (m/validate IffGroups {:a1 "a" :a3 "c"})))
-    (is (not (m/validate IffGroups {:a2 "b" :a3 "c"})))
-    (is (not (m/validate IffGroups {:a1 "a"})))
-    (is (not (m/validate IffGroups {:a2 "b"})))
-    (is (not (m/validate IffGroups {:a3 "c"}))))
+    (testing "validate"
+      (is (m/validate IffGroups {}))
+      (is (m/validate IffGroups {:a1 "a" :a2 "b" :a3 "c"}))
+      (is (m/validate IffGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
+      (is (not (m/validate IffGroups {:a1 "a" :a2 "b"})))
+      (is (not (m/validate IffGroups {:a1 "a" :a3 "c"})))
+      (is (not (m/validate IffGroups {:a2 "b" :a3 "c"})))
+      (is (not (m/validate IffGroups {:a1 "a"})))
+      (is (not (m/validate IffGroups {:a2 "b"})))
+      (is (not (m/validate IffGroups {:a3 "c"}))))
+
+    (testing "explain"
+      (is (nil? (m/explain IffGroups {})))
+      (is (nil? (m/explain IffGroups {:a1 "a" :a2 "b" :a3 "c"})))
+      (is (nil? (m/explain IffGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
+      ;;TODO msgs
+      (is (m/explain IffGroups {:a1 "a" :a2 "b"}))
+      (is (m/explain IffGroups {:a1 "a" :a3 "c"}))
+      (is (m/explain IffGroups {:a2 "b" :a3 "c"}))
+      (is (m/explain IffGroups {:a1 "a"}))
+      (is (m/explain IffGroups {:a2 "b"}))
+      (is (m/explain IffGroups {:a3 "c"}))))
   (testing ":implies"
-    (is (m/validate ImpliesGroups {}))
-    (is (m/validate ImpliesGroups {:a1 "a" :a2 "b" :a3 "c"}))
-    (is (m/validate ImpliesGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
-    (is (not (m/validate ImpliesGroups {:a1 "a" :a2 "b"})))
-    (is (not (m/validate ImpliesGroups {:a1 "a" :a3 "c"})))
-    (is (m/validate ImpliesGroups {:a2 "b" :a3 "c"}))
-    (is (not (m/validate ImpliesGroups {:a1 "a"})))
-    (is (m/validate ImpliesGroups {:a2 "b"}))
-    (is (m/validate ImpliesGroups {:a3 "c"})))
+    (testing "validate"
+      (is (m/validate ImpliesGroups {}))
+      (is (m/validate ImpliesGroups {:a1 "a" :a2 "b" :a3 "c"}))
+      (is (m/validate ImpliesGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
+      (is (not (m/validate ImpliesGroups {:a1 "a" :a2 "b"})))
+      (is (not (m/validate ImpliesGroups {:a1 "a" :a3 "c"})))
+      (is (m/validate ImpliesGroups {:a2 "b" :a3 "c"}))
+      (is (not (m/validate ImpliesGroups {:a1 "a"})))
+      (is (m/validate ImpliesGroups {:a2 "b"}))
+      (is (m/validate ImpliesGroups {:a3 "c"})))
+    (testing "explain"
+      (is (nil? (m/explain ImpliesGroups {})))
+      (is (nil? (m/explain ImpliesGroups {:a1 "a" :a2 "b" :a3 "c"})))
+      (is (nil? (m/explain ImpliesGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
+      ;;TODO msgs
+      (is (m/explain ImpliesGroups {:a1 "a" :a2 "b"}))
+      (is (m/explain ImpliesGroups {:a1 "a" :a3 "c"}))
+      (is (nil? (m/explain ImpliesGroups {:a2 "b" :a3 "c"})))
+      (is (m/explain ImpliesGroups {:a1 "a"}))
+      (is (nil? (m/explain ImpliesGroups {:a2 "b"})))
+      (is (nil? (m/explain ImpliesGroups {:a3 "c"})))))
   (testing ":xor"
-    (is (not (m/validate XOrGroups {})))
-    (is (not (m/validate XOrGroups {:a1 "a" :a2 "b" :a3 "c"})))
-    (is (not (m/validate XOrGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
-    (is (not (m/validate XOrGroups {:a1 "a" :a2 "b"})))
-    (is (not (m/validate XOrGroups {:a1 "a" :a3 "c"})))
-    (is (not (m/validate XOrGroups {:a2 "b" :a3 "c"})))
-    (is (m/validate XOrGroups {:a1 "a"}))
-    (is (m/validate XOrGroups {:a2 "b"}))
-    (is (m/validate XOrGroups {:a3 "c"})))
+    (testing "validate"
+      (is (not (m/validate XOrGroups {})))
+      (is (not (m/validate XOrGroups {:a1 "a" :a2 "b" :a3 "c"})))
+      (is (not (m/validate XOrGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
+      (is (not (m/validate XOrGroups {:a1 "a" :a2 "b"})))
+      (is (not (m/validate XOrGroups {:a1 "a" :a3 "c"})))
+      (is (not (m/validate XOrGroups {:a2 "b" :a3 "c"})))
+      (is (m/validate XOrGroups {:a1 "a"}))
+      (is (m/validate XOrGroups {:a2 "b"}))
+      (is (m/validate XOrGroups {:a3 "c"})))
+    (testing "explain"
+      ;;TODO msgs
+      (is (m/explain XOrGroups {}))
+      (is (m/explain XOrGroups {:a1 "a" :a2 "b" :a3 "c"}))
+      (is (m/explain XOrGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
+      (is (m/explain XOrGroups {:a1 "a" :a2 "b"}))
+      (is (m/explain XOrGroups {:a1 "a" :a3 "c"}))
+      (is (m/explain XOrGroups {:a2 "b" :a3 "c"}))
+      (is (nil? (m/explain XOrGroups {:a1 "a"})))
+      (is (nil? (m/explain XOrGroups {:a2 "b"})))
+      (is (nil? (m/explain XOrGroups {:a3 "c"})))))
   (testing ":not"
-    (is (m/validate NotGroups {}))
-    (is (m/validate NotGroups {:a1 "a" :a2 "b" :a3 "c"}))
-    (is (m/validate NotGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
-    (is (m/validate NotGroups {:a1 "a" :a2 "b"}))
-    (is (not (m/validate NotGroups {:a1 "a" :a3 "c"})))
-    (is (not (m/validate NotGroups {:a2 "b" :a3 "c"})))
-    (is (m/validate NotGroups {:a1 "a"}))
-    (is (m/validate NotGroups {:a2 "b"}))
-    (is (not (m/validate NotGroups {:a3 "c"})))))
+    (testing "validate"
+      (is (m/validate NotGroups {}))
+      (is (m/validate NotGroups {:a1 "a" :a2 "b" :a3 "c"}))
+      (is (m/validate NotGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
+      (is (m/validate NotGroups {:a1 "a" :a2 "b"}))
+      (is (not (m/validate NotGroups {:a1 "a" :a3 "c"})))
+      (is (not (m/validate NotGroups {:a2 "b" :a3 "c"})))
+      (is (m/validate NotGroups {:a1 "a"}))
+      (is (m/validate NotGroups {:a2 "b"}))
+      (is (not (m/validate NotGroups {:a3 "c"}))))
+    (testing "explain"
+      (is (nil? (m/explain NotGroups {})))
+      (is (nil? (m/explain NotGroups {:a1 "a" :a2 "b" :a3 "c"})))
+      (is (nil? (m/explain NotGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
+      (is (nil? (m/explain NotGroups {:a1 "a" :a2 "b"})))
+      ;;TODO msgs
+      (is (m/explain NotGroups {:a1 "a" :a3 "c"}))
+      (is (m/explain NotGroups {:a2 "b" :a3 "c"}))
+      (is (nil? (m/explain NotGroups {:a1 "a"})))
+      (is (nil? (m/explain NotGroups {:a2 "b"})))
+      ;;TODO msgs
+      (is (m/explain NotGroups {:a3 "c"})))))
