@@ -1038,7 +1038,11 @@
                                                                   (not-any? (fn [p] (p %))
                                                                             (subvec ps (first rs)))
                                                                   false))))
-                                             ;:iff
+                                             :iff (let [[p & ps] (mapv group->validator (next group))]
+                                                    (when-not p
+                                                      (-fail! ::empty-iff))
+                                                    #(let [expect (p %)]
+                                                       (every? (fn [p] (= expect (p %))) ps)))
                                              :implies (let [[p & ps] (mapv group->validator (next group))]
                                                         (when-not p
                                                           (-fail! ::missing-implies-condition {:group group}))

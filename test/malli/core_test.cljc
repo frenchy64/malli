@@ -3233,16 +3233,34 @@
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])
 
+(def IffGroups
+  [:map
+   {:groups [[:iff :a1 :a2 :a3]]}
+   [:a1 {:optional true} string?]
+   [:a2 {:optional true} string?]
+   [:a3 {:optional true} string?]])
+
 (deftest keys-groups-test
-  (is (m/validate UserPwGroups {:secret "a"}))
-  (is (m/validate UserPwGroups {:user "a"
-                                :pass "b"}))
-  (is (not (m/validate UserPwGroups {:user "a"})))
-  (is (not (m/validate UserPwGroups {:secret "a"})))
-  (is (not (m/validate UserPwGroups {})))
-  (is (not (m/validate UserPwGroups {:secret "a"
-                                     :user "b"})))
-  (is (not (m/validate UserPwGroups {:secret "a"
-                                     :user "b"
-                                     :password "c"})))
+  (testing ":distinct"
+    (is (m/validate UserPwGroups {:secret "a"}))
+    (is (m/validate UserPwGroups {:user "a"
+                                  :pass "b"}))
+    (is (not (m/validate UserPwGroups {:user "a"})))
+    (is (not (m/validate UserPwGroups {:secret "a"})))
+    (is (not (m/validate UserPwGroups {})))
+    (is (not (m/validate UserPwGroups {:secret "a"
+                                       :user "b"})))
+    (is (not (m/validate UserPwGroups {:secret "a"
+                                       :user "b"
+                                       :password "c"}))))
+  (testing ":iff"
+    (is (m/validate IffGroups {}))
+    (is (m/validate IffGroups {:a1 "a" :a2 "b" :a3 "c"}))
+    (is (m/validate IffGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
+    (is (not (m/validate IffGroups {:a1 "a" :a2 "b"})))
+    (is (not (m/validate IffGroups {:a1 "a" :a3 "c"})))
+    (is (not (m/validate IffGroups {:a2 "b" :a3 "c"})))
+    (is (not (m/validate IffGroups {:a1 "a"})))
+    (is (not (m/validate IffGroups {:a2 "b"})))
+    (is (not (m/validate IffGroups {:a3 "c"}))))
   )
