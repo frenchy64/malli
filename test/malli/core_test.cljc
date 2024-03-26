@@ -3286,7 +3286,9 @@
                          :value {}
                          :type :malli.core/group-violation
                          :message nil})}
-             (with-schema-forms (m/explain NonEmptyMapGroup {}))))))
+             (with-schema-forms (m/explain NonEmptyMapGroup {}))))
+      (is (= ["must provide at least one key: :a1 :a2"]
+             (me/humanize (m/explain NonEmptyMapGroup {}))))))
   (testing ":distinct"
     (testing "validate"
       (is (m/validate UserPwGroups {:secret "a"}))
@@ -3362,18 +3364,22 @@
       (is (not (m/validate IffGroups {:a1 "a"})))
       (is (not (m/validate IffGroups {:a2 "b"})))
       (is (not (m/validate IffGroups {:a3 "c"}))))
-
     (testing "explain"
       (is (nil? (m/explain IffGroups {})))
       (is (nil? (m/explain IffGroups {:a1 "a" :a2 "b" :a3 "c"})))
       (is (nil? (m/explain IffGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
-      ;;TODO msgs
-      (is (m/explain IffGroups {:a1 "a" :a2 "b"}))
-      (is (m/explain IffGroups {:a1 "a" :a3 "c"}))
-      (is (m/explain IffGroups {:a2 "b" :a3 "c"}))
-      (is (m/explain IffGroups {:a1 "a"}))
-      (is (m/explain IffGroups {:a2 "b"}))
-      (is (m/explain IffGroups {:a3 "c"}))))
+      (is (= ["since key :a1 was provided, must also provide: :a3"]
+             (me/humanize (m/explain IffGroups {:a1 "a" :a2 "b"}))))
+      (is (= ["since key :a1 was provided, must also provide: :a2"]
+             (me/humanize (m/explain IffGroups {:a1 "a" :a3 "c"}))))
+      (is (= ["since key :a2 was provided, must also provide: :a1"]
+             (me/humanize (m/explain IffGroups {:a2 "b" :a3 "c"}))))
+      (is (= ["since key :a1 was provided, must also provide: :a2 :a3"]
+             (me/humanize (m/explain IffGroups {:a1 "a"}))))
+      (is (= ["since key :a2 was provided, must also provide: :a1 :a3"]
+             (me/humanize (m/explain IffGroups {:a2 "b"}))))
+      (is (= ["since key :a3 was provided, must also provide: :a1 :a2"]
+             (me/humanize (m/explain IffGroups {:a3 "c"}))))))
   (testing ":implies"
     (testing "validate"
       (is (m/validate ImpliesGroups {}))

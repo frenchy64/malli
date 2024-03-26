@@ -31,6 +31,20 @@
    ::m/group-violation {:error/fn {:en (fn [{:keys [schema value path]} _]
                                          (let [group (-> schema m/properties :groups (nth (peek path)))]
                                            (cond
+                                             (and (= :or (first group))
+                                                  (not-any? vector? (next group)))
+                                             (str "must provide at least one key: "
+                                                  (apply str (interpose " " (map pr-str (next group)))))
+
+                                             (and (= :iff (first group))
+                                                  (not-any? vector? (next group)))
+                                             (let [{provided true
+                                                    missing false} (group-by #(contains? value %)
+                                                                             (next group))]
+                                               (str "since key " (pr-str (first provided))
+                                                    " was provided, must also provide: "
+                                                    (apply str (interpose " " (map pr-str missing)))))
+                                             
                                              (= :distinct (first group))
                                              (let [ksets (vec (next group))
                                                    [has-group has-k] (some (fn [i]
