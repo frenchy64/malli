@@ -3224,3 +3224,25 @@
                                              ::xymap [:merge ::xmap ::ymap]}}
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
+
+(def UserPwGroups
+  [:map
+   {:groups [[:or :secret [:and :user :pass]]
+             [:distinct #{:secret} #{:user :pass}]]}
+   [:secret {:optional true} string?]
+   [:user {:optional true} string?]
+   [:pass {:optional true} string?]])
+
+(deftest keys-groups-test
+  (is (m/validate UserPwGroups {:secret "a"}))
+  (is (m/validate UserPwGroups {:user "a"
+                                :pass "b"}))
+  (is (not (m/validate UserPwGroups {:user "a"})))
+  (is (not (m/validate UserPwGroups {:secret "a"})))
+  (is (not (m/validate UserPwGroups {})))
+  (is (not (m/validate UserPwGroups {:secret "a"
+                                     :user "b"})))
+  (is (not (m/validate UserPwGroups {:secret "a"
+                                     :user "b"
+                                     :password "c"})))
+  )

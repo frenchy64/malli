@@ -965,7 +965,7 @@
      (-type-properties [_] (:type-properties opts))
      (-properties-schema [_ _])
      (-children-schema [_ _])
-     (-into-schema [parent {:keys [closed] :as properties} children options]
+     (-into-schema [parent {:keys [closed groups] :as properties} children options]
        (let [pred? (:pred opts map?)
              entry-parser (-create-entry-parser children opts options)
              form (delay (-create-entry-form parent properties entry-parser options))
@@ -1007,6 +1007,36 @@
            Schema
            (-validator [this]
              (let [keyset (-entry-keyset (-entry-parser this))
+                   groups-validator (when (seq groups)
+                                      ((fn group->validator [group]
+                                         (if (vector? group)
+                                           (let [ps (mapv group->validator (next group))]
+                                             (case (first group)
+                                               :not (let [[p & ps] (mapv group->validator (next group))]
+                                                      (when (or (not p) ps)
+                                                        (-fail! ::not-keys-group-takes-one-child {:group group}))
+                                                      #(not (p %)))
+                                               :and (let [ps (mapv group->validator (next group))]
+                                                      #(every? (fn [p] (p %)) ps))
+                                               :or (let [ps (mapv group->validator (next group))]
+                                                     #(boolean (some (fn [p] (p %)) ps)))
+                                               :xor (let [ps (mapv group->validator (next group))]
+                                                      #(= 1 (count (filterv (fn [p] (p %)) ps))))
+                                               :distinct (let [ps (mapv (fn [ks]
+                                                                          (group->validator))
+                                                                        ps)]
+                                                           ;; TODO if one passes, all others must fail
+                                                           #_
+                                                           #(mapv () ))
+                                               ;:iff
+                                               :implies (let [[p & ps] (mapv group->validator (next group))]
+                                                          (when-not p
+                                                            (-fail! ::missing-implies-condition {:group group}))
+                                                          #(or (not (p %))
+                                                               (every? (fn [p] (p %)) ps)))
+                                               (-fail! ::unknown-group {:group group})))
+                                           #(contains? % group)))
+                                       (into [:and] groups)))
                    default-validator (some-> @default-schema (-validator))
                    validators (cond-> (-vmap
                                        (fn [[key {:keys [optional]} value]]
@@ -1019,7 +1049,8 @@
                                 default-validator
                                 (conj (fn [m] (default-validator (reduce (fn [acc k] (dissoc acc k)) m (keys keyset)))))
                                 (and closed (not default-validator))
-                                (conj (fn [m] (reduce (fn [acc k] (if (contains? keyset k) acc (reduced false))) true (keys m)))))
+                                (conj (fn [m] (reduce (fn [acc k] (if (contains? keyset k) acc (reduced false))) true (keys m))))
+                                groups-validator (conj groups-validator))
                    validate (miu/-every-pred validators)]
                (fn [m] (and (pred? m) (validate m)))))
            (-explainer [this path]
