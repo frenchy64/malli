@@ -624,7 +624,7 @@
                                                                            (fn [schemas]
                                                                              (gen/sized
                                                                                (fn [size]
-                                                                                 (let [schema (m/-instantiate schema schemas)]
+                                                                                 (let [schema (m/-instantiate-all schema schemas)]
                                                                                    (gen/return
                                                                                      {:explain (delay
                                                                                                  ((function-checker

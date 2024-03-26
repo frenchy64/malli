@@ -88,7 +88,7 @@
 
 (defprotocol AllSchema
   (-bounds [this] "return map of type variable name to bound")
-  (-instantiate [this schemas] "replace variables in polymorphic schema with schemas")
+  (-instantiate-all [this schemas] "replace variables in polymorphic schema with schemas")
   (-instantiate-for-instrumentation [this] "return the schema suitable for instrumentation"))
 
 (defn -ref-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.RefSchema x))
@@ -1719,7 +1719,9 @@
           (-options [_] options)
           (-children [_] children)
           (-parent [_] parent)
-          (-form [_] id)
+          (-form [_] (if (number? id)
+                       [::local id]
+                       id))
           Cached
           (-cache [_] cache)
           ;LensSchema
@@ -2691,7 +2693,7 @@
           (-cache [_] cache)
           AllSchema
           (-bounds [_] binder)
-          (-instantiate [_ schemas]
+          (-instantiate-all [_ schemas]
             (when-not (= nbound (count schemas))
               (-fail! ::wrong-number-of-schemas-to-instantiate))
             ;; TODO check schemas against bounds
@@ -2859,6 +2861,72 @@
                    f
                    options)))))
 
+;; -abstract / -instantiate for locally nameless representation
+;; See "I am not a number: I am a free variable" - Conor McBride and James McKinna
+
+(defn -abstract [?schema nme options]
+  (let [inner (fn [this s path options]
+                (-walk s this path
+                       (cond-> options
+                         (::scope (-properties s)) (update ::abstract-index inc))))
+        outer (fn [s path children {::keys [abstract-index] :as options}]
+                (let [s (-set-children s children)]
+                  (case (type s)
+                    ::local (let [[id] children]
+                              (if (= nme id)
+                                (-set-children s [abstract-index])
+                                s))
+                    ::val (first children)
+                    s)))]
+    (schema
+      [:schema {::scope true}
+       (inner
+         (reify Walker
+           (-accept [_ s path options] true)
+           (-inner [this s path options] (inner this s path options))
+           (-outer [_ schema path children options]
+             (outer schema path children options)))
+         (schema ?schema options)
+         []
+         (assoc options
+                ::walk-refs false
+                ::walk-schema-refs false
+                ::walk-entry-vals true
+                ::abstract-index 0))]
+      options)))
+
+(defn -instantiate [?scope to options]
+  (let [to (schema to options)
+        inner (fn [this s path options]
+                (-walk s this path
+                       (cond-> options
+                         (::scope (-properties s)) (update ::instantiate-index inc))))
+        outer (fn [s path children {::keys [instantiate-index] :as options}]
+                (let [s (-set-children s children)]
+                  (case (type s)
+                    ::local (let [[id] children]
+                              (if (= instantiate-index id)
+                                to
+                                s))
+                    ::val (first children)
+                    s)))
+        s (schema ?scope options)
+        _ (when-not (-> s -properties ::scope)
+            (-fail! ::instantiate-non-scope {:schema s}))]
+    (inner
+      (reify Walker
+        (-accept [_ s path options] true)
+        (-inner [this s path options] (inner this s path options))
+        (-outer [_ schema path children options]
+          (outer schema path children options)))
+      (first (-children s))
+      []
+      (assoc options
+             ::walk-refs false
+             ::walk-schema-refs false
+             ::walk-entry-vals true
+             ::instantiate-index 0))))
+
 (defn -all-names [s]
   (map #(nth % 0) (-bounds s)))
 
@@ -2976,13 +3044,7 @@
            [:sequential a]
            [:.. [:sequential c] c]]
       [:sequential b]])
-#_
-(all [a :- [:* :Schema], b]
-     [:=> [:catn
-           [:f [:=> [:catn [:pairwise-elements [:.. a a]]]
-                b]]
-           [:colls [:.. [:sequential a] a]]]
-      [:sequential b]])
+
 #?(:clj
    (defmacro tfn [binder body]
      (let [original-binder binder

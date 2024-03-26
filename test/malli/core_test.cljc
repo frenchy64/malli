@@ -3318,3 +3318,60 @@
   (is (m/validate :Schema :any))
   ;; FIXME we need to figure out a better kind for regexes
   (is (m/explain :Schema [:* :any])))
+
+(deftest -abstract-test
+  (is (= [:schema {::m/scope true} [::m/local 0]]
+         (m/form (m/-abstract [::m/local 'a] 'a nil))))
+  (is (= [:schema {::m/scope true} [:schema {::m/scope true} [::m/local 1]]]
+         (m/form (m/-abstract [:schema {::m/scope true} [::m/local 'a]] 'a nil))))
+  (is (= [:schema {::m/scope true}
+          [:schema {::m/scope true}
+           [:schema {::m/scope true}
+            [::m/local 2]]]]
+         (m/form (m/-abstract [:schema {::m/scope true}
+                               [:schema {::m/scope true}
+                                [::m/local 'a]]] 'a nil))))
+  (is (= [:schema {::m/scope true}
+          [:schema {::m/scope true}
+           [:schema {::m/scope true}
+            [:=> [:cat [::m/local 1]] [::m/local 2]]]]]
+         (m/form (m/-abstract [:schema {::m/scope true}
+                               [:schema {::m/scope true}
+                                [:=> [:cat [::m/local 1]] [::m/local 'a]]]]
+                              'a nil)))))
+
+(deftest -instantiate-test
+  (is (= :any
+         (m/form
+           (m/-instantiate [:schema {::m/scope true} [::m/local 0]]
+                           :any
+                           nil))))
+  (is (= [:schema {::m/scope true} :int]
+         (m/form
+           (m/-instantiate
+             [:schema {::m/scope true} [:schema {::m/scope true} [::m/local 1]]]
+             :int
+             nil))))
+  (is (= [:schema {::m/scope true}
+          [:schema {::m/scope true}
+           :int]]
+         (m/form
+           (m/-instantiate
+             [:schema {::m/scope true}
+              [:schema {::m/scope true}
+               [:schema {::m/scope true}
+                [::m/local 2]]]]
+             :int
+             nil))))
+  (is (= [:schema {::m/scope true}
+          [:schema {::m/scope true}
+           [:=> [:cat [::m/local 1]] :int]]]
+         (m/form
+           (m/-instantiate
+             [:schema {::m/scope true}
+              [:schema {::m/scope true}
+               [:schema {::m/scope true}
+                [:=> [:cat [::m/local 1]] [::m/local 2]]]]]
+             :int
+             nil)))))
+
