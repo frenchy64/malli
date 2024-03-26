@@ -29,31 +29,49 @@
    ::m/invalid-type {:error/message {:en "invalid type"}}
    ::m/extra-key {:error/message {:en "disallowed key"}}
    ::m/group-violation {:error/fn {:en (fn [{:keys [schema value path]} _]
-                                         (let [group (-> schema m/properties :groups (nth (peek path)))]
+                                         (let [group (-> schema m/properties :groups (nth (peek path)))
+                                               has? #(contains? value %)
+                                               flat? (not-any? vector? (next group))
+                                               ng (next group)
+                                               op (first group)]
                                            (cond
-                                             (and (= :or (first group))
-                                                  (not-any? vector? (next group)))
-                                             (str "must provide at least one key: "
-                                                  (apply str (interpose " " (map pr-str (next group)))))
+                                             (and (= :or op) flat?)
+                                             (str (format "must provide at least one key: "
+                                                          (case op
+                                                            :or "at least"
+                                                            :xor "exactly"))
+                                                  (apply str (interpose " " (map pr-str ng))))
 
-                                             (and (= :iff (first group))
-                                                  (not-any? vector? (next group)))
+                                             (and (= :xor op) flat?)
+                                             (if-some [[allowed & disallowed] (not-empty
+                                                                                (filterv has? ng))]
+                                               (str "since key " (pr-str allowed) " was provided, "
+                                                    "not allowed to provide keys: "
+                                                    (apply str (interpose " " (map pr-str disallowed))))
+                                               (str "must provide exactly one of the following keys: "
+                                                    (apply str (interpose " " (map pr-str ng)))))
+
+                                             (and (= :iff op) flat?)
                                              (let [{provided true
-                                                    missing false} (group-by #(contains? value %)
-                                                                             (next group))]
+                                                    missing false} (group-by has? ng)]
                                                (str "since key " (pr-str (first provided))
                                                     " was provided, must also provide: "
                                                     (apply str (interpose " " (map pr-str missing)))))
-                                             
-                                             (= :distinct (first group))
-                                             (let [ksets (vec (next group))
+
+                                             (and (= :implies op) flat?)
+                                             (let [missing (remove has? (next ng))]
+                                               (str "since key " (pr-str (second group))
+                                                    " was provided, must also provide: "
+                                                    (apply str (interpose " " (map pr-str missing)))))
+
+                                             (= :distinct op)
+                                             (let [ksets (vec ng)
                                                    [has-group has-k] (some (fn [i]
                                                                              (when-some [[has-k] (not-empty
-                                                                                                   (filter #(contains? value %)
-                                                                                                           (nth ksets i)))]
+                                                                                                   (filter has? (nth ksets i)))]
                                                                                [i has-k]))
                                                                            (range (count ksets)))
-                                                   violating-ks (filterv #(contains? value %)
+                                                   violating-ks (filterv has?
                                                                          (apply concat (subvec ksets (inc has-group))))]
                                                (if (= 1 (count violating-ks))
                                                  (str "cannot provide both " (pr-str has-k)

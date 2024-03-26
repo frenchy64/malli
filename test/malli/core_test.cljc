@@ -3395,11 +3395,13 @@
       (is (nil? (m/explain ImpliesGroups {})))
       (is (nil? (m/explain ImpliesGroups {:a1 "a" :a2 "b" :a3 "c"})))
       (is (nil? (m/explain ImpliesGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
-      ;;TODO msgs
-      (is (m/explain ImpliesGroups {:a1 "a" :a2 "b"}))
-      (is (m/explain ImpliesGroups {:a1 "a" :a3 "c"}))
+      (is (= ["since key :a1 was provided, must also provide: :a3"]
+             (me/humanize (m/explain ImpliesGroups {:a1 "a" :a2 "b"}))))
+      (is (= ["since key :a1 was provided, must also provide: :a2"]
+             (me/humanize (m/explain ImpliesGroups {:a1 "a" :a3 "c"}))))
       (is (nil? (m/explain ImpliesGroups {:a2 "b" :a3 "c"})))
-      (is (m/explain ImpliesGroups {:a1 "a"}))
+      (is (= ["since key :a1 was provided, must also provide: :a2 :a3"]
+             (me/humanize (m/explain ImpliesGroups {:a1 "a"}))))
       (is (nil? (m/explain ImpliesGroups {:a2 "b"})))
       (is (nil? (m/explain ImpliesGroups {:a3 "c"})))))
   (testing ":xor"
@@ -3414,13 +3416,18 @@
       (is (m/validate XOrGroups {:a2 "b"}))
       (is (m/validate XOrGroups {:a3 "c"})))
     (testing "explain"
-      ;;TODO msgs
-      (is (m/explain XOrGroups {}))
-      (is (m/explain XOrGroups {:a1 "a" :a2 "b" :a3 "c"}))
-      (is (m/explain XOrGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))
-      (is (m/explain XOrGroups {:a1 "a" :a2 "b"}))
-      (is (m/explain XOrGroups {:a1 "a" :a3 "c"}))
-      (is (m/explain XOrGroups {:a2 "b" :a3 "c"}))
+      (is (= ["must provide exactly one of the following keys: :a1 :a2 :a3"]
+             (me/humanize (m/explain XOrGroups {}))))
+      (is (= ["since key :a1 was provided, not allowed to provide keys: :a2 :a3"]
+             (me/humanize (m/explain XOrGroups {:a1 "a" :a2 "b" :a3 "c"}))))
+      (is (= ["since key :a1 was provided, not allowed to provide keys: :a2 :a3"]
+             (me/humanize (m/explain XOrGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))))
+      (is (= ["since key :a1 was provided, not allowed to provide keys: :a2"]
+             (me/humanize (m/explain XOrGroups {:a1 "a" :a2 "b"}))))
+      (is (= ["since key :a1 was provided, not allowed to provide keys: :a3"]
+             (me/humanize (m/explain XOrGroups {:a1 "a" :a3 "c"}))))
+      (is (= ["since key :a2 was provided, not allowed to provide keys: :a3"]
+             (me/humanize (m/explain XOrGroups {:a2 "b" :a3 "c"}))))
       (is (nil? (m/explain XOrGroups {:a1 "a"})))
       (is (nil? (m/explain XOrGroups {:a2 "b"})))
       (is (nil? (m/explain XOrGroups {:a3 "c"})))))
