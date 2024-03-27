@@ -922,13 +922,13 @@
 
 (def NonEmptyMapGroup
   [:map
-   {:groups [[:or :a1 :a2]]}
+   {:keys [[:or :a1 :a2]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]])
 
 (def UserPwGroups
   [:map
-   {:groups [[:or :secret [:and :user :pass]]
+   {:keys [[:or :secret [:and :user :pass]]
              [:distinct #{:secret} #{:user :pass}]]}
    [:secret {:optional true} string?]
    [:user {:optional true} string?]
@@ -936,33 +936,33 @@
 
 (def ImpliesGroups
   [:map
-   {:groups [[:implies :a1 :a2 :a3]]}
+   {:keys [[:implies :a1 :a2 :a3]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
 (def IffGroups
   [:map
-   {:groups [[:iff :a1 :a2 :a3]]}
+   {:keys [[:iff :a1 :a2 :a3]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
 (def XOrGroups
   [:map
-   {:groups [[:xor :a1 :a2 :a3]]}
+   {:keys [[:xor :a1 :a2 :a3]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
 (def NotGroups
   [:map
-   {:groups [[:or [:and :a1 :a2] [:not :a3]]]}
+   {:keys [[:or [:and :a1 :a2] [:not :a3]]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
-(deftest map-groups-generator-test
+(deftest map-keys-generator-test
   (testing ":or"
     (is (= '({:a1 ""} {:a2 "4"} {:a1 "h"} {:a1 ""} {:a1 "99"} {:a1 "tW1", :a2 "8J"} {:a2 "c"})
            (mg/sample NonEmptyMapGroup

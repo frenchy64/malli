@@ -980,7 +980,7 @@
                                          ksets)
                                 _ (let [in-multiple (apply set/intersection ksets)]
                                     (when (seq in-multiple)
-                                      (-fail! ::distinct-groups-must-be-distinct {:in-multiple-groups in-multiple})))]
+                                      (-fail! ::distinct-keys-must-be-distinct {:in-multiple-keys in-multiple})))]
                             ;; TODO if one passes, all others must fail
                             ;;TODO rewrite in terms of reduce, short circuit rs on first success
                             #(let [rs (into [] (keep-indexed (fn [i p]
@@ -1004,12 +1004,12 @@
               #(contains? % group)))]
     (-key-group-validator group)))
 
-(defn -valid-key-groups [schema options]
-  (when-some [groups (:groups (-properties schema))]
+(defn -valid-key-keys [schema options]
+  (when-some [keys (:keys (-properties schema))]
     (let [{required false
            optional true} (group-by #(-> % miu/-last -properties :optional)
                                     (-entries schema))
-          key-group (into [:and] groups)
+          key-group (into [:and] keys)
           base (into {} (map (fn [k]
                                {k :required}))
                      required)
@@ -1041,7 +1041,7 @@
      (-type-properties [_] (:type-properties opts))
      (-properties-schema [_ _])
      (-children-schema [_ _])
-     (-into-schema [parent {:keys [closed groups] :as properties} children options]
+     (-into-schema [parent {:keys [closed keys] :as properties} children options]
        (let [pred? (:pred opts map?)
              entry-parser (-create-entry-parser children opts options)
              form (delay (-create-entry-form parent properties entry-parser options))
@@ -1049,7 +1049,7 @@
              default-schema (delay (some-> entry-parser (-entry-children) (-default-entry-schema) (schema options)))
              explicit-children (delay (cond->> (-entry-children entry-parser) @default-schema (remove -default-entry)))
              ->parser (fn [this f]
-                        (when groups (-fail! ::todo-parse-map-groups))
+                        (when keys (-fail! ::todo-parse-map-keys))
                         (let [keyset (-entry-keyset (-entry-parser this))
                               default-parser (some-> @default-schema (f))
                               parsers (cond->> (-vmap
@@ -1084,9 +1084,9 @@
            Schema
            (-validator [this]
              (let [keyset (-entry-keyset (-entry-parser this))
-                   groups-validator (when (seq groups)
+                   keys-validator (when (seq keys)
                                       (-key-group-validator
-                                        (into [:and] groups)
+                                        (into [:and] keys)
                                         options))
                    default-validator (some-> @default-schema (-validator))
                    validators (cond-> (-vmap
@@ -1101,12 +1101,12 @@
                                 (conj (fn [m] (default-validator (reduce (fn [acc k] (dissoc acc k)) m (keys keyset)))))
                                 (and closed (not default-validator))
                                 (conj (fn [m] (reduce (fn [acc k] (if (contains? keyset k) acc (reduced false))) true (keys m))))
-                                groups-validator (conj groups-validator))
+                                keys-validator (conj keys-validator))
                    validate (miu/-every-pred validators)]
                (fn [m] (and (pred? m) (validate m)))))
            (-explainer [this path]
              (let [keyset (-entry-keyset (-entry-parser this))
-                   group->validator (some->> groups (into [] (map-indexed
+                   group->validator (some->> keys (into [] (map-indexed
                                                                (fn [i group]
                                                                  [i group (-key-group-validator group options)]))))
                    default-explainer (some-> @default-schema (-explainer (conj path ::default)))
@@ -1139,7 +1139,7 @@
                                          (fn [acc [i group group-validator]]
                                            (if (group-validator x)
                                              acc
-                                             (conj acc (miu/-error (conj path :groups i) in this x ::group-violation))))
+                                             (conj acc (miu/-error (conj path :keys i) in this x ::group-violation))))
                                          acc group->validator))))]
                (fn [x in acc]
                  (if-not (pred? x)
@@ -1151,7 +1151,7 @@
            (-parser [this] (->parser this -parser))
            (-unparser [this] (->parser this -unparser))
            (-transformer [this transformer method options]
-             (when groups (-fail! ::todo-transform-map-groups))
+             (when keys (-fail! ::todo-transform-map-keys))
              (let [keyset (-entry-keyset (-entry-parser this))
                    this-transformer (-value-transformer transformer this method options)
                    ->children (reduce (fn [acc [k s]]

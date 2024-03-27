@@ -3227,13 +3227,13 @@
 
 (def NonEmptyMapGroup
   [:map
-   {:groups [[:or :a1 :a2]]}
+   {:keys [[:or :a1 :a2]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]])
 
 (def UserPwGroups
   [:map
-   {:groups [[:or :secret [:and :user :pass]]
+   {:keys [[:or :secret [:and :user :pass]]
              [:distinct #{:secret} (sorted-set :user :pass)]]}
    [:secret {:optional true} string?]
    [:user {:optional true} string?]
@@ -3241,28 +3241,28 @@
 
 (def IffGroups
   [:map
-   {:groups [[:iff :a1 :a2 :a3]]}
+   {:keys [[:iff :a1 :a2 :a3]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
 (def ImpliesGroups
   [:map
-   {:groups [[:implies :a1 :a2 :a3]]}
+   {:keys [[:implies :a1 :a2 :a3]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
 (def XOrGroups
   [:map
-   {:groups [[:xor :a1 :a2 :a3]]}
+   {:keys [[:xor :a1 :a2 :a3]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
 (def FlatNotGroup
   [:map
-   {:groups [[:not :a3]]}
+   {:keys [[:not :a3]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
@@ -3270,12 +3270,12 @@
 ;; equivalent to [:implies :a3 :a1 :a2]
 (def NotGroups
   [:map
-   {:groups [[:or [:and :a1 :a2] [:not :a3]]]}
+   {:keys [[:or [:and :a1 :a2] [:not :a3]]]}
    [:a1 {:optional true} string?]
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
-(deftest map-groups-test
+(deftest map-keys-test
   (testing ":or"
     (testing "validate"
       (is (m/validate NonEmptyMapGroup {:a1 "a"}))
@@ -3286,11 +3286,11 @@
       (is (nil? (m/explain NonEmptyMapGroup {:a1 "a"})))
       (is (nil? (m/explain NonEmptyMapGroup {:a1 "a" :a2 "b"})))
       (is (nil? (m/explain NonEmptyMapGroup {:a1 "a" :a2 "b" :a3 "c"})))
-      (is (= '{:schema [:map {:groups [[:or :a1 :a2]]} [:a1 {:optional true} string?] [:a2 {:optional true} string?]]
+      (is (= '{:schema [:map {:keys [[:or :a1 :a2]]} [:a1 {:optional true} string?] [:a2 {:optional true} string?]]
                :value {}
-               :errors ({:path [:groups 0]
+               :errors ({:path [:keys 0]
                          :in []
-                         :schema [:map {:groups [[:or :a1 :a2]]} [:a1 {:optional true} string?] [:a2 {:optional true} string?]]
+                         :schema [:map {:keys [[:or :a1 :a2]]} [:a1 {:optional true} string?] [:a2 {:optional true} string?]]
                          :value {}
                          :type :malli.core/group-violation
                          :message nil})}
@@ -3313,7 +3313,7 @@
       (is (nil? (m/explain UserPwGroups {:secret "a"})))
       (is (nil? (m/explain UserPwGroups {:user "a"
                                          :pass "b"})))
-      (is (= [{:path [:groups 0]
+      (is (= [{:path [:keys 0]
                :in []
                :schema (m/form UserPwGroups)
                :value {:user "a"}
@@ -3322,7 +3322,7 @@
             (:errors (with-schema-forms (m/explain UserPwGroups {:user "a"})))))
       (is (= ["either: 1). should provide key: :secret; or 2). should provide key: :pass"]
              (me/humanize (m/explain UserPwGroups {:user "a"}))))
-      (is (= [{:path [:groups 0]
+      (is (= [{:path [:keys 0]
                :in []
                :schema (m/form UserPwGroups)
                :value {}
@@ -3333,7 +3333,7 @@
                  :errors)))
       (is (= ["either: 1). should provide key: :secret; or 2). should provide keys: :user :pass"]
              (me/humanize (m/explain UserPwGroups {}))))
-      (is (= [{:path [:groups 1]
+      (is (= [{:path [:keys 1]
                :in []
                :schema (m/form UserPwGroups)
                :value {:secret "a", :user "b"}
@@ -3346,7 +3346,7 @@
       (is (= ["should not combine key :secret with key: :user"]
              (me/humanize (m/explain UserPwGroups {:secret "a"
                                                    :user "b"}))))
-      (is (= [{:path [:groups 1]
+      (is (= [{:path [:keys 1]
                :in []
                :schema (m/form UserPwGroups)
                :value {:secret "a", :user "b", :pass "c"}
@@ -3475,29 +3475,29 @@
 
 (def Address
   [:map
-   {:groups [[:iff :street :city :zip]]}
+   {:keys [[:iff :street :city :zip]]}
    [:street {:optional true} string?]
    [:city {:optional true} string?]
    [:zip {:optional true} int?]])
 
 (def GitOrMvn
-  [:map {:groups [[:xor :mvn/version :git/sha]]}
+  [:map {:keys [[:xor :mvn/version :git/sha]]}
    [:mvn/version {:optional true} :string]
    [:git/sha {:optional true} :string]])
 
 (def TagImpliesSha
-  [:map {:groups [[:implies :git/tag :git/sha]]}
+  [:map {:keys [[:implies :git/tag :git/sha]]}
    [:git/sha {:optional true} :string]
    [:git/tag {:optional true} :string]])
 
 (def UserPass
   [:map
-   {:groups [[:iff :user :pass]]}
+   {:keys [[:iff :user :pass]]}
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])
 
 (def SeparateMvnGit
-  [:map {:groups [[:distinct #{:mvn/version} #{:git/sha :git/url :git/tag}]]}
+  [:map {:keys [[:distinct #{:mvn/version} #{:git/sha :git/url :git/tag}]]}
    [:mvn/version {:optional true} :string]
    [:git/sha {:optional true} :string]
    [:git/tag {:optional true} :string]
@@ -3505,14 +3505,14 @@
 
 (def SecretOrCreds
   [:map
-   {:groups [[:or :secret [:and :user :pass]]
+   {:keys [[:or :secret [:and :user :pass]]
              [:distinct #{:secret} #{:user :pass}]]}
    [:secret {:optional true} string?]
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])
 
 (def DPad
-  [:map {:groups [[:not [:and :down :up]]
+  [:map {:keys [[:not [:and :down :up]]
                   [:not [:and :left :right]]]}
    [:down {:optional true} [:= 1]]
    [:left {:optional true} [:= 1]]
@@ -3520,7 +3520,7 @@
    [:up {:optional true} [:= 1]]])
 
 (def DPadDeMorgan
-  [:map {:groups [[:or [:not :down] [:not :up]]
+  [:map {:keys [[:or [:not :down] [:not :up]]
                   [:or [:not :left] [:not :right]]]}
    [:down {:optional true} [:= 1]]
    [:left {:optional true} [:= 1]]
@@ -3531,14 +3531,14 @@
   (is (= (me/humanize
            (m/explain
              [:map
-              {:groups [:x]}
+              {:keys [:x]}
               [:x {:optional true} :int]]
              {}))
          ["should provide key: :x"]))
   (is (= (me/humanize
            (m/explain
              [:map
-              {:groups [[:or :a1 :a2]]}
+              {:keys [[:or :a1 :a2]]}
               [:a1 {:optional true} :string]
               [:a2 {:optional true} :string]]
              {}))

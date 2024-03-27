@@ -74,12 +74,12 @@
           :or {merge-default (fn [_ s2 _] s2)
                merge-required (fn [_ r2] r2)}} options
          bear (fn [p1 p2]
-                (when (some :groups [p1 p2])
-                  (m/-fail! ::todo-merge-groups))
+                (when (some :keys [p1 p2])
+                  (m/-fail! ::todo-merge-keys))
                 (if (and p1 p2) (c/merge p1 p2) (or p1 p2)))
          tear (fn [t s] (if (= :map t)
-                          (do (when (:groups (m/properties t))
-                                (m/-fail! ::todo-merge-groups))
+                          (do (when (:keys (m/properties t))
+                                (m/-fail! ::todo-merge-keys))
                               [nil s])
                           (concat [(m/properties s)] (m/children s))))
          join (fn [[p1 c1 & cs1] [p2 c2 & cs2]]

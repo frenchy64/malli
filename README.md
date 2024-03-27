@@ -378,19 +378,18 @@ default branching can be arbitrarily nested:
 ; => true
 ```
 
-## Key groupings
+## Keys constraints
 
-The `:map` schema accepts a `:groups` property, which is a vector of
-constraints relating the keys of the map. All of the constraints
-must be satisfied for a value to be valid.
+The `:map` schema accepts a `:keys` property, which is a vector of
+additional constraints that must be satisfied by the keys of the map.
 
-The atomic constraint is naming a key, which asserts the key must exist.
+The simplest constraint is naming a key, which asserts the key must exist.
 
 ```clojure
 (me/humanize
   (m/explain
    [:map
-    {:groups [:x]}
+    {:keys [:x]}
     [:x {:optional true} :int]]
    {}))
 ; => ["should provide key: :x"]
@@ -402,7 +401,7 @@ The `:or` constraint asserts that at least one of its children is satisfied.
 (me/humanize
  (m/explain
   [:map
-   {:groups [[:or :a1 :a2]]}
+   {:keys [[:or :a1 :a2]]}
    [:a1 {:optional true} :string]
    [:a2 {:optional true} :string]]
   {}))
@@ -413,7 +412,7 @@ The `:xor` constraint either requires exactly one of its children to be satisfie
 
 ```clojure
 (def GitOrMvn
-  [:map {:groups [[:xor :mvn/version :git/sha]]}
+  [:map {:keys [[:xor :mvn/version :git/sha]]}
    [:mvn/version {:optional true} :string]
    [:git/sha {:optional true} :string]])
 
@@ -432,7 +431,7 @@ The `:iff` constraint either requires either all or none of its children to be s
 ```clojure
 (def UserPass
   [:map
-   {:groups [[:iff :user :pass]]}
+   {:keys [[:iff :user :pass]]}
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])
 
@@ -453,7 +452,7 @@ all of its constraints are satisfied. It takes one or more constraints.
 
 ```clojure
 (def TagImpliesSha
-  [:map {:groups [[:implies :git/tag :git/sha]]}
+  [:map {:keys [[:implies :git/tag :git/sha]]}
    [:git/sha {:optional true} :string]
    [:git/tag {:optional true} :string]])
 
@@ -472,7 +471,7 @@ The `:distinct` constraint takes sets of keys. Map keys can intersect with at mo
 
 ```clojure
 (def SeparateMvnGit
-  [:map {:groups [[:distinct #{:mvn/version} #{:git/sha :git/url :git/tag}]]}
+  [:map {:keys [[:distinct #{:mvn/version} #{:git/sha :git/url :git/tag}]]}
    [:mvn/version {:optional true} :string]
    [:git/sha {:optional true} :string]
    [:git/tag {:optional true} :string]
@@ -492,12 +491,12 @@ The `:distinct` constraint takes sets of keys. Map keys can intersect with at mo
 ```
 
 The `:and` constraint requires all of its children to be satisfied. The top-level vector
-of constraints provided to the `:groups` property implicitly forms an `:and`.
+of constraints provided to the `:keys` property implicitly forms an `:and`.
 
 ```clojure
 (def SecretOrCreds
   [:map
-   {:groups [[:or :secret [:and :user :pass]]
+   {:keys [[:or :secret [:and :user :pass]]
              [:distinct #{:secret} #{:user :pass}]]}
    [:secret {:optional true} string?]
    [:user {:optional true} string?]
@@ -523,8 +522,8 @@ The `:not` constraint is satisified if its child isn't.
 
 ```clojure
 (def DPad
-  [:map {:groups [[:not [:and :down :up]]
-                  [:not [:and :left :right]]]}
+  [:map {:keys [[:not [:and :down :up]]
+                [:not [:and :left :right]]]}
    [:down {:optional true} [:= 1]]
    [:left {:optional true} [:= 1]]
    [:right {:optional true} [:= 1]]

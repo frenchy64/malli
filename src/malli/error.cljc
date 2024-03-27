@@ -106,7 +106,7 @@
    ::m/invalid-type {:error/message {:en "invalid type"}}
    ::m/extra-key {:error/message {:en "disallowed key"}}
    ::m/group-violation {:error/fn {:en (fn [{:keys [schema value path]} _]
-                                         (-humanize-group-violation {:group (-> schema m/properties :groups (nth (peek path)))
+                                         (-humanize-group-violation {:group (-> schema m/properties :keys (nth (peek path)))
                                                                      :value value}))}}
    :malli.core/invalid-dispatch-value {:error/message {:en "invalid dispatch value"}}
    ::misspelled-key {:error/fn {:en (fn [{::keys [likely-misspelling-of]} _]

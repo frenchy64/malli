@@ -170,12 +170,12 @@
   (let [g (generator s options)]
     (cond->> g (-not-unreachable g) (gen/fmap (fn [v] [k v])))))
 
-(defn -valid-key-groups [schema options]
-  (when-some [groups (:groups (m/properties schema))]
+(defn -valid-key-keys [schema options]
+  (when-some [keys (:keys (m/properties schema))]
     (let [{required false
            optional true} (group-by #(-> % -last m/properties :optional)
                                     (m/entries schema))
-          key-group (into [:and] groups)
+          key-group (into [:and] keys)
           base (into {} (map (fn [k]
                                {k :required}))
                      required)
@@ -216,7 +216,7 @@
             (-never-gen options)
             (recur entries (conj gens g))))))))
 
-(defn -map-gen-no-groups [schema options]
+(defn -map-gen-no-keys [schema options]
   (-map-gen* schema
              (fn [e]
                (if (-> e -last m/properties :optional)
@@ -225,18 +225,18 @@
              options))
 
 (defn -map-gen [schema options]
-  (if-some [key-groups (-valid-key-groups schema options)]
-    (do (assert (seq key-groups)
-                (str "Unsatisfiable key groups: " (m/form schema)))
-        (prn "key-groups" key-groups)
+  (if-some [key-keys (-valid-key-keys schema options)]
+    (do (assert (seq key-keys)
+                (str "Unsatisfiable key keys: " (m/form schema)))
+        (prn "key-keys" key-keys)
         (gen/bind gen/nat
                   (fn [i]
-                    (let [key-group (nth key-groups (mod i (count key-groups)))]
+                    (let [key-group (nth key-keys (mod i (count key-keys)))]
                       (-map-gen* schema
                                  (fn [[k]]
                                    (get key-group k :never))
                                  options)))))
-    (-map-gen-no-groups schema options)))
+    (-map-gen-no-keys schema options)))
 
 (defn -map-of-gen [schema options]
   (let [{:keys [min max]} (-min-max schema options)
