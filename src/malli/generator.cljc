@@ -1,6 +1,7 @@
 ;; See also `malli.generator-ast` for viewing generators as data
 (ns malli.generator
-  (:require [clojure.spec.gen.alpha :as ga]
+  (:require [clojure.math.combinatorics :as comb]
+            [clojure.spec.gen.alpha :as ga]
             [clojure.string :as str]
             [clojure.test.check :as check]
             [clojure.test.check.generators :as gen]
