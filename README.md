@@ -398,14 +398,18 @@ The simplest constraint is naming a key, which asserts the key must exist.
 The `:or` constraint asserts that at least one of its children is satisfied.
 
 ```clojure
-(me/humanize
- (m/explain
+(def Padding
   [:map
-   {:keys [[:or :a1 :a2]]}
-   [:a1 {:optional true} :string]
-   [:a2 {:optional true} :string]]
-  {}))
-; => ["should provide at least one key: :a1 :a2"]
+   {:keys [[:or :top :bottom :left :right]]}
+   [:top {:optional true} number?]
+   [:bottom {:optional true} number?]
+   [:left {:optional true} number?]
+   [:right {:optional true} number?]])
+
+(m/validate Padding {:left 1 :right 10 :up 25 :down 50}) ;=> true
+(me/humanize
+  (m/explain Padding {}))
+; => ["should provide at least one key: :top :bottom :left :right"]
 ```
 
 The `:xor` constraint requires exactly one of its children to be satisfied.
@@ -445,19 +449,6 @@ The `:iff` constraint either requires either all or none of its children to be s
 (me/humanize
   (m/explain UserPass {:user "a"}))
 ; => ["should provide key: :pass"]
-
-(def Padding
-  [:map
-   {:keys [[:or :top :bottom :left :right]]}
-   [:top {:optional true} number?]
-   [:bottom {:optional true} number?]
-   [:left {:optional true} number?]
-   [:right {:optional true} number?]])
-
-(m/validate Padding {:left 1 :right 10 :up 25 :down 50}) ;=> true
-(me/humanize
-  (m/explain Padding {}))
-; => ["should provide at least one key: :top :bottom :left :right"]
 ```
 
 The `:implies` constraint is satisfied if either its first constraint is _not_ satisfied or
