@@ -29,7 +29,7 @@
 
                   (and (= :and op) flat-op?)
                   (let [missing (remove has? ng)]
-                    (str (format "should provide key%s: " (if (next missing) "s" ""))
+                    (str "should provide key" (if (next missing) "s" "") ": "
                          (apply str (interpose " " (map pr-str missing)))))
 
                   (and (= :xor op) flat-op?)
@@ -66,12 +66,12 @@
 
                   (and (= :iff op) flat-op?)
                   (let [missing (remove has? ng)]
-                    (str (format "should provide key%s: " (if (next missing) "s" ""))
+                    (str "should provide key" (if (next missing) "s" "") ": "
                          (apply str (interpose " " (map pr-str missing)))))
 
                   (and (= :implies op) flat-op?)
                   (let [missing (remove has? (next ng))]
-                    (str (format "should provide key%s: " (if (next missing) "s" ""))
+                    (str "should provide key" (if (next missing) "s" "") ": "
                          (apply str (interpose " " (map pr-str missing)))))
 
                   (= :distinct op)
@@ -84,8 +84,7 @@
                         violating-ks (filterv has?
                                               (apply concat (subvec ksets (inc has-group))))]
                     (str "should not combine key " (pr-str has-k)
-                         (format " with key%s: "
-                                 (if (next violating-ks) "s" ""))
+                         " with key" (if (next violating-ks) "s" "") ": "
                          (apply str (interpose " " (map pr-str violating-ks)))))
                   :else (str "should satisfy keys constraint: " (pr-str group))))))]
     (-humanize-group-violation group)))
