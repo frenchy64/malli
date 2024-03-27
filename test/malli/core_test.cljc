@@ -3506,14 +3506,14 @@
 (def SecretOrCreds
   [:map
    {:keys [[:or :secret [:and :user :pass]]
-             [:distinct #{:secret} #{:user :pass}]]}
+           [:distinct #{:secret} #{:user :pass}]]}
    [:secret {:optional true} string?]
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])
 
 (def DPad
   [:map {:keys [[:not [:and :down :up]]
-                  [:not [:and :left :right]]]}
+                [:not [:and :left :right]]]}
    [:down {:optional true} [:= 1]]
    [:left {:optional true} [:= 1]]
    [:right {:optional true} [:= 1]]
@@ -3521,7 +3521,7 @@
 
 (def DPadDeMorgan
   [:map {:keys [[:or [:not :down] [:not :up]]
-                  [:or [:not :left] [:not :right]]]}
+                [:or [:not :left] [:not :right]]]}
    [:down {:optional true} [:= 1]]
    [:left {:optional true} [:= 1]]
    [:right {:optional true} [:= 1]]

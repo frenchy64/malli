@@ -493,7 +493,7 @@ of constraints provided to the `:keys` property implicitly forms an `:and`.
 (def SecretOrCreds
   [:map
    {:keys [[:or :secret [:and :user :pass]]
-             [:distinct #{:secret} #{:user :pass}]]}
+           [:distinct #{:secret} #{:user :pass}]]}
    [:secret {:optional true} string?]
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])

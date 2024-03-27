@@ -954,26 +954,26 @@
            (-ref [_])
            (-deref [_] schema)))))))
 
-(defn -key-group-validator [group options]
-  (letfn [(-key-group-validator [group]
-            (if (vector? group)
-              (case (first group)
-                :not (let [[p & ps] (mapv -key-group-validator (next group))]
+(defn -keys-constraint-validator [constraint options]
+  (letfn [(-keys-constraint-validator [constraint]
+            (if (vector? constraint)
+              (case (first constraint)
+                :not (let [[p & ps] (mapv -keys-constraint-validator (next constraint))]
                        (when (or (not p) ps)
-                         (-fail! ::not-keys-group-takes-one-child {:group group}))
+                         (-fail! ::not-keys-constraint-takes-one-child {:constraint constraint}))
                        #(not (p %)))
-                :and (let [ps (mapv -key-group-validator (next group))]
+                :and (let [ps (mapv -keys-constraint-validator (next constraint))]
                        #(every? (fn [p] (p %)) ps))
-                :or (let [ps (mapv -key-group-validator (next group))]
+                :or (let [ps (mapv -keys-constraint-validator (next constraint))]
                       #(boolean (some (fn [p] (p %)) ps)))
-                :xor (let [ps (mapv -key-group-validator (next group))]
+                :xor (let [ps (mapv -keys-constraint-validator (next constraint))]
                        #(let [rs (filter (fn [p] (p %)) ps)]
                           (boolean
                             (and (seq rs) (not (next rs))))))
-                :distinct (let [ksets (next group)
+                :distinct (let [ksets (next constraint)
                                 ps (mapv (fn [ks]
                                            (when-not (set? ks)
-                                             (-fail! ::distinct-group-takes-sets-of-keys {:group group}))
+                                             (-fail! ::distinct-constraint-takes-sets-of-keys {:constraint constraint}))
                                            #(boolean
                                               (some (fn [k]
                                                       (contains? % k))
@@ -982,28 +982,25 @@
                                 _ (let [in-multiple (apply set/intersection ksets)]
                                     (when (seq in-multiple)
                                       (-fail! ::distinct-keys-must-be-distinct {:in-multiple-keys in-multiple})))]
-                            ;; TODO if one passes, all others must fail
-                            ;;TODO rewrite in terms of reduce, short circuit rs on first success
-                            #(let [rs (into [] (keep-indexed (fn [i p]
-                                                               (when (p %)
-                                                                 i)))
-                                            ps)
-                                   cnt (count rs)]
-                               (or (zero? cnt)
-                                   (= 1 cnt))))
-                :iff (let [[p & ps] (mapv -key-group-validator (next group))]
+                            #(let [rs (keep-indexed (fn [i p]
+                                                      (when (p %)
+                                                        i))
+                                                    ps)]
+                               (or (empty? rs)
+                                   (not (next rs)))))
+                :iff (let [[p & ps] (mapv -keys-constraint-validator (next constraint))]
                        (when-not p
                          (-fail! ::empty-iff))
                        #(let [expect (p %)]
                           (every? (fn [p] (= expect (p %))) ps)))
-                :implies (let [[p & ps] (mapv -key-group-validator (next group))]
+                :implies (let [[p & ps] (mapv -keys-constraint-validator (next constraint))]
                            (when-not p
-                             (-fail! ::missing-implies-condition {:group group}))
+                             (-fail! ::missing-implies-condition {:constraint constraint}))
                            #(or (not (p %))
                                 (every? (fn [p] (p %)) ps)))
-                (-fail! ::unknown-group {:group group}))
-              #(contains? % group)))]
-    (-key-group-validator group)))
+                (-fail! ::unknown-constraint {:constraint constraint}))
+              #(contains? % constraint)))]
+    (-keys-constraint-validator constraint)))
 
 (defn -map-schema
   ([]
@@ -1018,7 +1015,7 @@
      (-type-properties [_] (:type-properties opts))
      (-properties-schema [_ _])
      (-children-schema [_ _])
-     (-into-schema [parent {:keys [closed keys] :as properties} children options]
+     (-into-schema [parent {:keys [closed] keys-constraints :keys :as properties} children options]
        (let [pred? (:pred opts map?)
              entry-parser (-create-entry-parser children opts options)
              form (delay (-create-entry-form parent properties entry-parser options))
@@ -1026,7 +1023,7 @@
              default-schema (delay (some-> entry-parser (-entry-children) (-default-entry-schema) (schema options)))
              explicit-children (delay (cond->> (-entry-children entry-parser) @default-schema (remove -default-entry)))
              ->parser (fn [this f]
-                        (when keys (-fail! ::todo-parse-map-keys))
+                        (when keys-constraints (-fail! ::todo-parse-map-keys))
                         (let [keyset (-entry-keyset (-entry-parser this))
                               default-parser (some-> @default-schema (f))
                               parsers (cond->> (-vmap
@@ -1061,10 +1058,10 @@
            Schema
            (-validator [this]
              (let [keyset (-entry-keyset (-entry-parser this))
-                   keys-validator (when (seq keys)
-                                      (-key-group-validator
-                                        (into [:and] keys)
-                                        options))
+                   keys-validator (when (seq keys-constraints)
+                                    (-keys-constraint-validator
+                                      (into [:and] keys-constraints)
+                                      options))
                    default-validator (some-> @default-schema (-validator))
                    validators (cond-> (-vmap
                                        (fn [[key {:keys [optional]} value]]
@@ -1085,7 +1082,7 @@
              (let [keyset (-entry-keyset (-entry-parser this))
                    group->validator (some->> keys (into [] (map-indexed
                                                                (fn [i group]
-                                                                 [i group (-key-group-validator group options)]))))
+                                                                 [i group (-keys-constraint-validator group options)]))))
                    default-explainer (some-> @default-schema (-explainer (conj path ::default)))
                    explainers (cond-> (-vmap
                                        (fn [[key {:keys [optional]} schema]]

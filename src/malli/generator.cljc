@@ -175,18 +175,16 @@
     (let [{required false
            optional true} (group-by #(-> % -last m/properties :optional boolean)
                                     (m/entries schema))
-          key-group (into [:and] keys-constraints)
+          keys-constraint (into [:and] keys-constraints)
           base (into {} (map (fn [[k]]
                                {k :required}))
                      required)
-          p (m/-key-group-validator key-group options)]
-      (prn "base" base)
+          p (m/-keys-constraint-validator keys-constraint options)]
       (into [] (comp (keep (fn [optionals]
                              (let [example (-> base
                                                (into (map (fn [[k]]
                                                             {k :required}))
                                                      optionals))]
-                               (prn "candidate" example (p example))
                                (when (p example)
                                  (into example
                                        (map (fn [[k]]
