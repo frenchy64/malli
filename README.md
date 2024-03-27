@@ -491,7 +491,33 @@ The `:distinct` constraint takes sets of keys. Map keys can intersect with at mo
 ; => ["should not combine key :mvn/version with key: :git/sha"]
 ```
 
-The `:and` constraint requires all of its children to be satisfied.
+The `:and` constraint requires all of its children to be satisfied. The top-level vector
+of constraints provided to the `:groups` property implicitly forms an `:and`.
+
+```
+(def SecretOrCreds
+  [:map
+   {:groups [[:or :secret [:and :user :pass]]
+             [:distinct #{:secret} #{:user :pass}]]}
+   [:secret {:optional true} string?]
+   [:user {:optional true} string?]
+   [:pass {:optional true} string?]])
+
+(m/validate SecretOrCreds {:secret "1234"})
+; => true
+
+(m/validate SecretOrCreds {:user "user" :pass "hello"})
+; => true
+
+(me/humanize
+  (m/explain SecretOrCreds {:user "user"}))
+; => ["either: 1). should provide key: :secret; or 2). should provide key: :pass"]
+
+;; combining :or with :distinct helps enforce this case
+(me/humanize
+  (m/explain SecretOrCreds {:secret "1234" :user "user"}))
+; => ["should not combine key :secret with key: :user"]
+```
 
 Constraints can be arbitrarily nested.
 

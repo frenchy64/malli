@@ -3502,6 +3502,14 @@
    [:git/tag {:optional true} :string]
    [:git/url {:optional true} :string]])
 
+(def SecretOrCreds
+  [:map
+   {:groups [[:or :secret [:and :user :pass]]
+             [:distinct #{:secret} #{:user :pass}]]}
+   [:secret {:optional true} string?]
+   [:user {:optional true} string?]
+   [:pass {:optional true} string?]])
+
 (deftest key-groupings-readme-examples-test
   (is (= (me/humanize
            (m/explain
@@ -3552,4 +3560,14 @@
                       {:mvn/version "1.0.0"
                        :git/sha "abc123"}))
          ["should not combine key :mvn/version with key: :git/sha"]))
+  (is (= (m/validate SecretOrCreds {:secret "1234"})
+         true))
+  (is (= (m/validate SecretOrCreds {:user "user" :pass "hello"})
+         true))
+  (is (= (me/humanize
+           (m/explain SecretOrCreds {:user "user"}))
+         ["either: 1). should provide key: :secret; or 2). should provide key: :pass"]))
+  (is (= (me/humanize
+           (m/explain SecretOrCreds {:secret "1234" :user "user"}))
+         ["should not combine key :secret with key: :user"]))
 )
