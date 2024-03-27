@@ -445,6 +445,19 @@ The `:iff` constraint either requires either all or none of its children to be s
 (me/humanize
   (m/explain UserPass {:user "a"}))
 ; => ["should provide key: :pass"]
+
+(def Padding
+  [:map
+   {:keys [[:or :top :bottom :left :right]]}
+   [:top {:optional true} number?]
+   [:bottom {:optional true} number?]
+   [:left {:optional true} number?]
+   [:right {:optional true} number?]])
+
+(m/validate Padding {:left 1 :right 10 :up 25 :down 50}) ;=> true
+(me/humanize
+  (m/explain Padding {}))
+; => ["should provide at least one key: :top :bottom :left :right"]
 ```
 
 The `:implies` constraint is satisfied if either its first constraint is _not_ satisfied or

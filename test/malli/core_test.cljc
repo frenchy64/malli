@@ -3527,6 +3527,14 @@
    [:right {:optional true} [:= 1]]
    [:up {:optional true} [:= 1]]])
 
+(def Padding
+  [:map
+   {:keys [[:or :top :bottom :left :right]]}
+   [:top {:optional true} number?]
+   [:bottom {:optional true} number?]
+   [:left {:optional true} number?]
+   [:right {:optional true} number?]])
+
 (deftest key-groupings-readme-examples-test
   (is (= (me/humanize
            (m/explain
@@ -3610,4 +3618,9 @@
              ["either: 1). should not provide key: :down; or 2). should not provide key: :up"]))
       (is (= (me/humanize
                (m/explain DPad {:left 1 :right 1}))
-             ["either: 1). should not provide key: :left; or 2). should not provide key: :right"])))))
+             ["either: 1). should not provide key: :left; or 2). should not provide key: :right"]))))
+  (testing "Padding"
+    (is (m/validate Padding {:left 1 :right 10 :up 25 :down 50}))
+    (is (= (me/humanize
+             (m/explain Padding {}))
+           ["should provide at least one key: :top :bottom :left :right"]))))
