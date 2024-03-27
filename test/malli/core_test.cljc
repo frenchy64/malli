@@ -3267,6 +3267,7 @@
    [:a2 {:optional true} string?]
    [:a3 {:optional true} string?]])
 
+;; equivalent to [:implies :a3 :a1 :a2]
 (def NotGroups
   [:map
    {:groups [[:or [:and :a1 :a2] [:not :a3]]]}
@@ -3510,6 +3511,14 @@
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])
 
+(def DPad
+  [:map {:groups [[:not [:and :down :up]]
+                  [:not [:and :left :right]]]}
+   [:down {:optional true} [:= 1]]
+   [:left {:optional true} [:= 1]]
+   [:right {:optional true} [:= 1]]
+   [:up {:optional true} [:= 1]]])
+
 (deftest key-groupings-readme-examples-test
   (is (= (me/humanize
            (m/explain
@@ -3570,4 +3579,21 @@
   (is (= (me/humanize
            (m/explain SecretOrCreds {:secret "1234" :user "user"}))
          ["should not combine key :secret with key: :user"]))
+
+  (testing "DPad"
+    (is (m/validate DPad {}))
+    (is (m/validate DPad {:up 1}))
+    (is (m/validate DPad {:down 1}))
+    (is (m/validate DPad {:right 1}))
+    (is (m/validate DPad {:left 1}))
+    (is (m/validate DPad {:up 1 :left 1}))
+    (is (m/validate DPad {:down 1 :left 1}))
+    (is (m/validate DPad {:up 1 :right 1}))
+    (is (m/validate DPad {:down 1 :right 1}))
+    (is (= (me/humanize
+             (m/explain DPad {:up 1 :down 1}))
+           ["should satisfy keys constraint: [:not [:and :down :up]]"]))
+    (is (= (me/humanize
+             (m/explain DPad {:left 1 :right 1}))
+           ["should satisfy keys constraint: [:not [:and :left :right]]"]))
 )

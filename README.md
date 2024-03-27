@@ -519,7 +519,10 @@ of constraints provided to the `:groups` property implicitly forms an `:and`.
 ; => ["should not combine key :secret with key: :user"]
 ```
 
-Constraints can be arbitrarily nested.
+The `:not` constraint is satisified if its child isn't.
+
+```clojure
+```
 
 ## Sequence schemas
 
