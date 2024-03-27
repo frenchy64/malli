@@ -3342,7 +3342,7 @@
                                           :user "b"})
                  with-schema-forms
                  :errors)))
-      (is (= ["cannot provide both :secret and :user keys"]
+      (is (= ["should not combine key :secret with key: :user"]
              (me/humanize (m/explain UserPwGroups {:secret "a"
                                                    :user "b"}))))
       (is (= [{:path [:groups 1]
@@ -3356,7 +3356,7 @@
                                           :pass "c"})
                  with-schema-forms
                  :errors)))
-      (is (= ["since key :secret was provided, the following provided keys are disallowed: :pass :user"]
+      (is (= ["should not combine key :secret with keys: :pass :user"]
              (me/humanize (m/explain UserPwGroups {:secret "a"
                                                    :user "b"
                                                    :pass "c"}))))))
@@ -3375,17 +3375,17 @@
       (is (nil? (m/explain IffGroups {})))
       (is (nil? (m/explain IffGroups {:a1 "a" :a2 "b" :a3 "c"})))
       (is (nil? (m/explain IffGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
-      (is (= ["since key :a1 was provided, should also provide: :a3"]
+      (is (= ["should provide key: :a3"]
              (me/humanize (m/explain IffGroups {:a1 "a" :a2 "b"}))))
-      (is (= ["since key :a1 was provided, should also provide: :a2"]
+      (is (= ["should provide key: :a2"]
              (me/humanize (m/explain IffGroups {:a1 "a" :a3 "c"}))))
-      (is (= ["since key :a2 was provided, should also provide: :a1"]
+      (is (= ["should provide key: :a1"]
              (me/humanize (m/explain IffGroups {:a2 "b" :a3 "c"}))))
-      (is (= ["since key :a1 was provided, should also provide: :a2 :a3"]
+      (is (= ["should provide keys: :a2 :a3"]
              (me/humanize (m/explain IffGroups {:a1 "a"}))))
-      (is (= ["since key :a2 was provided, should also provide: :a1 :a3"]
+      (is (= ["should provide keys: :a1 :a3"]
              (me/humanize (m/explain IffGroups {:a2 "b"}))))
-      (is (= ["since key :a3 was provided, should also provide: :a1 :a2"]
+      (is (= ["should provide keys: :a1 :a2"]
              (me/humanize (m/explain IffGroups {:a3 "c"}))))))
   (testing ":implies"
     (testing "validate"
@@ -3402,12 +3402,12 @@
       (is (nil? (m/explain ImpliesGroups {})))
       (is (nil? (m/explain ImpliesGroups {:a1 "a" :a2 "b" :a3 "c"})))
       (is (nil? (m/explain ImpliesGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
-      (is (= ["since key :a1 was provided, should also provide: :a3"]
+      (is (= ["should provide key: :a3"]
              (me/humanize (m/explain ImpliesGroups {:a1 "a" :a2 "b"}))))
-      (is (= ["since key :a1 was provided, should also provide: :a2"]
+      (is (= ["should provide key: :a2"]
              (me/humanize (m/explain ImpliesGroups {:a1 "a" :a3 "c"}))))
       (is (nil? (m/explain ImpliesGroups {:a2 "b" :a3 "c"})))
-      (is (= ["since key :a1 was provided, should also provide: :a2 :a3"]
+      (is (= ["should provide keys: :a2 :a3"]
              (me/humanize (m/explain ImpliesGroups {:a1 "a"}))))
       (is (nil? (m/explain ImpliesGroups {:a2 "b"})))
       (is (nil? (m/explain ImpliesGroups {:a3 "c"})))))
@@ -3425,15 +3425,15 @@
     (testing "explain"
       (is (= ["should provide exactly one of the following keys: :a1 :a2 :a3"]
              (me/humanize (m/explain XOrGroups {}))))
-      (is (= ["exactly one of the following keys is required, but all were provided: :a1 :a2 :a3"]
+      (is (= ["should provide exactly one of the following keys: :a1 :a2 :a3"]
              (me/humanize (m/explain XOrGroups {:a1 "a" :a2 "b" :a3 "c"}))))
-      (is (= ["exactly one of the following keys is required, but all were provided: :a1 :a2 :a3"]
+      (is (= ["should provide exactly one of the following keys: :a1 :a2 :a3"]
              (me/humanize (m/explain XOrGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))))
-      (is (= ["exactly one of the following keys is required, but all were provided: :a1 :a2"]
+      (is (= ["should provide exactly one of the following keys: :a1 :a2"]
              (me/humanize (m/explain XOrGroups {:a1 "a" :a2 "b"}))))
-      (is (= ["exactly one of the following keys is required, but all were provided: :a1 :a3"]
+      (is (= ["should provide exactly one of the following keys: :a1 :a3"]
              (me/humanize (m/explain XOrGroups {:a1 "a" :a3 "c"}))))
-      (is (= ["exactly one of the following keys is required, but all were provided: :a2 :a3"]
+      (is (= ["should provide exactly one of the following keys: :a2 :a3"]
              (me/humanize (m/explain XOrGroups {:a2 "b" :a3 "c"}))))
       (is (nil? (m/explain XOrGroups {:a1 "a"})))
       (is (nil? (m/explain XOrGroups {:a2 "b"})))

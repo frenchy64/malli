@@ -32,12 +32,20 @@
                     (str (format "should provide key%s: " (if (next missing) "s" ""))
                          (apply str (interpose " " (map pr-str missing)))))
 
-                  (and (= :or op)
+                  (and (= :xor op) flat-op?)
+                  (let [provided (or (not-empty (filterv has? ng))
+                                     ng)]
+                    (str "should provide exactly one of the following keys: "
+                         (apply str (interpose " " (map pr-str provided)))))
+
+                  (and (#{:xor :or} op)
                        (every? #(or (not (vector? %))
-                                    (and (#{:and :not} (first %))
+                                    (and (#{:and :not :implies :iff} (first %))
                                          (flat? %)))
                                ng))
-                  (str "either: "
+                  (str (case op
+                         :or "either: "
+                         :xor "exactly one of: ")
                        (apply str
                               (interpose "; or "
                                          (map-indexed (fn [i flat-child]
@@ -45,28 +53,17 @@
                                                              (-humanize-group-violation flat-child)))
                                                       ng))))
 
-                  (and (= :xor op) flat-op?)
-                  (if-some [provided (not-empty (filterv has? ng))]
-                    (str "exactly one of the following keys is required, "
-                         "but all were provided: "
-                         (apply str (interpose " " (map pr-str provided))))
-                    (str "should provide exactly one of the following keys: "
-                         (apply str (interpose " " (map pr-str ng)))))
-
                   (and (= :not op) flat-op?)
                   (str "should not provide key: " (pr-str (first ng)))
 
                   (and (= :iff op) flat-op?)
-                  (let [{provided true
-                         missing false} (group-by has? ng)]
-                    (str "since key " (pr-str (first provided))
-                         " was provided, should also provide: "
+                  (let [missing (remove has? ng)]
+                    (str (format "should provide key%s: " (if (next missing) "s" ""))
                          (apply str (interpose " " (map pr-str missing)))))
 
                   (and (= :implies op) flat-op?)
                   (let [missing (remove has? (next ng))]
-                    (str "since key " (pr-str (first ng))
-                         " was provided, should also provide: "
+                    (str (format "should provide key%s: " (if (next missing) "s" ""))
                          (apply str (interpose " " (map pr-str missing)))))
 
                   (= :distinct op)
@@ -78,12 +75,10 @@
                                                 (range (count ksets)))
                         violating-ks (filterv has?
                                               (apply concat (subvec ksets (inc has-group))))]
-                    (if (= 1 (count violating-ks))
-                      (str "cannot provide both " (pr-str has-k)
-                           " and " (pr-str (first violating-ks)) " keys")
-                      (str "since key " (pr-str has-k) " was provided," 
-                           " the following provided keys are disallowed: "
-                           (apply str (interpose " " (map pr-str violating-ks))))))
+                    (str "should not combine key " (pr-str has-k)
+                         (format " with key%s: "
+                                 (if (next violating-ks) "s" ""))
+                         (apply str (interpose " " (map pr-str violating-ks)))))
                   :else (str "should satisfy keys constraint: " (pr-str group))))))]
     (-humanize-group-violation group)))
 
