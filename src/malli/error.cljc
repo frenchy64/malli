@@ -52,7 +52,7 @@
                                                     (apply str (interpose " " (map pr-str ng)))))
 
                                              (and (= :not op) flat-op?)
-                                             (format "not allowed to provide %s key" (pr-str (first ng)))
+                                             (str "not allowed to provide key: " (pr-str (first ng)))
 
                                              (and (= :iff op) flat-op?)
                                              (let [{provided true

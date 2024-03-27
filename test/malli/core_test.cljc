@@ -3459,7 +3459,7 @@
       (is (nil? (m/explain FlatNotGroup {})))
       (is (nil? (m/explain FlatNotGroup {:a1 "b"})))
       (is (nil? (m/explain FlatNotGroup {:a1 "b" :a2 "c"})))
-      (is (= ["not allowed to provide :a3 key"]
+      (is (= ["not allowed to provide key: :a3"]
              (me/humanize (m/explain FlatNotGroup {:a1 "b" :a2 "c" :a3 "d"}))))
       (is (nil? (m/explain NotGroups {})))
       (is (nil? (m/explain NotGroups {:a1 "a" :a2 "b" :a3 "c"})))
