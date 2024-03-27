@@ -522,6 +522,31 @@ of constraints provided to the `:groups` property implicitly forms an `:and`.
 The `:not` constraint is satisified if its child isn't.
 
 ```clojure
+(def DPad
+  [:map {:groups [[:not [:and :down :up]]
+                  [:not [:and :left :right]]]}
+   [:down {:optional true} [:= 1]]
+   [:left {:optional true} [:= 1]]
+   [:right {:optional true} [:= 1]]
+   [:up {:optional true} [:= 1]]])
+
+(m/validate DPad {}) ; => true
+(m/validate DPad {:up 1}) ; => true
+(m/validate DPad {:down 1}) ; => true
+(m/validate DPad {:right 1}) ; => true
+(m/validate DPad {:left 1}) ; => true
+(m/validate DPad {:up 1 :left 1}) ; => true
+(m/validate DPad {:down 1 :left 1}) ; => true
+(m/validate DPad {:up 1 :right 1}) ; => true
+(m/validate DPad {:down 1 :right 1}) ; => true
+
+(me/humanize
+  (m/explain DPad {:up 1 :down 1}))
+; => ["either: 1). should not provide key: :down; or 2). should not provide key: :up"]
+
+(me/humanize
+ (m/explain DPad {:left 1 :right 1}))
+; => ["either: 1). should not provide key: :left; or 2). should not provide key: :right"]
 ```
 
 ## Sequence schemas
