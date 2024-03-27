@@ -3471,3 +3471,32 @@
       (is (nil? (m/explain NotGroups {:a2 "b"})))
       (is (= ["either: 1). should provide keys: :a1 :a2; or 2). should not provide key: :a3"]
              (me/humanize (m/explain NotGroups {:a3 "c"})))))))
+
+(def Address
+  [:map
+   {:groups [[:iff :street :city :zip]]}
+   [:street {:optional true} string?]
+   [:city {:optional true} string?]
+   [:zip {:optional true} int?]])
+
+(deftest key-groupings-readme-examples-test
+  (is (= (me/humanize
+           (m/explain
+             [:map
+              {:groups [:x]}
+              [:x {:optional true} :int]]
+             {}))
+         ["should provide key: :x"]))
+  (is (= (me/humanize
+           (m/explain
+             [:map
+              {:groups [[:or :a1 :a2]]}
+              [:a1 {:optional true} :string]
+              [:a2 {:optional true} :string]]
+             {}))
+         ["should provide at least one key: :a1 :a2"]))
+  (is (= (m/validate Address {})
+         true))
+  (is (= (me/humanize (m/explain Address {:zip 5555}))
+         ["should provide keys: :street :city"]))
+  )

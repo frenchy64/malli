@@ -1049,6 +1049,7 @@
              default-schema (delay (some-> entry-parser (-entry-children) (-default-entry-schema) (schema options)))
              explicit-children (delay (cond->> (-entry-children entry-parser) @default-schema (remove -default-entry)))
              ->parser (fn [this f]
+                        (when groups (-fail! ::todo-parse-map-groups))
                         (let [keyset (-entry-keyset (-entry-parser this))
                               default-parser (some-> @default-schema (f))
                               parsers (cond->> (-vmap
@@ -1150,6 +1151,7 @@
            (-parser [this] (->parser this -parser))
            (-unparser [this] (->parser this -unparser))
            (-transformer [this transformer method options]
+             (when groups (-fail! ::todo-transform-map-groups))
              (let [keyset (-entry-keyset (-entry-parser this))
                    this-transformer (-value-transformer transformer this method options)
                    ->children (reduce (fn [acc [k s]]

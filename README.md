@@ -378,6 +378,57 @@ default branching can be arbitrarily nested:
 ; => true
 ```
 
+## Key groupings
+
+The `:map` schema accepts a `:groups` property, which is a vector of
+constraints relating the keys of the map. All of the constraints
+must be satisfied for a value to be valid.
+
+The atomic constraint is naming a key, which asserts the key must exist.
+
+```clojure
+(me/humanize
+  (m/explain
+   [:map
+    {:groups [:x]}
+    [:x {:optional true} :int]]
+   {}))
+; => ["should provide key: :x"]
+```
+
+The `:or` constraint asserts that at least one of its children is satisfied.
+
+```clojure
+(me/humanize
+ (m/explain
+  [:map
+   {:groups [[:or :a1 :a2]]}
+   [:a1 {:optional true} :string]
+   [:a2 {:optional true} :string]]
+  {}))
+; => ["should provide at least one key: :a1 :a2"]
+```
+
+The `:iff` constraint either requires either all or none of its children to be satisfied.
+
+```clojure
+(def Address
+  [:map
+   {:groups [[:iff :street :city :zip]]}
+   [:street {:optional true} string?]
+   [:city {:optional true} string?]
+   [:zip {:optional true} int?]])
+
+(m/validate Address {})
+; => true
+
+(me/humanize
+  (m/explain Address {:zip 5555}))
+; => ["should provide keys: :street :city"]
+```
+
+Constraints can be arbitrarily nested.
+
 ## Sequence schemas
 
 You can use `:sequential` to describe homogeneous sequential Clojure collections.
