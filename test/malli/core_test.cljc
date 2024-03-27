@@ -3519,6 +3519,14 @@
    [:right {:optional true} [:= 1]]
    [:up {:optional true} [:= 1]]])
 
+(def DPadDeMorgan
+  [:map {:groups [[:or [:not :down] [:not :up]]
+                  [:or [:not :left] [:not :right]]]}
+   [:down {:optional true} [:= 1]]
+   [:left {:optional true} [:= 1]]
+   [:right {:optional true} [:= 1]]
+   [:up {:optional true} [:= 1]]])
+
 (deftest key-groupings-readme-examples-test
   (is (= (me/humanize
            (m/explain
@@ -3580,20 +3588,20 @@
            (m/explain SecretOrCreds {:secret "1234" :user "user"}))
          ["should not combine key :secret with key: :user"]))
 
-  (testing "DPad"
-    (is (m/validate DPad {}))
-    (is (m/validate DPad {:up 1}))
-    (is (m/validate DPad {:down 1}))
-    (is (m/validate DPad {:right 1}))
-    (is (m/validate DPad {:left 1}))
-    (is (m/validate DPad {:up 1 :left 1}))
-    (is (m/validate DPad {:down 1 :left 1}))
-    (is (m/validate DPad {:up 1 :right 1}))
-    (is (m/validate DPad {:down 1 :right 1}))
-    (is (= (me/humanize
-             (m/explain DPad {:up 1 :down 1}))
-           ["should satisfy keys constraint: [:not [:and :down :up]]"]))
-    (is (= (me/humanize
-             (m/explain DPad {:left 1 :right 1}))
-           ["should satisfy keys constraint: [:not [:and :left :right]]"]))
-)
+  (doseq [DPad [DPad DPadDeMorgan]]
+    (testing "DPad"
+      (is (m/validate DPad {}))
+      (is (m/validate DPad {:up 1}))
+      (is (m/validate DPad {:down 1}))
+      (is (m/validate DPad {:right 1}))
+      (is (m/validate DPad {:left 1}))
+      (is (m/validate DPad {:up 1 :left 1}))
+      (is (m/validate DPad {:down 1 :left 1}))
+      (is (m/validate DPad {:up 1 :right 1}))
+      (is (m/validate DPad {:down 1 :right 1}))
+      (is (= (me/humanize
+               (m/explain DPad {:up 1 :down 1}))
+             ["either: 1). should not provide key: :down; or 2). should not provide key: :up"]))
+      (is (= (me/humanize
+               (m/explain DPad {:left 1 :right 1}))
+             ["either: 1). should not provide key: :left; or 2). should not provide key: :right"])))))

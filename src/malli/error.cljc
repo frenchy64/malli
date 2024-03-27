@@ -56,6 +56,14 @@
                   (and (= :not op) flat-op?)
                   (str "should not provide key: " (pr-str (first ng)))
 
+                  (and (= :not op)
+                       (vector? (first ng))
+                       (#{:and :or} (ffirst ng)))
+                  (-humanize-group-violation
+                    (into [({:and :or :or :and} (ffirst ng))]
+                          (map #(vector :not %))
+                          (nfirst ng)))
+
                   (and (= :iff op) flat-op?)
                   (let [missing (remove has? ng)]
                     (str (format "should provide key%s: " (if (next missing) "s" ""))
