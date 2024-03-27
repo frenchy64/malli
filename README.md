@@ -409,23 +409,89 @@ The `:or` constraint asserts that at least one of its children is satisfied.
 ; => ["should provide at least one key: :a1 :a2"]
 ```
 
-The `:iff` constraint either requires either all or none of its children to be satisfied.
+The `:xor` constraint either requires exactly one of its children to be satisfied.
 
 ```clojure
-(def Address
-  [:map
-   {:groups [[:iff :street :city :zip]]}
-   [:street {:optional true} string?]
-   [:city {:optional true} string?]
-   [:zip {:optional true} int?]])
+(def GitOrMvn
+  [:map {:groups [[:xor :mvn/version :git/sha]]}
+   [:mvn/version {:optional true} :string]
+   [:git/sha {:optional true} :string]])
 
-(m/validate Address {})
+(m/validate GitOrMvn {:mvn/version "1.0.0"})
 ; => true
 
 (me/humanize
-  (m/explain Address {:zip 5555}))
-; => ["should provide keys: :street :city"]
+  (m/explain GitOrMvn
+             {:mvn/version "1.0.0"
+              :git/sha "123"}))
+; => ["should provide exactly one of the following keys: :mvn/version :git/sha"]
 ```
+
+The `:iff` constraint either requires either all or none of its children to be satisfied.
+
+```clojure
+(def UserPass
+  [:map
+   {:groups [[:iff :user :pass]]}
+   [:user {:optional true} string?]
+   [:pass {:optional true} string?]])
+
+(m/validate UserPass {})
+; => true
+
+(m/validate UserPass {:user "a" :pass "b"})
+; => true
+
+(me/humanize
+  (m/explain UserPass {:user "a"}))
+; => ["should provide key: :pass"]
+```
+
+The `:implies` constraint is satisfied if either its first constraint is _not_ satisfied or
+all of its constraints are satisfied.
+
+
+```clojure
+(def TagImpliesSha
+  [:map {:groups [[:implies :git/tag :git/sha]]}
+   [:git/sha {:optional true} :string]
+   [:git/tag {:optional true} :string]])
+
+(m/validate TagImpliesSha {:git/sha "abc123"})
+;=> true
+
+(m/validate TagImpliesSha {:git/tag "v1.0.0" :git/sha "abc123"})
+; => true
+
+(me/humanize
+  (m/explain TagImpliesSha {:git/tag "v1.0.0"}))
+; => ["should provide key: :git/sha"]
+```
+
+The `:distinct` constraint takes sets of keys. Map keys can intersect with at most one set.
+
+```clojure
+(def SeparateMvnGit
+  [:map {:groups [[:distinct #{:mvn/version} #{:git/sha :git/url :git/tag}]]}
+   [:mvn/version {:optional true} :string]
+   [:git/sha {:optional true} :string]
+   [:git/tag {:optional true} :string]
+   [:git/url {:optional true} :string]])
+
+(m/validate SeparateMvnGit {:mvn/version "1.0.0"})
+; => true
+
+(m/validate SeparateMvnGit {:git/sha "1.0.0"})
+; => true
+
+(me/humanize
+  (m/explain SeparateMvnGit
+             {:mvn/version "1.0.0"
+              :git/sha "abc123"}))
+; => ["should not combine key :mvn/version with key: :git/sha"]
+```
+
+The `:and` constraint requires all of its children to be satisfied.
 
 Constraints can be arbitrarily nested.
 

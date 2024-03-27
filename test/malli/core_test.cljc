@@ -3479,6 +3479,29 @@
    [:city {:optional true} string?]
    [:zip {:optional true} int?]])
 
+(def GitOrMvn
+  [:map {:groups [[:xor :mvn/version :git/sha]]}
+   [:mvn/version {:optional true} :string]
+   [:git/sha {:optional true} :string]])
+
+(def TagImpliesSha
+  [:map {:groups [[:implies :git/tag :git/sha]]}
+   [:git/sha {:optional true} :string]
+   [:git/tag {:optional true} :string]])
+
+(def UserPass
+  [:map
+   {:groups [[:iff :user :pass]]}
+   [:user {:optional true} string?]
+   [:pass {:optional true} string?]])
+
+(def SeparateMvnGit
+  [:map {:groups [[:distinct #{:mvn/version} #{:git/sha :git/url :git/tag}]]}
+   [:mvn/version {:optional true} :string]
+   [:git/sha {:optional true} :string]
+   [:git/tag {:optional true} :string]
+   [:git/url {:optional true} :string]])
+
 (deftest key-groupings-readme-examples-test
   (is (= (me/humanize
            (m/explain
@@ -3498,4 +3521,35 @@
   (is (= (m/validate Address {})
          true))
   (is (= (me/humanize (m/explain Address {:zip 5555}))
-         ["should provide keys: :street :city"])))
+         ["should provide keys: :street :city"]))
+  (is (= (m/validate GitOrMvn {:mvn/version "1.0.0"})
+         true))
+  (is (= (me/humanize
+           (m/explain GitOrMvn
+                      {:mvn/version "1.0.0"
+                       :git/sha "123"}))
+         ["should provide exactly one of the following keys: :mvn/version :git/sha"]))
+  (is (= (m/validate TagImpliesSha {:git/sha "abc123"})
+         true))
+  (is (= (m/validate TagImpliesSha {:git/tag "v1.0.0" :git/sha "abc123"})
+         true))
+  (is (= (me/humanize
+           (m/explain TagImpliesSha {:git/tag "v1.0.0"}))
+         ["should provide key: :git/sha"]))
+  (is (= (m/validate UserPass {})
+         true))
+  (is (= (m/validate UserPass {:user "a" :pass "b"})
+         true))
+  (is (= (me/humanize
+           (m/explain UserPass {:user "a"}))
+         ["should provide key: :pass"]))
+  (is (= (m/validate SeparateMvnGit {:mvn/version "1.0.0"})
+         true))
+  (is (= (m/validate SeparateMvnGit {:git/sha "1.0.0"})
+         true))
+  (is (= (me/humanize
+           (m/explain SeparateMvnGit
+                      {:mvn/version "1.0.0"
+                       :git/sha "abc123"}))
+         ["should not combine key :mvn/version with key: :git/sha"]))
+)
