@@ -13,6 +13,80 @@
         min (str "should be at least " min)
         max (str "should be at most " max)))))
 
+(defn -humanize-group-violation [{:keys [group value] :as args}]
+  (letfn [(has? [k] (contains? value k))
+          (flat? [group] (not-any? vector? (next group)))
+          (-humanize-group-violation [group]
+            (if (not (vector? group))
+              (str "must provide key: " (pr-str group))
+              (let [flat-op? (flat? group)
+                    ng (next group)
+                    op (first group)]
+                (cond
+                  (and (= :or op) flat-op?)
+                  (str "must provide at least one key: "
+                       (apply str (interpose " " (map pr-str ng))))
+
+                  (and (= :and op) flat-op?)
+                  (let [missing (remove has? ng)]
+                    (str "must provide keys: "
+                         (apply str (interpose " " (map pr-str missing)))))
+
+                  (and (= :or op)
+                       (every? #(or (not (vector? %))
+                                    (and (#{:and :not} (first %))
+                                         (flat? %)))
+                               ng))
+                  (str "either: "
+                       (apply str
+                              (interpose "; or "
+                                         (map-indexed (fn [i flat-child]
+                                                        (str (inc i) "). "
+                                                             (-humanize-group-violation flat-child)))
+                                                      ng))))
+
+                  (and (= :xor op) flat-op?)
+                  (if-some [provided (not-empty (filterv has? ng))]
+                    (str "exactly one of the following keys is required, "
+                         "but all were provided: "
+                         (apply str (interpose " " (map pr-str provided))))
+                    (str "must provide exactly one of the following keys: "
+                         (apply str (interpose " " (map pr-str ng)))))
+
+                  (and (= :not op) flat-op?)
+                  (str "should not provide key: " (pr-str (first ng)))
+
+                  (and (= :iff op) flat-op?)
+                  (let [{provided true
+                         missing false} (group-by has? ng)]
+                    (str "since key " (pr-str (first provided))
+                         " was provided, must also provide: "
+                         (apply str (interpose " " (map pr-str missing)))))
+
+                  (and (= :implies op) flat-op?)
+                  (let [missing (remove has? (next ng))]
+                    (str "since key " (pr-str (first ng))
+                         " was provided, must also provide: "
+                         (apply str (interpose " " (map pr-str missing)))))
+
+                  (= :distinct op)
+                  (let [ksets (vec ng)
+                        [has-group has-k] (some (fn [i]
+                                                  (when-some [[has-k] (not-empty
+                                                                        (filter has? (nth ksets i)))]
+                                                    [i has-k]))
+                                                (range (count ksets)))
+                        violating-ks (filterv has?
+                                              (apply concat (subvec ksets (inc has-group))))]
+                    (if (= 1 (count violating-ks))
+                      (str "cannot provide both " (pr-str has-k)
+                           " and " (pr-str (first violating-ks)) " keys")
+                      (str "since key " (pr-str has-k) " was provided," 
+                           " the following provided keys are disallowed: "
+                           (apply str (interpose " " (map pr-str violating-ks))))))
+                  :else (str "should satisfy keys constraint: " (pr-str group))))))]
+    (-humanize-group-violation group)))
+
 (def default-errors
   {::unknown {:error/message {:en "unknown error"}}
    ::m/missing-key {:error/message {:en "missing required key"}}
@@ -29,60 +103,8 @@
    ::m/invalid-type {:error/message {:en "invalid type"}}
    ::m/extra-key {:error/message {:en "disallowed key"}}
    ::m/group-violation {:error/fn {:en (fn [{:keys [schema value path]} _]
-                                         (let [group (-> schema m/properties :groups (nth (peek path)))
-                                               has? #(contains? value %)
-                                               flat? #(not-any? vector? (next %))
-                                               flat-op? (flat? group)
-                                               ng (next group)
-                                               op (first group)]
-                                           (cond
-                                             (and (= :or op) flat-op?)
-                                             (str (format "must provide at least one key: "
-                                                          (case op
-                                                            :or "at least"
-                                                            :xor "exactly"))
-                                                  (apply str (interpose " " (map pr-str ng))))
-
-                                             (and (= :xor op) flat-op?)
-                                             (if-some [provided (not-empty (filterv has? ng))]
-                                               (str "exactly one of the following keys is required, "
-                                                    "but all were provided: "
-                                                    (apply str (interpose " " (map pr-str provided))))
-                                               (str "must provide exactly one of the following keys: "
-                                                    (apply str (interpose " " (map pr-str ng)))))
-
-                                             (and (= :not op) flat-op?)
-                                             (str "not allowed to provide key: " (pr-str (first ng)))
-
-                                             (and (= :iff op) flat-op?)
-                                             (let [{provided true
-                                                    missing false} (group-by has? ng)]
-                                               (str "since key " (pr-str (first provided))
-                                                    " was provided, must also provide: "
-                                                    (apply str (interpose " " (map pr-str missing)))))
-
-                                             (and (= :implies op) flat-op?)
-                                             (let [missing (remove has? (next ng))]
-                                               (str "since key " (pr-str (second group))
-                                                    " was provided, must also provide: "
-                                                    (apply str (interpose " " (map pr-str missing)))))
-
-                                             (= :distinct op)
-                                             (let [ksets (vec ng)
-                                                   [has-group has-k] (some (fn [i]
-                                                                             (when-some [[has-k] (not-empty
-                                                                                                   (filter has? (nth ksets i)))]
-                                                                               [i has-k]))
-                                                                           (range (count ksets)))
-                                                   violating-ks (filterv has?
-                                                                         (apply concat (subvec ksets (inc has-group))))]
-                                               (if (= 1 (count violating-ks))
-                                                 (str "cannot provide both " (pr-str has-k)
-                                                      " and " (pr-str (first violating-ks)) " keys")
-                                                 (str "since key " (pr-str has-k) " was provided," 
-                                                      " the following provided keys are disallowed: "
-                                                      (apply str (interpose " " (map pr-str violating-ks))))))
-                                             :else (str "should satisfy keys constraint: " (pr-str group)))))}}
+                                         (-humanize-group-violation {:group (-> schema m/properties :groups (nth (peek path)))
+                                                                     :value value}))}}
    :malli.core/invalid-dispatch-value {:error/message {:en "invalid dispatch value"}}
    ::misspelled-key {:error/fn {:en (fn [{::keys [likely-misspelling-of]} _]
                                       (str "should be spelled " (str/join " or " (map last likely-misspelling-of))))}}

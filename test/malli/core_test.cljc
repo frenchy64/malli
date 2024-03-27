@@ -3331,8 +3331,7 @@
              (-> (m/explain UserPwGroups {})
                  with-schema-forms
                  :errors)))
-      ;;TODO
-      (is (= ["should satisfy keys constraint: [:or :secret [:and :user :pass]]"]
+      (is (= ["either: 1). must provide key: :secret; or 2). must provide keys: :user :pass"]
              (me/humanize (m/explain UserPwGroups {}))))
       (is (= [{:path [:groups 1]
                :in []
@@ -3459,20 +3458,17 @@
       (is (nil? (m/explain FlatNotGroup {})))
       (is (nil? (m/explain FlatNotGroup {:a1 "b"})))
       (is (nil? (m/explain FlatNotGroup {:a1 "b" :a2 "c"})))
-      (is (= ["not allowed to provide key: :a3"]
+      (is (= ["should not provide key: :a3"]
              (me/humanize (m/explain FlatNotGroup {:a1 "b" :a2 "c" :a3 "d"}))))
       (is (nil? (m/explain NotGroups {})))
       (is (nil? (m/explain NotGroups {:a1 "a" :a2 "b" :a3 "c"})))
       (is (nil? (m/explain NotGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"})))
       (is (nil? (m/explain NotGroups {:a1 "a" :a2 "b"})))
-      ;;TODO msgs
-      (is (= ["should satisfy keys constraint: [:or [:and :a1 :a2] [:not :a3]]"]
+      (is (= ["either: 1). must provide keys: :a2; or 2). should not provide key: :a3"]
              (me/humanize (m/explain NotGroups {:a1 "a" :a3 "c"}))))
-      ;;TODO msgs
-      (is (= ["should satisfy keys constraint: [:or [:and :a1 :a2] [:not :a3]]"]
+      (is (= ["either: 1). must provide keys: :a1; or 2). should not provide key: :a3"]
              (me/humanize (m/explain NotGroups {:a2 "b" :a3 "c"}))))
       (is (nil? (m/explain NotGroups {:a1 "a"})))
       (is (nil? (m/explain NotGroups {:a2 "b"})))
-      ;;TODO msgs
-      (is (= ["should satisfy keys constraint: [:or [:and :a1 :a2] [:not :a3]]"]
+      (is (= ["either: 1). must provide keys: :a1 :a2; or 2). should not provide key: :a3"]
              (me/humanize (m/explain NotGroups {:a3 "c"})))))))
