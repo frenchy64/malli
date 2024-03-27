@@ -3498,5 +3498,4 @@
   (is (= (m/validate Address {})
          true))
   (is (= (me/humanize (m/explain Address {:zip 5555}))
-         ["should provide keys: :street :city"]))
-  )
+         ["should provide keys: :street :city"])))
