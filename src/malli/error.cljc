@@ -18,18 +18,18 @@
           (flat? [group] (not-any? vector? (next group)))
           (-humanize-group-violation [group]
             (if (not (vector? group))
-              (str "must provide key: " (pr-str group))
+              (str "should provide key: " (pr-str group))
               (let [flat-op? (flat? group)
                     ng (next group)
                     op (first group)]
                 (cond
                   (and (= :or op) flat-op?)
-                  (str "must provide at least one key: "
+                  (str "should provide at least one key: "
                        (apply str (interpose " " (map pr-str ng))))
 
                   (and (= :and op) flat-op?)
                   (let [missing (remove has? ng)]
-                    (str "must provide keys: "
+                    (str (format "should provide key%s: " (if (next missing) "s" ""))
                          (apply str (interpose " " (map pr-str missing)))))
 
                   (and (= :or op)
@@ -50,7 +50,7 @@
                     (str "exactly one of the following keys is required, "
                          "but all were provided: "
                          (apply str (interpose " " (map pr-str provided))))
-                    (str "must provide exactly one of the following keys: "
+                    (str "should provide exactly one of the following keys: "
                          (apply str (interpose " " (map pr-str ng)))))
 
                   (and (= :not op) flat-op?)
@@ -60,13 +60,13 @@
                   (let [{provided true
                          missing false} (group-by has? ng)]
                     (str "since key " (pr-str (first provided))
-                         " was provided, must also provide: "
+                         " was provided, should also provide: "
                          (apply str (interpose " " (map pr-str missing)))))
 
                   (and (= :implies op) flat-op?)
                   (let [missing (remove has? (next ng))]
                     (str "since key " (pr-str (first ng))
-                         " was provided, must also provide: "
+                         " was provided, should also provide: "
                          (apply str (interpose " " (map pr-str missing)))))
 
                   (= :distinct op)
