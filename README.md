@@ -416,13 +416,17 @@ The `:xor` constraint requires exactly one of its children to be satisfied.
    [:mvn/version {:optional true} :string]
    [:git/sha {:optional true} :string]])
 
-(m/validate GitOrMvn {:mvn/version "1.0.0"})
-; => true
+(m/validate GitOrMvn {:mvn/version "1.0.0"}) ; => true
 
 (me/humanize
   (m/explain GitOrMvn
              {:mvn/version "1.0.0"
               :git/sha "123"}))
+; => ["should provide exactly one of the following keys: :mvn/version :git/sha"]
+
+(me/humanize
+  (m/explain GitOrMvn
+             {}))
 ; => ["should provide exactly one of the following keys: :mvn/version :git/sha"]
 ```
 
@@ -435,18 +439,15 @@ The `:iff` constraint either requires either all or none of its children to be s
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])
 
-(m/validate UserPass {})
-; => true
-
-(m/validate UserPass {:user "a" :pass "b"})
-; => true
+(m/validate UserPass {}) ; => true
+(m/validate UserPass {:user "a" :pass "b"}) ; => true
 
 (me/humanize
   (m/explain UserPass {:user "a"}))
 ; => ["should provide key: :pass"]
 ```
 
-The `:implies` constraint `is satisfied if either its first constraint is _not_ satisfied or
+The `:implies` constraint is satisfied if either its first constraint is _not_ satisfied or
 all of its constraints are satisfied. It takes one or more constraints.
 
 
@@ -456,11 +457,8 @@ all of its constraints are satisfied. It takes one or more constraints.
    [:git/sha {:optional true} :string]
    [:git/tag {:optional true} :string]])
 
-(m/validate TagImpliesSha {:git/sha "abc123"})
-;=> true
-
-(m/validate TagImpliesSha {:git/tag "v1.0.0" :git/sha "abc123"})
-; => true
+(m/validate TagImpliesSha {:git/sha "abc123"}) ;=> true
+(m/validate TagImpliesSha {:git/tag "v1.0.0" :git/sha "abc123"}) ; => true
 
 (me/humanize
   (m/explain TagImpliesSha {:git/tag "v1.0.0"}))
@@ -477,11 +475,9 @@ The `:distinct` constraint takes sets of keys. Map keys can intersect with at mo
    [:git/tag {:optional true} :string]
    [:git/url {:optional true} :string]])
 
-(m/validate SeparateMvnGit {:mvn/version "1.0.0"})
-; => true
-
-(m/validate SeparateMvnGit {:git/sha "1.0.0"})
-; => true
+(m/validate SeparateMvnGit {}) ; => true
+(m/validate SeparateMvnGit {:mvn/version "1.0.0"}) ; => true
+(m/validate SeparateMvnGit {:git/sha "1.0.0"}) ; => true
 
 (me/humanize
   (m/explain SeparateMvnGit
@@ -502,11 +498,8 @@ of constraints provided to the `:keys` property implicitly forms an `:and`.
    [:user {:optional true} string?]
    [:pass {:optional true} string?]])
 
-(m/validate SecretOrCreds {:secret "1234"})
-; => true
-
-(m/validate SecretOrCreds {:user "user" :pass "hello"})
-; => true
+(m/validate SecretOrCreds {:secret "1234"}) ; => true
+(m/validate SecretOrCreds {:user "user" :pass "hello"}) ; => true
 
 (me/humanize
   (m/explain SecretOrCreds {:user "user"}))
@@ -544,7 +537,7 @@ The `:not` constraint is satisified if its child isn't.
 ; => ["either: 1). should not provide key: :down; or 2). should not provide key: :up"]
 
 (me/humanize
- (m/explain DPad {:left 1 :right 1}))
+  (m/explain DPad {:left 1 :right 1}))
 ; => ["either: 1). should not provide key: :left; or 2). should not provide key: :right"]
 ```
 

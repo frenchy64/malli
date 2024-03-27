@@ -967,8 +967,9 @@
                 :or (let [ps (mapv -key-group-validator (next group))]
                       #(boolean (some (fn [p] (p %)) ps)))
                 :xor (let [ps (mapv -key-group-validator (next group))]
-                       ;;TODO short circuit
-                       #(= 1 (count (filterv (fn [p] (p %)) ps))))
+                       #(let [rs (filter (fn [p] (p %)) ps)]
+                          (boolean
+                            (and (seq rs) (not (next rs))))))
                 :distinct (let [ksets (next group)
                                 ps (mapv (fn [ks]
                                            (when-not (set? ks)

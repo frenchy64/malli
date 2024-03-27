@@ -3554,6 +3554,10 @@
                       {:mvn/version "1.0.0"
                        :git/sha "123"}))
          ["should provide exactly one of the following keys: :mvn/version :git/sha"]))
+  (is (= (me/humanize
+           (m/explain GitOrMvn
+                      {}))
+         ["should provide exactly one of the following keys: :mvn/version :git/sha"]))
   (is (= (m/validate TagImpliesSha {:git/sha "abc123"})
          true))
   (is (= (m/validate TagImpliesSha {:git/tag "v1.0.0" :git/sha "abc123"})
@@ -3568,6 +3572,8 @@
   (is (= (me/humanize
            (m/explain UserPass {:user "a"}))
          ["should provide key: :pass"]))
+  (is (= (m/validate SeparateMvnGit {})
+         true))
   (is (= (m/validate SeparateMvnGit {:mvn/version "1.0.0"})
          true))
   (is (= (m/validate SeparateMvnGit {:git/sha "1.0.0"})
