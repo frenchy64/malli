@@ -44,11 +44,10 @@
                                                   (apply str (interpose " " (map pr-str ng))))
 
                                              (and (= :xor op) flat-op?)
-                                             (if-some [[allowed & disallowed] (not-empty
-                                                                                (filterv has? ng))]
-                                               (str "since key " (pr-str allowed) " was provided, "
-                                                    "not allowed to provide keys: "
-                                                    (apply str (interpose " " (map pr-str disallowed))))
+                                             (if-some [provided (not-empty (filterv has? ng))]
+                                               (str "exactly one of the following keys is required, "
+                                                    "but all were provided: "
+                                                    (apply str (interpose " " (map pr-str provided))))
                                                (str "must provide exactly one of the following keys: "
                                                     (apply str (interpose " " (map pr-str ng)))))
 

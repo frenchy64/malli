@@ -3427,15 +3427,15 @@
     (testing "explain"
       (is (= ["must provide exactly one of the following keys: :a1 :a2 :a3"]
              (me/humanize (m/explain XOrGroups {}))))
-      (is (= ["since key :a1 was provided, not allowed to provide keys: :a2 :a3"]
+      (is (= ["exactly one of the following keys is required, but all were provided: :a1 :a2 :a3"]
              (me/humanize (m/explain XOrGroups {:a1 "a" :a2 "b" :a3 "c"}))))
-      (is (= ["since key :a1 was provided, not allowed to provide keys: :a2 :a3"]
+      (is (= ["exactly one of the following keys is required, but all were provided: :a1 :a2 :a3"]
              (me/humanize (m/explain XOrGroups {:a1 "a" :a2 "b" :a3 "c" :a4 "d"}))))
-      (is (= ["since key :a1 was provided, not allowed to provide keys: :a2"]
+      (is (= ["exactly one of the following keys is required, but all were provided: :a1 :a2"]
              (me/humanize (m/explain XOrGroups {:a1 "a" :a2 "b"}))))
-      (is (= ["since key :a1 was provided, not allowed to provide keys: :a3"]
+      (is (= ["exactly one of the following keys is required, but all were provided: :a1 :a3"]
              (me/humanize (m/explain XOrGroups {:a1 "a" :a3 "c"}))))
-      (is (= ["since key :a2 was provided, not allowed to provide keys: :a3"]
+      (is (= ["exactly one of the following keys is required, but all were provided: :a2 :a3"]
              (me/humanize (m/explain XOrGroups {:a2 "b" :a3 "c"}))))
       (is (nil? (m/explain XOrGroups {:a1 "a"})))
       (is (nil? (m/explain XOrGroups {:a2 "b"})))
