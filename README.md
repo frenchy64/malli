@@ -447,8 +447,8 @@ The `:iff` constraint either requires either all or none of its children to be s
 ; => ["should provide key: :pass"]
 ```
 
-The `:implies` constraint is satisfied if either its first constraint is _not_ satisfied or
-all of its constraints are satisfied.
+The `:implies` constraint `is satisfied if either its first constraint is _not_ satisfied or
+all of its constraints are satisfied. It takes one or more constraints.
 
 
 ```clojure
@@ -494,7 +494,7 @@ The `:distinct` constraint takes sets of keys. Map keys can intersect with at mo
 The `:and` constraint requires all of its children to be satisfied. The top-level vector
 of constraints provided to the `:groups` property implicitly forms an `:and`.
 
-```
+```clojure
 (def SecretOrCreds
   [:map
    {:groups [[:or :secret [:and :user :pass]]
