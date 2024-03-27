@@ -2527,7 +2527,11 @@
       (testing "guards"
         (let [guard (fn [[[x y] z]] (> (+ x y) z))
               schema (m/schema
-                      [:=> [:cat :int :int] :int [:fn guard]]
+                      [:=> [:cat
+                            ;; guard is only true if overflow/underflow is avoided
+                            [:int {:gen/min -1000 :gen/max 1000}]
+                            [:int {:gen/min -1000 :gen/max 1000}]]
+                       :int [:fn guard]]
                       {::m/function-checker mg/function-checker})
               valid (fn [x y] (dec (+ x y)))
               invalid (fn [x y] (+ x y))]
