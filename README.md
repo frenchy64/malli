@@ -408,7 +408,7 @@ The `:or` constraint asserts that at least one of its children is satisfied.
 ; => ["should provide at least one key: :a1 :a2"]
 ```
 
-The `:xor` constraint either requires exactly one of its children to be satisfied.
+The `:xor` constraint requires exactly one of its children to be satisfied.
 
 ```clojure
 (def GitOrMvn
