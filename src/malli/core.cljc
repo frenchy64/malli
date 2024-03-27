@@ -1080,9 +1080,8 @@
                (fn [m] (and (pred? m) (validate m)))))
            (-explainer [this path]
              (let [keyset (-entry-keyset (-entry-parser this))
-                   group->validator (some->> keys (into [] (map-indexed
-                                                               (fn [i group]
-                                                                 [i group (-keys-constraint-validator group options)]))))
+                   constraint-validators (some->> keys-constraints
+                                                  (mapv #(-keys-constraint-validator % options)))
                    default-explainer (some-> @default-schema (-explainer (conj path ::default)))
                    explainers (cond-> (-vmap
                                        (fn [[key {:keys [optional]} schema]]
@@ -1107,14 +1106,14 @@
                                               acc
                                               (conj acc (miu/-error (conj path k) (conj in k) this v ::extra-key))))
                                           acc x)))
-                                group->validator
+                                constraint-validators
                                 (conj (fn [x in acc]
                                         (reduce
-                                         (fn [acc [i group group-validator]]
-                                           (if (group-validator x)
+                                         (fn [acc [i constraint-validator]]
+                                           (if (constraint-validator x)
                                              acc
                                              (conj acc (miu/-error (conj path :keys i) in this x ::group-violation))))
-                                         acc group->validator))))]
+                                         acc (map-indexed vector constraint-validators)))))]
                (fn [x in acc]
                  (if-not (pred? x)
                    (conj acc (miu/-error path in this x ::invalid-type))
