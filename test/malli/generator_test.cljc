@@ -993,3 +993,17 @@
            (mg/sample NotGroups
                       {:seed 3
                        :size 5})))))
+
+(deftest map-keys-unsatisfiable-test
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.generator/unsatisfiable-keys"
+        (mg/generate
+          [:map {:keys [[:and :a [:not :a]]]}
+           [:a :int]])))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.generator/unsatisfiable-keys"
+        (mg/generate
+          [:map {:keys [[:not :a]]}
+           [:a :int]]))))

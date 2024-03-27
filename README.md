@@ -541,6 +541,23 @@ The `:not` constraint is satisified if its child isn't.
 ; => ["either: 1). should not provide key: :left; or 2). should not provide key: :right"]
 ```
 
+Constraints can be checked for satisfiability by calling `mg/generate`. Note that a required
+key can never omitted from a map regardless of `:keys`.
+
+```clojure
+;; contradiction within :keys
+(mg/generate
+  [:map {:keys [[:and :a [:not :a]]]}
+   [:a :int]])
+; Exception: :malli.generator/unsatisfiable-keys
+
+;; :keys constraint contradicts required key
+(mg/generate
+  [:map {:keys [[:not :a]]}
+   [:a :int]])
+; Exception: :malli.generator/unsatisfiable-keys
+```
+
 ## Sequence schemas
 
 You can use `:sequential` to describe homogeneous sequential Clojure collections.

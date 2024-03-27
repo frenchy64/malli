@@ -1005,30 +1005,6 @@
               #(contains? % group)))]
     (-key-group-validator group)))
 
-(defn -valid-key-keys [schema options]
-  (when-some [keys (:keys (-properties schema))]
-    (let [{required false
-           optional true} (group-by #(-> % miu/-last -properties :optional)
-                                    (-entries schema))
-          key-group (into [:and] keys)
-          base (into {} (map (fn [k]
-                               {k :required}))
-                     required)
-          p (-key-group-validator key-group options)]
-      (into [] (comp (keep (fn [optionals]
-                             (let [example (-> base
-                                               (into (map (fn [[k]]
-                                                            {k :required}))
-                                                     optionals))]
-                               (when (p example)
-                                 (into example
-                                       (map (fn [[k]]
-                                              (when-not (example k)
-                                                {k :never})))
-                                       optional)))))
-                     (distinct))
-            (comb/subsets optional)))))
-
 (defn -map-schema
   ([]
    (-map-schema {:naked-keys true}))
