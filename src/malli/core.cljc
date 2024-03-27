@@ -3,7 +3,6 @@
   #?(:cljs (:require-macros malli.core))
   (:require #?(:clj [clojure.walk :as walk])
             [clojure.core :as c]
-            [clojure.math.combinatorics :as comb]
             [clojure.set :as set]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
