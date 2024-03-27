@@ -1123,7 +1123,7 @@
            (-parser [this] (->parser this -parser))
            (-unparser [this] (->parser this -unparser))
            (-transformer [this transformer method options]
-             (when keys (-fail! ::todo-transform-map-keys))
+             (when keys-constraints (-fail! ::todo-transform-map-keys))
              (let [keyset (-entry-keyset (-entry-parser this))
                    this-transformer (-value-transformer transformer this method options)
                    ->children (reduce (fn [acc [k s]]
