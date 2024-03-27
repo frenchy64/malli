@@ -2538,7 +2538,10 @@
 
           (is (= {:type :=>,
                   :input {:type :cat
-                          :children [{:type :int} {:type :int}]},
+                          :children [{:type :int,
+                                      :properties {:gen/max 1000, :gen/min -1000}}
+                                     {:type :int,
+                                      :properties {:gen/max 1000, :gen/min -1000}}]},
                   :output {:type :int},
                   :guard {:type :fn
                           :value guard}}
