@@ -956,7 +956,8 @@
 
 (defn -keys-constraint-validator [constraint options]
   (letfn [(-keys-constraint-validator [constraint]
-            (if (vector? constraint)
+            (if (not (vector? constraint))
+              #(contains? % constraint)
               (case (first constraint)
                 :not (let [[p & ps] (mapv -keys-constraint-validator (next constraint))]
                        (when (or (not p) ps)
@@ -998,8 +999,7 @@
                              (-fail! ::missing-implies-condition {:constraint constraint}))
                            #(or (not (p %))
                                 (every? (fn [p] (p %)) ps)))
-                (-fail! ::unknown-constraint {:constraint constraint}))
-              #(contains? % constraint)))]
+                (-fail! ::unknown-constraint {:constraint constraint}))))]
     (-keys-constraint-validator constraint)))
 
 (defn -map-schema
