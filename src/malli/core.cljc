@@ -14,7 +14,8 @@
 
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
-         parser unparser ast from-ast -all-schema -subst-tv -fv -parse-binder)
+         parser unparser ast from-ast -all-schema -subst-tv -fv -parse-binder
+         -instantiate-many -abstract-many)
 
 ;;
 ;; protocols and records
@@ -88,6 +89,8 @@
 
 (defprotocol AllSchema
   (-bounds [this] "return map of type variable name to bound")
+  (-all-fresh-names [this] "return names to instantiate body with")
+  (-all-body [this names] "return body using names")
   (-instantiate-all [this schemas] "replace variables in polymorphic schema with schemas")
   (-instantiate-for-instrumentation [this] "return the schema suitable for instrumentation"))
 
@@ -1721,7 +1724,9 @@
           (-parent [_] parent)
           (-form [_] (if (number? id)
                        [::local id]
-                       id))
+                       (if (::verbose-locals options)
+                         id
+                         original-name)))
           Cached
           (-cache [_] cache)
           ;LensSchema
@@ -2634,14 +2639,15 @@
       (-check-children! :all properties children 2 2)
       (let [[binder-syntax body-syntax] children
             {:keys [binder syms]} (-parse-binder binder-syntax)
-            gsyms (mapv #(symbol (str (name %) "__" (random-uuid))) syms)
+            ->gsyms (fn []
+                      (mapv #(with-meta (symbol (str (name %) "__" (random-uuid)))
+                                        {::original-name %})
+                            syms))
             bounds (mapv second binder)
-            sym->local-info (into {} (map (fn [sym gsym kind]
+            sym->local-info (into {} (map (fn [sym kind]
                                             {sym {:kind kind
-                                                  :original-name sym
-                                                  :id gsym}})
+                                                  :id sym}})
                                           syms
-                                          gsyms
                                           bounds))
             nbound (count syms)
             instrumenting-binder (mapv #(case %
@@ -2651,10 +2657,17 @@
                                        bounds)
             body (schema body-syntax (update options ::local-scope (fnil into {})
                                              sym->local-info))
-            body-fv (-fv body options)
+            body (-abstract-many body (map (comp :id sym->local-info) syms) options)
+            ->inst-body (fn [images]
+                          (-instantiate-many body images options))
             ;; TODO inspect free variables and determine whether it's safe to
             ;; use the original names
-            form [:all binder-syntax (form body)]
+            form (delay
+                   [:all binder-syntax
+                    (-form (->inst-body (mapv #(vector ::local
+                                                       {:original-name (-> sym->local-info % :original-name)}
+                                                       %)
+                                              syms)))])
             children [binder body]
             cache (-create-cache options)
             ->checker (if function-checker #(function-checker % options) (constantly nil))]
@@ -2688,11 +2701,19 @@
           (-options [_] options)
           (-children [_] children)
           (-parent [_] parent)
-          (-form [_] form)
+          (-form [_] @form)
           Cached
           (-cache [_] cache)
           AllSchema
           (-bounds [_] binder)
+          (-all-fresh-names [_] (->gsyms))
+          (-all-body [_ fresh-names]
+            (->inst-body (mapv (fn [id kind]
+                                 [::local {:original-name (-> id meta ::original-name)
+                                           :kind kind}
+                                  id])
+                               fresh-names
+                               bounds)))
           (-instantiate-all [_ schemas]
             (when-not (= nbound (count schemas))
               (-fail! ::wrong-number-of-schemas-to-instantiate))
@@ -2700,7 +2721,7 @@
             ;; note that :Schema is a non-regex schema. kind for sequences of schemas tbd
             (-subst-tv body (zipmap syms schemas) options))
           (-instantiate-for-instrumentation [this]
-            (-instantiate this instrumenting-binder))
+            (-instantiate-all this instrumenting-binder))
           LensSchema
           (-keep [_])
           (-get [_ key default] (get children key default))
@@ -2895,6 +2916,11 @@
                 ::abstract-index 0))]
       options)))
 
+(defn -abstract-many [s names options]
+  (reduce (fn [s nme]
+            (-abstract s nme options))
+          s names))
+
 (defn -instantiate [?scope to options]
   (let [to (schema to options)
         inner (fn [this s path options]
@@ -2926,6 +2952,11 @@
              ::walk-schema-refs false
              ::walk-entry-vals true
              ::instantiate-index 0))))
+
+(defn -instantiate-many [s images options]
+  (reduce (fn [s image]
+            (-instantiate s image options))
+          s (rseq images)))
 
 (defn -all-names [s]
   (map #(nth % 0) (-bounds s)))

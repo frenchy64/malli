@@ -3375,3 +3375,23 @@
              :int
              nil)))))
 
+(deftest all-smart-constructor-destructor-test
+  (is (= '[:all [x] [:=> [:cat x] x]]
+         (m/form (m/schema (m/all [x] [:=> [:cat x] x])))))
+  (is (= '[:all [x y] [:=> [:cat x] y]]
+         (m/form (m/schema (m/all [x y] [:=> [:cat x] y])))))
+  (is (= '[:=> [:cat a] b]
+         (m/form
+           (m/-all-body (m/schema (m/all [x y] [:=> [:cat x] y]))
+                        '[a b]))))
+  (is (= '[:=> [:cat x] y]
+         (let [s (m/schema (m/all [x y] [:=> [:cat x] y]))]
+           (m/form
+             (m/-all-body (m/schema (m/all [x y] [:=> [:cat x] y]))
+                          (m/-all-fresh-names s))))))
+  (is (= '[:=> [:cat x__] y__]
+         (let [s (m/schema (m/all [x y] [:=> [:cat x] y]))]
+           (m/form
+             (m/-all-body (m/schema (m/all [x y] [:=> [:cat x] y])
+                                    {::m/verbose-locals true})
+                          (mapv #(with-meta (symbol (subs (name %) 0 3)) (meta %)) (m/-all-fresh-names s))))))))
