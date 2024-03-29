@@ -2880,6 +2880,7 @@
                            info (apply (:f info) args)
                            varargs-info (if (< arity (:min varargs-info)) (report-arity) (apply (:f varargs-info) args))
                            :else (report-arity))))))
+       ;; TODO add locals to options so they can propagate to guard
        :all (recur (assoc props :schema (-instantiate-for-instrumentation schema))
                    f
                    options)))))
