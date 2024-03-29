@@ -2860,7 +2860,9 @@
                  (let [value (apply f args)]
                    (when (and wrap-output (not (validate-output value)))
                      (report ::invalid-output {:output output, :value value, :args args, :schema schema}))
-                   (when (and wrap-guard (not (validate-guard [args value])))
+                   (when (and wrap-guard (not (validate-guard [args value {:props props
+                                                                           :f f
+                                                                           :options options}])))
                      (report ::invalid-guard {:guard guard, :value value, :args args, :schema schema}))
                    value))))
        :function (let [arity->info (->> (children schema)

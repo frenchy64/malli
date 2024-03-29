@@ -3395,3 +3395,13 @@
              (m/-all-body (m/schema (m/all [x y] [:=> [:cat x] y])
                                     {::m/verbose-locals true})
                           (mapv #(with-meta (symbol (subs (name %) 0 3)) (meta %)) (m/-all-fresh-names s))))))))
+
+(comment
+  (m/form
+    (m/schema
+      [:schema {:registry {::Reducer (m/tfn [a b] [:=> b a b])
+                           ::Transducer (m/tfn [in out]
+                                               (m/all [r]
+                                                      [:=> [::Reducer out r] [::Reducer in r]]))}}
+       (m/all [in out] [:=> [:=> in out] [::Transducer in out]])]))
+  )
