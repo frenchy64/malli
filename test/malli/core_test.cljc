@@ -3224,3 +3224,184 @@
                                              ::xymap [:merge ::xmap ::ymap]}}
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
+
+(deftest all-syntax-test
+  (is (= '[:all [a] [:=> [:cat a] a]]
+         (m/all [a] [:=> [:cat a] a])
+         #_(m/all [a :- :Schema] [:=> [:cat a] a])))
+  (is (= '[:all [a :- :Schema] [:=> [:cat a] a]]
+         (m/all [a :- :Schema] [:=> [:cat a] a])))
+  (is (= '[:all [a :*]
+           [:=> [:cat a] a]]
+         (m/all [a :*] [:=> [:cat a] a])))
+  ;;FIXME m/form for [:.. a a]
+  #_
+  (is (= '[:all [a :* b]
+           [:=> [:catn
+                 [:f [:=> [:catn [:pairwise-elements [:.. a a]]] b]]
+                 [:colls [:.. [:sequential a] a]]]
+            [:sequential b]]]
+         (m/form
+           (m/all [a :* b]
+                  [:=> [:catn
+                        [:f [:=> [:catn [:pairwise-elements [:.. a a]]]
+                             b]]
+                        [:colls [:.. [:sequential a] a]]]
+                   [:sequential b]]))))
+  (is (= '[:all [a] [:all [a] [:=> [:cat a] a]]]
+         (m/form (m/all [a] (m/all [a] [:=> [:cat a] a])))))
+  (testing "local in registry disallowed for now"
+    (is (thrown-with-msg?
+          #?(:clj Exception, :cljs js/Error)
+          #":malli\.core/unscoped-local-binding"
+          (m/form (m/all [a]
+                         [:schema {:registry {::Foo a}}
+                          [:=> [:cat ::Foo] ::Foo]])))))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.core/unscoped-local-binding"
+        (m/form [:schema {:registry {::Foo 'a}}
+                 (m/all [a]
+                        [:=> [:cat ::Foo] :any])]))))
+
+(deftest fv-test
+  (is (= '#{{:id a123
+             :original-name a
+             :kind :Schema}}
+         (m/-fv '[::m/local {:original-name a :kind :Schema} a123] nil)))
+  (is (= '#{{:id a123
+             :original-name a
+             :kind :Schema}}
+         (m/-fv (m/all [a] [:=> [:cat a]
+                            '[::m/local {:original-name a :kind :Schema} a123]])
+                nil))))
+
+(deftest subst-tv-test
+  (is (= :any (m/-subst-tv [::m/local 'a123]
+                           {'a123 :any}
+                           nil)))
+  (is (= [:sequential :any]
+         (m/form
+           (m/-subst-tv [:sequential [::m/local 'a]]
+                        {'a :any}
+                        nil))))
+  (is (= [:catn [:foo :any]]
+         (m/form
+           (m/-subst-tv [:catn [:foo [::m/local 'a]]]
+                        {'a :any}
+                        nil))))
+  (is (= '[:all [a] [:=> [:cat a] a]]
+         (m/all [a] [:=> [:cat a] a])
+         (m/form
+           (m/-subst-tv (m/all [a] [:=> [:cat a] a])
+                        {'a :any}
+                        nil))))
+  (is (= '[:all [a] [:=> [:cat a] :any]]
+         (m/all [a] [:=> [:cat a] :any])
+         (m/form
+           (m/-subst-tv (m/all [a] [:=> [:cat a] [::m/local 'b123]])
+                        {'b123 :any}
+                        nil))))
+  (is (= (m/all [a] [:=> [:cat a] 'a123])
+         (m/form
+           (m/-subst-tv (m/all [a] [:=> [:cat a] [::m/local 'b123]])
+                        {'b123 [::m/local {:original-name 'a} 'a123]}
+                        nil))))
+  (is (= (m/all [a] [:=> [:cat a] 'a123])
+         (m/form
+           (m/-subst-tv (m/all [a] [:=> [:cat a] [::m/local 'b123]])
+                        {'b123 [::m/local {:original-name 'b} 'a123]}
+                        nil)))))
+
+#_
+(deftest Schema-test
+  (is (m/validate :Schema :any))
+  ;; FIXME we need to figure out a better kind for regexes
+  (is (m/explain :Schema [:* :any])))
+
+(deftest -abstract-test
+  (is (= [:schema {::m/scope true} [::m/local 0]]
+         (m/form (m/-abstract [::m/local 'a] 'a nil))))
+  (is (= [:schema {::m/scope true} [:schema {::m/scope true} [::m/local 1]]]
+         (m/form (m/-abstract [:schema {::m/scope true} [::m/local 'a]] 'a nil))))
+  (is (= [:schema {::m/scope true}
+          [:schema {::m/scope true}
+           [:schema {::m/scope true}
+            [::m/local 2]]]]
+         (m/form (m/-abstract [:schema {::m/scope true}
+                               [:schema {::m/scope true}
+                                [::m/local 'a]]] 'a nil))))
+  (is (= [:schema {::m/scope true}
+          [:schema {::m/scope true}
+           [:schema {::m/scope true}
+            [:=> [:cat [::m/local 1]] [::m/local 2]]]]]
+         (m/form (m/-abstract [:schema {::m/scope true}
+                               [:schema {::m/scope true}
+                                [:=> [:cat [::m/local 1]] [::m/local 'a]]]]
+                              'a nil)))))
+
+(deftest -instantiate-test
+  (is (= :any
+         (m/form
+           (m/-instantiate [:schema {::m/scope true} [::m/local 0]]
+                           :any
+                           nil))))
+  (is (= [:schema {::m/scope true} :int]
+         (m/form
+           (m/-instantiate
+             [:schema {::m/scope true} [:schema {::m/scope true} [::m/local 1]]]
+             :int
+             nil))))
+  (is (= [:schema {::m/scope true}
+          [:schema {::m/scope true}
+           :int]]
+         (m/form
+           (m/-instantiate
+             [:schema {::m/scope true}
+              [:schema {::m/scope true}
+               [:schema {::m/scope true}
+                [::m/local 2]]]]
+             :int
+             nil))))
+  (is (= [:schema {::m/scope true}
+          [:schema {::m/scope true}
+           [:=> [:cat [::m/local 1]] :int]]]
+         (m/form
+           (m/-instantiate
+             [:schema {::m/scope true}
+              [:schema {::m/scope true}
+               [:schema {::m/scope true}
+                [:=> [:cat [::m/local 1]] [::m/local 2]]]]]
+             :int
+             nil)))))
+
+(deftest all-smart-constructor-destructor-test
+  (is (= '[:all [x] [:=> [:cat x] x]]
+         (m/form (m/schema (m/all [x] [:=> [:cat x] x])))))
+  (is (= '[:all [x y] [:=> [:cat x] y]]
+         (m/form (m/schema (m/all [x y] [:=> [:cat x] y])))))
+  (is (= '[:=> [:cat a] b]
+         (m/form
+           (m/-all-body (m/schema (m/all [x y] [:=> [:cat x] y]))
+                        '[a b]))))
+  (is (= '[:=> [:cat x] y]
+         (let [s (m/schema (m/all [x y] [:=> [:cat x] y]))]
+           (m/form
+             (m/-all-body (m/schema (m/all [x y] [:=> [:cat x] y]))
+                          (m/-all-fresh-names s))))))
+  (is (= '[:=> [:cat x__] y__]
+         (let [s (m/schema (m/all [x y] [:=> [:cat x] y]))]
+           (m/form
+             (m/-all-body (m/schema (m/all [x y] [:=> [:cat x] y])
+                                    {::m/verbose-locals true})
+                          (mapv #(with-meta (symbol (subs (name %) 0 3)) (meta %)) (m/-all-fresh-names s))))))))
+
+(comment
+  (m/form
+    (m/schema
+      [:schema {:registry {::Reducer (m/tfn [a b] [:=> b a b])
+                           ::Transducer (m/tfn [in out]
+                                               (m/all [r]
+                                                      [:=> [::Reducer out r] [::Reducer in r]]))}}
+       (m/all [in out] [:=> [:=> in out] [::Transducer in out]])]))
+  )

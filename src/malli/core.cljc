@@ -14,7 +14,8 @@
 
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
-         parser unparser ast from-ast)
+         parser unparser ast from-ast -all-schema -subst-tv -fv -parse-binder
+         -instantiate-many -abstract-many)
 
 ;;
 ;; protocols and records
@@ -85,6 +86,13 @@
   (-regex-parser [this] "returns the raw internal regex parser implementation")
   (-regex-transformer [this transformer method options] "returns the raw internal regex transformer implementation")
   (-regex-min-max [this nested?] "returns size of the sequence as {:min min :max max}. nil max means unbounded. nested? is true when this schema is nested inside an outer regex schema."))
+
+(defprotocol AllSchema
+  (-bounds [this] "return map of type variable name to bound")
+  (-all-fresh-names [this] "return names to instantiate body with")
+  (-all-body [this names] "return body using names")
+  (-instantiate-all [this schemas] "replace variables in polymorphic schema with schemas")
+  (-instantiate-for-instrumentation [this] "return the schema suitable for instrumentation"))
 
 (defn -ref-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.RefSchema x))
 (defn -entry-parser? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntryParser x))
@@ -167,7 +175,17 @@
 
 (defn -pointer [id schema options] (-into-schema (-schema-schema {:id id}) nil [schema] options))
 
+;; failed idea: can we have a lexically scoped registry?
+;; no, because options are passed around dynamically.
+;; e.g.,
+;; [:let [a :any] [:schema {:registry {::FOO a} [:ref ::FOO]]]
+;; vs 
+;; [:schema {:registry {::FOO a} [:let [a :any] [:ref ::FOO]]]
+;; you only encounter an occurrence of `a` dynamically so there's no way to
+;; know which lexical binding it corresponds to.
 (defn -reference? [?schema] (or (string? ?schema) (qualified-ident? ?schema) (var? ?schema)))
+
+(defn -local? [?schema] (simple-symbol? ?schema))
 
 (defn -lazy [ref options] (-into-schema (-ref-schema {:lazy true}) nil [ref] options))
 
@@ -254,7 +272,7 @@
   ([opts] (or (when opts (mr/registry (opts :registry))) default-registry)))
 
 (defn -property-registry [m options f]
-  (let [options (assoc options ::allow-invalid-refs true)]
+  (let [options (-> options (assoc ::allow-invalid-refs true) (dissoc ::local-scope))]
     (reduce-kv (fn [acc k v] (assoc acc k (f (schema v options)))) {} m)))
 
 (defn -delayed-registry [m f]
@@ -713,6 +731,13 @@
 (defn -qualified-keyword-schema [] (-simple-schema {:type :qualified-keyword, :pred qualified-keyword?, :property-pred -qualified-keyword-pred}))
 (defn -qualified-symbol-schema [] (-simple-schema {:type :qualified-symbol, :pred qualified-symbol?}))
 (defn -uuid-schema [] (-simple-schema {:type :uuid, :pred uuid?}))
+;; the schema of all schemas
+;; TODO hardcoding upper/lower bounds to :any/:never. when adding that support, make sure
+;; `function-checker` is updated.
+(defn -schema-schema-schema [] (-simple-schema {:type :Schema, :pred (fn [?schema]
+                                                                       (let [s (schema ?schema)]
+                                                                         (and (boolean s)
+                                                                              (not (-regex-op? s)))))}))
 
 (defn -and-schema []
   ^{:type ::into-schema}
@@ -1605,7 +1630,8 @@
        (-check-children! :ref properties children 1 1)
        (when-not (-reference? ref)
          (-fail! ::invalid-ref {:ref ref}))
-       (let [rf (or (and lazy (-memoize (fn [] (schema (mr/-schema (-registry options) ref) options))))
+       (let [options (dissoc options ::local-scope)
+             rf (or (and lazy (-memoize (fn [] (schema (mr/-schema (-registry options) ref) options))))
                     (when-let [s (mr/-schema (-registry options) ref)] (-memoize (fn [] (schema s options))))
                     (when-not allow-invalid-refs
                       (-fail! ::invalid-ref {:type :ref, :ref ref})))
@@ -1663,6 +1689,112 @@
            (-regex-transformer [this _ _ _] (-fail! ::potentially-recursive-seqex this))
            (-regex-min-max [this _] (-fail! ::potentially-recursive-seqex this))))))))
 
+(defn -local-schema []
+  ^{:type ::into-schema}
+  (reify
+    AST
+    (-from-ast [parent ast options] (-from-value-ast parent ast options))
+    IntoSchema
+    (-type [_] ::local)
+    (-type-properties [_])
+    (-into-schema [parent properties [id :as children] options]
+      (-check-children! ::local properties children 1 1)
+      (when-not (or (nat-int? id) (simple-symbol? id))
+        (-fail! ::invalid-local {:id id
+                                 :properties properties}))
+      (let [children (vec children)
+            {:keys [original-name kind]
+             :or {original-name id}} properties
+            kind kind ;(schema kind options) TODO
+            cache (-create-cache options)]
+        ^{:type ::schema}
+        (reify
+          AST
+          (-to-ast [this _] (-to-value-ast this))
+          Schema
+          (-validator [this] (-fail! ::uninstantiated-tv {:id original-name}))
+          (-explainer [this path] (-fail! ::uninstantiated-tv {:id original-name}))
+          (-parser [this] (-fail! ::uninstantiated-tv {:id original-name}))
+          (-unparser [this] (-fail! ::uninstantiated-tv {:id original-name}))
+          (-transformer [this transformer method options] (-fail! ::uninstantiated-tv {:id original-name}))
+          (-walk [this walker path options] (-walk-leaf this walker path options))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] (if (number? id)
+                       [::local id]
+                       (if (::verbose-locals options)
+                         id
+                         original-name)))
+          Cached
+          (-cache [_] cache)
+          ;LensSchema
+          ;(-get [_ key default] (if (= key 0) (-pointer id (rf) options) default))
+          ;(-keep [_])
+          ;(-set [this key value] (if (= key 0) (-set-children this [value])
+          ;                                     (-fail! ::index-out-of-bounds {:schema this, :key key})))
+          RegexSchema
+          (-regex-op? [_] (-regex-op? kind))
+          (-regex-validator [this] (-fail! ::uninstantiated-tv {:id original-name}))
+          (-regex-explainer [this _] (-fail! ::uninstantiated-tv {:id original-name}))
+          (-regex-parser [this] (-fail! ::uninstantiated-tv {:id original-name}))
+          (-regex-unparser [this] (-fail! ::uninstantiated-tv {:id original-name}))
+          (-regex-transformer [this _ _ _] (-fail! ::uninstantiated-tv {:id original-name}))
+          (-regex-min-max [this _] (-fail! ::uninstantiated-tv {:id original-name})))))))
+
+(defn -dotted-pretype-schema []
+  ^{:type ::into-schema}
+  (reify
+    AST
+    (-from-ast [parent ast options] (-from-value-ast parent ast options))
+    IntoSchema
+    (-type [_] :..)
+    (-type-properties [_])
+    (-into-schema [parent properties children options]
+      (-check-children! :.. properties children 2 2)
+      (let [[pretype bound :as children] (-vmap #(schema % options) children)
+            ;bound (or bound pretype)
+            _ (when-not (= ::local (type bound))
+                (-fail! ::invalid-dotted-variable bound))
+            form (delay (-simple-form parent properties children identity options))
+            cache (-create-cache options)]
+        ^{:type ::schema}
+        (reify
+          AST
+          (-to-ast [this _] (-to-value-ast this))
+          Schema
+          (-validator [this] (-fail! ::uninstantiated-... this))
+          (-explainer [this path] (-fail! ::uninstantiated-... this))
+          (-parser [this] (-fail! ::uninstantiated-... this))
+          (-unparser [this] (-fail! ::uninstantiated-... this))
+          (-transformer [this transformer method options] (-fail! ::uninstantiated-... this))
+          (-walk [this walker path options]
+            (when (-accept walker this path options)
+              (-outer walker this path [(-inner walker pretype (conj path ::pretype) options)
+                                        (-inner walker bound (conj path ::bound) options)]
+                      options)))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] @form)
+          Cached
+          (-cache [_] cache)
+          ;LensSchema
+          ;(-get [_ key default] (if (= key 0) (-pointer tv (rf) options) default))
+          ;(-keep [_])
+          ;(-set [this key value] (if (= key 0) (-set-children this [value])
+          ;                                     (-fail! ::index-out-of-bounds {:schema this, :key key})))
+          RegexSchema
+          (-regex-op? [_] false)
+          (-regex-validator [this] (-fail! ::uninstantiated-... this))
+          (-regex-explainer [this _] (-fail! ::uninstantiated-... this))
+          (-regex-parser [this] (-fail! ::uninstantiated-... this))
+          (-regex-unparser [this] (-fail! ::uninstantiated-... this))
+          (-regex-transformer [this _ _ _] (-fail! ::uninstantiated-... this))
+          (-regex-min-max [this _] (-fail! ::uninstantiated-... this)))))))
+
 (defn -schema-schema [{:keys [id raw]}]
   ^{:type ::into-schema}
   (let [internal (or id raw)
@@ -1698,8 +1830,7 @@
             (-unparser [_] (-unparser child))
             (-transformer [this transformer method options]
               (-parent-children-transformer this children transformer method options))
-            (-walk [this walker path options]
-              (when (-accept walker this path options)
+            (-walk [this walker path options] (when (-accept walker this path options)
                 (if (or (not id) ((-boolean-fn (::walk-schema-refs options false)) id))
                   (-outer walker this path (-inner-indexed walker path children options) options)
                   (-outer walker this path children options))))
@@ -2054,9 +2185,17 @@
                          (if (or (nil? ?p) (map? ?p))
                            (into-schema t ?p (when (< 2 n) (subvec ?schema 2 n)) options)
                            (into-schema t nil (when (< 1 n) (subvec ?schema 1 n)) options)))
-     :else (if-let [?schema' (and (-reference? ?schema) (-lookup ?schema options))]
-             (-pointer ?schema (schema ?schema' options) options)
-             (-> ?schema (-lookup! ?schema nil false options) (recur options))))))
+     :else (let [ref? (-reference? ?schema)
+                 options-no-locals (when ref? (dissoc options ::local-scope))]
+             (if-let [?schema' (and ref? (-lookup ?schema options-no-locals))]
+               (-pointer ?schema (schema ?schema' options) options-no-locals)
+               (if (-local? ?schema)
+                 (let [{::keys [local-scope]} options
+                       local-info (or (get local-scope ?schema)
+                                      (-fail! ::unscoped-local-binding {:schema ?schema
+                                                                        :scope (set (keys local-scope))}))]
+                   (-into-schema (-local-schema) local-info [?schema] options))
+                 (-> ?schema (-lookup! ?schema nil false options) (recur options))))))))
 
 (defn form
   "Returns the Schema form"
@@ -2489,6 +2628,105 @@
                                   :re-transformer (fn [_ children] (apply re/alt-transformer children))
                                   :re-min-max (fn [_ children] (reduce -re-alt-min-max {:max 0} (-vmap last children)))})})
 
+(defn -all-schema []
+  ^{:type ::into-schema}
+  (reify IntoSchema
+    (-type [_] :all)
+    (-type-properties [_])
+    (-properties-schema [_ _])
+    (-children-schema [_ _])
+    (-into-schema [parent properties children {::keys [function-checker] :as options}]
+      (-check-children! :all properties children 2 2)
+      (let [[binder-syntax body-syntax] children
+            {:keys [binder syms]} (-parse-binder binder-syntax)
+            ->gsyms (fn []
+                      (mapv #(with-meta (symbol (str (name %) "__" (random-uuid)))
+                                        {::original-name %})
+                            syms))
+            bounds (mapv second binder)
+            sym->local-info (into {} (map (fn [sym kind]
+                                            {sym {:kind kind
+                                                  :id sym}})
+                                          syms
+                                          bounds))
+            nbound (count syms)
+            instrumenting-binder (mapv #(case %
+                                          :Schema :any
+                                          :* [:* :any]
+                                          :+ [:* :any])
+                                       bounds)
+            body (schema body-syntax (update options ::local-scope (fnil into {})
+                                             sym->local-info))
+            body (-abstract-many body (map (comp :id sym->local-info) syms) options)
+            ->inst-body (fn [images]
+                          (-instantiate-many body images options))
+            ;; TODO inspect free variables and determine whether it's safe to
+            ;; use the original names
+            form (delay
+                   [:all binder-syntax
+                    (-form (->inst-body (mapv #(vector ::local
+                                                       {:original-name (-> sym->local-info % :original-name)}
+                                                       %)
+                                              syms)))])
+            children [binder body]
+            cache (-create-cache options)
+            ->checker (if function-checker #(function-checker % options) (constantly nil))]
+        ^{:type ::schema}
+        (reify
+          Schema
+          (-validator [this]
+            (if-let [checker (->checker this)]
+              (let [validator (fn [x] (nil? (checker x)))]
+                (fn [x] (and (ifn? x) (validator x)))) ifn?))
+          (-explainer [this path]
+            (if-let [checker (->checker this)]
+              (fn explain [x in acc]
+                (if (not (fn? x))
+                  (conj acc (miu/-error path in this x))
+                  (if-let [res (checker x)]
+                    (conj acc (assoc (miu/-error path in this x) :check res))
+                    acc)))
+              (let [validator (-validator this)]
+                (fn explain [x in acc]
+                  (if-not (validator x) (conj acc (miu/-error path in this x)) acc)))))
+          (-parser [this]
+            (let [validator (-validator this)]
+              (fn [x] (if (validator x) x ::invalid))))
+          (-unparser [this] (-parser this))
+          (-transformer [_ _ _ _])
+          (-walk [this walker path options]
+            (when (-accept walker schema path options)
+              (-outer walker this path [binder-syntax (-inner walker body (conj path ::body) options)] options)))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] @form)
+          Cached
+          (-cache [_] cache)
+          AllSchema
+          (-bounds [_] binder)
+          (-all-fresh-names [_] (->gsyms))
+          (-all-body [_ fresh-names]
+            (->inst-body (mapv (fn [id kind]
+                                 [::local {:original-name (-> id meta ::original-name)
+                                           :kind kind}
+                                  id])
+                               fresh-names
+                               bounds)))
+          (-instantiate-all [_ schemas]
+            (when-not (= nbound (count schemas))
+              (-fail! ::wrong-number-of-schemas-to-instantiate))
+            ;; TODO check schemas against bounds
+            ;; note that :Schema is a non-regex schema. kind for sequences of schemas tbd
+            (-subst-tv body (zipmap syms schemas) options))
+          (-instantiate-for-instrumentation [this]
+            (-instantiate-all this instrumenting-binder))
+          LensSchema
+          (-keep [_])
+          (-get [_ key default] (get children key default))
+          (-set [this key value] (-set-assoc-children this key value)))))))
+
 (defn base-schemas []
   {:and (-and-schema)
    :or (-or-schema)
@@ -2508,7 +2746,11 @@
    :ref (-ref-schema)
    :=> (-=>-schema)
    :function (-function-schema nil)
+   :all (-all-schema)
+   ::local (-local-schema)
    :schema (-schema-schema nil)
+   :Schema (-schema-schema-schema)
+   :.. (-dotted-pretype-schema)
    ::schema (-schema-schema {:raw true})})
 
 (defn default-schemas []
@@ -2551,7 +2793,10 @@
   ([?schema] (function-schema ?schema nil))
   ([?schema options]
    (let [s (schema ?schema options), t (type s)]
-     (if (#{:=> :function} t) s (-fail! ::invalid-=>schema {:type t, :schema s})))))
+     (case t
+       (:=> :function) s
+       :all (function-schema (-instantiate-for-instrumentation s) options)
+       (-fail! ::invalid-=>schema {:type t, :schema s})))))
 
 ;; for cljs we cannot invoke `function-schema` at macroexpansion-time
 ;; - `?schema` could contain cljs vars that will only resolve at runtime.
@@ -2615,7 +2860,9 @@
                  (let [value (apply f args)]
                    (when (and wrap-output (not (validate-output value)))
                      (report ::invalid-output {:output output, :value value, :args args, :schema schema}))
-                   (when (and wrap-guard (not (validate-guard [args value])))
+                   (when (and wrap-guard (not (validate-guard [args value {:props props
+                                                                           :f f
+                                                                           :options options}])))
                      (report ::invalid-guard {:guard guard, :value value, :args args, :schema schema}))
                    value))))
        :function (let [arity->info (->> (children schema)
@@ -2632,4 +2879,281 @@
                          (cond
                            info (apply (:f info) args)
                            varargs-info (if (< arity (:min varargs-info)) (report-arity) (apply (:f varargs-info) args))
-                           :else (report-arity))))))))))
+                           :else (report-arity))))))
+       ;; TODO add locals to options so they can propagate to guard
+       :all (recur (assoc props :schema (-instantiate-for-instrumentation schema))
+                   f
+                   options)))))
+
+;; -abstract / -instantiate for locally nameless representation
+;; See "I am not a number: I am a free variable" - Conor McBride and James McKinna
+
+(defn -abstract [?schema nme options]
+  (let [inner (fn [this s path options]
+                (-walk s this path
+                       (cond-> options
+                         (::scope (-properties s)) (update ::abstract-index inc))))
+        outer (fn [s path children {::keys [abstract-index] :as options}]
+                (let [s (-set-children s children)]
+                  (case (type s)
+                    ::local (let [[id] children]
+                              (if (= nme id)
+                                (-set-children s [abstract-index])
+                                s))
+                    ::val (first children)
+                    s)))]
+    (schema
+      [:schema {::scope true}
+       (inner
+         (reify Walker
+           (-accept [_ s path options] true)
+           (-inner [this s path options] (inner this s path options))
+           (-outer [_ schema path children options]
+             (outer schema path children options)))
+         (schema ?schema options)
+         []
+         (assoc options
+                ::walk-refs false
+                ::walk-schema-refs false
+                ::walk-entry-vals true
+                ::abstract-index 0))]
+      options)))
+
+(defn -abstract-many [s names options]
+  (reduce (fn [s nme]
+            (-abstract s nme options))
+          s names))
+
+(defn -instantiate [?scope to options]
+  (let [to (schema to options)
+        inner (fn [this s path options]
+                (-walk s this path
+                       (cond-> options
+                         (::scope (-properties s)) (update ::instantiate-index inc))))
+        outer (fn [s path children {::keys [instantiate-index] :as options}]
+                (let [s (-set-children s children)]
+                  (case (type s)
+                    ::local (let [[id] children]
+                              (if (= instantiate-index id)
+                                to
+                                s))
+                    ::val (first children)
+                    s)))
+        s (schema ?scope options)
+        _ (when-not (-> s -properties ::scope)
+            (-fail! ::instantiate-non-scope {:schema s}))]
+    (inner
+      (reify Walker
+        (-accept [_ s path options] true)
+        (-inner [this s path options] (inner this s path options))
+        (-outer [_ schema path children options]
+          (outer schema path children options)))
+      (first (-children s))
+      []
+      (assoc options
+             ::walk-refs false
+             ::walk-schema-refs false
+             ::walk-entry-vals true
+             ::instantiate-index 0))))
+
+(defn -instantiate-many [s images options]
+  (reduce (fn [s image]
+            (-instantiate s image options))
+          s (rseq images)))
+
+(defn -all-names [s]
+  (map #(nth % 0) (-bounds s)))
+
+(defn -fv [?schema options]
+  (let [fvs (atom #{})
+        inner (fn [this s p options]
+                (case (type s)
+                  :all (-walk s this p (update options ::bound-tvs into (-all-names s)))
+                  (-walk s this p options)))]
+    (inner (reify Walker
+             (-accept [_ s _ _] s)
+             (-inner [this s p options]
+               (inner this s p options))
+             (-outer [_ s p c {::keys [bound-tvs] :as options}]
+               (case (type s)
+                 ::local (let [id (first c)]
+                           ;;TODO when id is simple-symbol?
+                           (when-not (contains? bound-tvs id)
+                             (swap! fvs conj (assoc (-properties s) :id id))))
+                 ;;TODO think harder about :..
+                 nil)
+               s))
+           (schema ?schema options)
+           []
+           (assoc options
+                  ::walk-refs false
+                  ::walk-schema-refs false
+                  ::walk-entry-vals true
+                  ::bound-tvs #{}))
+    @fvs))
+
+;;TODO capture avoidance
+(defn -subst-tv [?schema tv->schema options]
+  (let [inner (fn [this s path options]
+                (case (type s)
+                  ;; TODO rename :all binder if name capturing will occur
+                  :all (-walk s this path (update options ::tv->schema
+                                                  (fn [tv->schema]
+                                                    (let [shadowed (-all-names s)]
+                                                      (apply dissoc tv->schema shadowed)))))
+                  :.. (-fail! ::todo-subst-tv-for-dotted-schema)
+                  (-walk s this path options)))
+        outer (fn [s path children {::keys [tv->schema] :as options}]
+                (let [s (-set-children s children)]
+                  (case (type s)
+                    ::local (let [[id] children]
+                              (if-some [[_ v] (find tv->schema id)]
+                                v
+                                s))
+                    ::val (first children)
+                    s)))]
+    (inner
+      (reify Walker
+        (-accept [_ s path options] true)
+        (-inner [this s path options] (inner this s path options))
+        (-outer [_ schema path children options]
+          (outer schema path children options)))
+      (schema ?schema options)
+      []
+      (assoc options
+             ::walk-refs false
+             ::walk-schema-refs false
+             ::walk-entry-vals true
+             ::tv->schema tv->schema))))
+
+(defn -parse-binder [binder]
+  (when-not (seq binder)
+    (-fail! ::empty-binder binder))
+  (let [binder (loop [binder binder
+                      out []]
+                 (if (empty? binder)
+                   out
+                   (let [[sym colon s] binder]
+                     (if (vector? sym)
+                       (let [[sym kind :as all] sym]
+                         (when (not= 2 (count all))
+                           (-fail! ::binder-non-pair all))
+                         (when-not (simple-symbol? sym)
+                           (-fail! ::non-simple-symbol-binder sym))
+                         (recur (next binder)
+                                (conj out all)))
+                       (do (when-not (simple-symbol? sym)
+                             (-fail! ::non-simple-symbol-binder sym))
+                           (if-some [k (#{:+ :*} colon)]
+                             (recur (nthnext binder 2)
+                                    (conj out [sym k]))
+                             (if (= :- colon)
+                               (do (when-not s
+                                     (-fail! ::missing-all-bound sym))
+                                   (recur (nthnext binder 3)
+                                          (conj out [sym s])))
+                               (recur (next binder)
+                                      (conj out [sym :Schema])))))))))
+        syms (mapv first binder)]
+    (when-not (apply distinct? syms)
+      (-fail! ::repeated-bound-local syms))
+    {:binder binder
+     :syms syms}))
+
+
+;;TODO kind annotations. try [:sequential :Schema] for non-uniform variable arity polymorphism,
+;; #'nat-int for dependently typed functions.
+;; idea: dependent :cat? not very promising, raises too many questions.
+;; [:dcat :int [:string {:min [:local 0], :max 4}]]
+;; [:dcatn [:i :int],
+;;         [:m {:depends [:i]} (fn [{:keys [i]}] [:string {:min i, :max 4}])]]
+;; e.g., schema for variable-arity map
+#_
+(all [a :- :Schema
+      b :- :Schema
+      ;; defaults to [:* :any]
+      c :- [:* :Schema]]
+     [:=> [:cat [:=> [:cat a [:.. c c]]
+                 b]
+           [:sequential a]
+           [:.. [:sequential c] c]]
+      [:sequential b]])
+
+#?(:clj
+   (defmacro tfn [binder body]
+     (let [original-binder binder
+           {:keys [binder syms]} (-parse-binder binder)]
+       `[:tfn '~original-binder
+         (let [~@(mapcat (fn [s] [s (list 'quote s)])
+                         syms)]
+           ~body)])))
+
+;;TODO refinement types
+#_ ;;nth just checking length
+(m/all [x]
+       [:=> {:and (m/refine [v i]
+                            [:and
+                             [:<= 0 i]
+                             [:< i [:count v]]])}
+        [:cat [:vector x] :int]
+        x])
+#_ ;; TODO polymorphic refinement type
+(m/all [x :*, n :< nat-int?]
+       [:=> {:and (m/refine {{:keys [v i]} :args}
+                            [:< i [:count v]])}
+        [:catn
+         [:v [:schema x]]
+         [:i n]]
+        [:..nth x n]])
+
+#_
+(m/all [m :< :map-of k]
+       [:=>
+        [:cat m k]
+        [:get m k]])
+
+#_
+(m/all [c :< :sequential
+        i :< nat-int?]
+       [:=> {:and (m/refine {[c i] :args}
+                            [:< i [:count c]])}
+        [:cat c i]
+        [:nth c i]])
+
+[:inst ::nth [:schema [:cat :a :b :c]] [:= 0]]
+;=> [:=> {:and ..} [:cat [:schema [:cat :a :b :c]] [:= 0]] :a]]
+[:inst ::nth :sequential nat-int?]
+;=> [:=> {:and ..} [:cat :sequential :nat-int] :any]]
+
+(comment
+  [:inst ::nth [:cat :a :b :c] [:= 2]]
+  ;=> [:=> {:and ..} [:cat [:schema [:cat :a :b :c]] [:= 2]] :c]
+  [:inst ::nth [:* :int] nat-int?]
+  ;=> [:=> {:and ..} [:cat [:schema [:* :int]] nat-int?] :int]
+  ;; for instrumentation:
+  [:inst ::nth [:* :any] nat-int?]
+  ;=> [:=> {:and ..} [:cat [:schema [:* :any]] nat-int?] :any]
+  [:..nth [:* :int] nat-int?]
+  ;=> int?
+  [:..nth [:cat :a :b] [:= 0]]
+  ;=> :a
+  [:..nth [:cat :a :b] nat-int?]
+  ;=> [:or :a :b])
+
+;; TODO continue with *tv-scope* to parse free variables
+;; 1. syntax is written as simple symbols like `a`
+;; 2. they are parsed into `::local` schemas using dynamic binding for scoping
+;; 3. TODO walk entire schema while dynamic binding is in effect to parse
+;;    fv's in registries defined in local properties. might need to allow
+;;    invalid refs, then immediately return the m/form back as the result
+;;    of the ref.
+;; 4. figure out how to print a fv. should we print a gensym then rewrite
+;;    prettier if possible? or pass down a map (dynamically?) of which name to use? or something else?
+#?(:clj
+   (defmacro all [binder body]
+     (let [original-binder binder
+           {:keys [binder syms]} (-parse-binder binder)]
+       `[:all '~original-binder
+         (let [~@(mapcat (fn [s] [s (list 'quote s)])
+                         syms)]
+           ~body)])))

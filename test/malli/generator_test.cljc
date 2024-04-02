@@ -919,3 +919,15 @@
                        {:seed 2})]
     (is (vector? v))
     (is (seq v))))
+
+(deftest schema-kind-generators-test
+  (is (= [:enum 'M]
+         (mg/generate :Schema
+                      {:size 0
+                       :seed 0})))
+  (is (= :any (mg/generate :Schema
+                           {:size 0
+                            :seed 1})))
+  (is (= :any (mg/generate [:+ :Schema]
+                           {:size 0
+                            :seed 1}))))

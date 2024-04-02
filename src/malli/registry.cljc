@@ -10,7 +10,8 @@
 
 (defprotocol Registry
   (-schema [this type] "returns the schema from a registry")
-  (-schemas [this] "returns all schemas from a registry"))
+  (-schemas [this] "returns all schemas from a registry")
+  (-clear-locals [this] "clears local schemas from a registry"))
 
 (defn registry? [x] (#?(:clj instance?, :cljs implements?) malli.registry.Registry x))
 

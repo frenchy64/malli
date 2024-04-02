@@ -317,3 +317,19 @@
 
 (deftest maybe-ast-test
   (is (ast/generator-ast [:maybe :boolean])))
+
+(deftest schema-schema-test
+  (let [{[sized] :args} (ast/generator-ast :Schema)]
+    (is (= [ast/-vals-to-enum-schema
+            {:op :vector
+             :generator {:op :one-of
+                         :generators [{:op :return, :value nil}
+                                      {:op :boolean}
+                                      {:args [identity {:op :uuid}], :args-form '[identity gen/uuid], :op :fmap}
+                                      {:op :large-integer}
+                                      {:op :keyword}
+                                      {:op :string-alphanumeric}
+                                      {:op :symbol}
+                                      {:op :uuid}]}
+             :num-elements 1}] 
+           (:args (first (:generators (sized 0))))))))
