@@ -3106,6 +3106,25 @@
          [:i n]]
         [:..nth x n]])
 
+#_
+(m/all [m :< :map-of k]
+       [:=>
+        [:cat m k]
+        [:get m k]])
+
+#_
+(m/all [c :< :sequential
+        i :< nat-int?]
+       [:=> {:and (m/refine {[c i] :args}
+                            [:< i [:count c]])}
+        [:cat c i]
+        [:nth c i]])
+
+[:inst ::nth [:schema [:cat :a :b :c]] [:= 0]]
+;=> [:=> {:and ..} [:cat [:schema [:cat :a :b :c]] [:= 0]] :a]]
+[:inst ::nth :sequential nat-int?]
+;=> [:=> {:and ..} [:cat :sequential :nat-int] :any]]
+
 (comment
   [:inst ::nth [:cat :a :b :c] [:= 2]]
   ;=> [:=> {:and ..} [:cat [:schema [:cat :a :b :c]] [:= 2]] :c]
