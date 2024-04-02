@@ -3088,6 +3088,39 @@
                          syms)]
            ~body)])))
 
+;;TODO refinement types
+#_ ;;nth just checking length
+(m/all [x]
+       [:=> {:and (m/refine [v i]
+                            [:and
+                             [:<= 0 i]
+                             [:< i [:count v]]])}
+        [:cat [:vector x] :int]
+        x])
+#_ ;; TODO polymorphic refinement type
+(m/all [x :*, n :< nat-int?]
+       [:=> {:and (m/refine {{:keys [v i]} :args}
+                            [:< i [:count v]])}
+        [:catn
+         [:v [:schema x]]
+         [:i n]]
+        [:..nth x n]])
+
+(comment
+  [:inst ::nth [:cat :a :b :c] [:= 2]]
+  ;=> [:=> {:and ..} [:cat [:schema [:cat :a :b :c]] [:= 2]] :c]
+  [:inst ::nth [:* :int] nat-int?]
+  ;=> [:=> {:and ..} [:cat [:schema [:* :int]] nat-int?] :int]
+  ;; for instrumentation:
+  [:inst ::nth [:* :any] nat-int?]
+  ;=> [:=> {:and ..} [:cat [:schema [:* :any]] nat-int?] :any]
+  [:..nth [:* :int] nat-int?]
+  ;=> int?
+  [:..nth [:cat :a :b] [:= 0]]
+  ;=> :a
+  [:..nth [:cat :a :b] nat-int?]
+  ;=> [:or :a :b])
+
 ;; TODO continue with *tv-scope* to parse free variables
 ;; 1. syntax is written as simple symbols like `a`
 ;; 2. they are parsed into `::local` schemas using dynamic binding for scoping
