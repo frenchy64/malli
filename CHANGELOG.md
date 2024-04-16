@@ -14,7 +14,7 @@ We use [Break Versioning][breakver]. The version numbers follow a `<major>.<mino
 
 Malli is in well matured [alpha](README.md#alpha).
 
-## UNRELEASED
+## 0.15.0 (2024-03-23)
 
 * `:=>` takes optional 3rd child, the guard schema validating vector of arguments and return value `[args ret]`. See [Function Guards](docs/function-schemas.md#function-guards) for more details. Fixes [#764](https://github.com/metosin/malli/issues/764) and [#764](https://github.com/metosin/malli/issues/764).
 
@@ -32,6 +32,11 @@ Malli is in well matured [alpha](README.md#alpha).
   * new `::m/explain-guard` to return guard explanation, if any
 * `m/explain` for `:=>` returns also errors for args, return and guard if they exist
 * FIX `m/deref-recursive` doesn't play nice with `:merge` schema [#997](https://github.com/metosin/malli/issues/997) via [#999](https://github.com/metosin/malli/pull/999)
+* FIX nested `:repeat` sequence schema's doesn't seem to work [#761](https://github.com/metosin/malli/issues/761) via [#1024](https://github.com/metosin/malli/pull/1024)
+* FIX Invalid Swagger JSON with `[:or :nil]` alternatives [#1006](https://github.com/metosin/malli/issues/1006) via [#1023](https://github.com/metosin/malli/pull/1023)
+* FIX `(explain :tuple [])` [#1022](https://github.com/metosin/malli/pull/1022)
+* Enforce entry specs in open map destructurings [#1021](https://github.com/metosin/malli/pull/1021)
+* FIX `goog/mixin` was deprecated and is now removed [#1016](https://github.com/metosin/malli/pull/1016)
 
 * Updated dependencies:
 
