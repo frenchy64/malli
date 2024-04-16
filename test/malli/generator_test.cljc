@@ -1006,16 +1006,9 @@
     (is (vector? v))
     (is (seq v))))
 
-(deftest map-of-min-max-test
-  (is (empty? (remove #(<= 2 (count %))
-                      (mg/sample [:map-of {:min 2} [:enum 1 2 3] :any]
-                                 {:size 100}))))
-  (is (empty? (remove #(<= (count %) 2)
-                      (mg/sample [:map-of {:max 2} [:enum 1 2 3] :any]
-                                 {:size 100}))))
-  (is (empty? (remove #(<= 2 (count %) 3)
-                      (mg/sample [:map-of {:min 2 :max 3} [:enum 1 2 3] :any]
-                                 {:size 100})))))
+(deftest never-test
+  (is (thrown-with-msg? Exception #"Cannot generate values due to infinitely expanding schema: :never"
+                        (mg/generate :never))))
 
 (deftest such-that-generator-failure-test
   (is (thrown-with-msg?
@@ -1034,3 +1027,28 @@
         #?(:clj Exception, :cljs js/Error)
         #":malli\.generator/and-generator-failure"
         (mg/generate [:and pos? neg?]))))
+
+(deftest into-map-test
+  (is (mg/generate [:into-map [:sequential [:tuple :int :int]]]))
+  (is (mg/generate [:into-map [:cat [:tuple :int :int]]]))
+  (is (mg/generate [:into-map [:* [:tuple :int :int]]]))
+  (is (thrown-with-msg? Exception
+                        #"Couldn't satisfy such-that predicate after 100 tries\."
+                        (mg/generate [:into-map [:cat
+                                                 [:tuple [:= 1] :int]
+                                                 [:tuple [:= 1] :int]]])))
+  (is (mg/generate [:into-map [:cat
+                               [:* [:tuple [:enum 1 2] :nil]]
+                               [:+ [:tuple [:enum 1] :nil]]
+                               [:* [:tuple [:enum 1 2] :nil]]]])))
+
+(deftest map-of-min-max-test
+  (is (empty? (remove #(<= 2 (count %))
+                      (mg/sample [:map-of {:min 2} [:enum 1 2 3] :any]
+                                 {:size 100}))))
+  (is (empty? (remove #(<= (count %) 2)
+                      (mg/sample [:map-of {:max 2} [:enum 1 2 3] :any]
+                                 {:size 100}))))
+  (is (empty? (remove #(<= 2 (count %) 3)
+                      (mg/sample [:map-of {:min 2 :max 3} [:enum 1 2 3] :any]
+                                 {:size 100})))))

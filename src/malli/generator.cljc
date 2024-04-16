@@ -9,6 +9,7 @@
             [clojure.test.check.rose-tree :as rose]
             [malli.core :as m]
             [malli.registry :as mr]
+            [malli.impl.ref :refer [-identify-ref-schema]]
             [malli.impl.util :refer [-last -merge]]
             #?(:clj [borkdude.dynaload :as dynaload])))
 
@@ -61,7 +62,7 @@
               ::original-generator-schema original-generator-schema}))
 
 (defn -unreachable-gen?
-  "Returns true iff generator g generators no values."
+  "Returns true iff generator g generates no values."
   [g] (-> (meta g) ::never-gen boolean))
 
 (defn -not-unreachable [g] (when-not (-unreachable-gen? g) g))
@@ -204,6 +205,15 @@
                      (assoc :ex-fn #(m/-exception ::distinct-generator-failure (assoc % :schema schema))))]
         (gen/fmap #(into {} %) (gen/vector-distinct-by first (gen/tuple k-gen v-gen) opts))))))
 
+(defn -into-map-gen [schema options]
+  (let [{:keys [min max]} (-min-max schema options)
+        [es-gen :as gs] (map #(generator % options) (m/children schema options))]
+    (if (-unreachable-gen? es-gen)
+      (-never-gen options)
+      (gen/such-that (m/validator schema options)
+                     (gen/fmap #(into {} %) es-gen)
+                     100))))
+
 #?(:clj
    (defn -re-gen [schema options]
      ;; [com.gfredericks/test.chuck "0.2.10"+]
@@ -308,10 +318,6 @@
 ;;    [:schema {:registry {::b :int}}
 ;;     ;; (1)
 ;;     [:or [:ref ::a] [:ref ::b]]]]
-
-(defn- -identify-ref-schema [schema]
-  {:scope (-> schema m/-options m/-registry mr/-schemas)
-   :name (m/-ref schema)})
 
 (defn -ref-gen [schema options]
   (let [ref-id (-identify-ref-schema schema)]
@@ -427,6 +433,7 @@
 (defmethod -schema-generator ::m/val [schema options] (generator (first (m/children schema)) options))
 (defmethod -schema-generator :map [schema options] (-map-gen schema options))
 (defmethod -schema-generator :map-of [schema options] (-map-of-gen schema options))
+(defmethod -schema-generator :into-map [schema options] (-into-map-gen schema options))
 (defmethod -schema-generator :multi [schema options] (-multi-gen schema options))
 (defmethod -schema-generator :vector [schema options] (-coll-gen schema identity options))
 (defmethod -schema-generator :sequential [schema options] (-coll-gen schema identity options))
@@ -445,6 +452,7 @@
       (-never-gen options))))
 #?(:clj (defmethod -schema-generator :re [schema options] (-re-gen schema options)))
 (defmethod -schema-generator :any [_ _] (ga/gen-for-pred any?))
+(defmethod -schema-generator :never [_ options] (-never-gen options))
 (defmethod -schema-generator :some [_ _] gen/any-printable)
 (defmethod -schema-generator :nil [_ _] nil-gen)
 (defmethod -schema-generator :string [schema options] (-string-gen schema options))

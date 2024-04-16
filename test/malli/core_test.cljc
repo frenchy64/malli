@@ -3224,3 +3224,19 @@
                                              ::xymap [:merge ::xmap ::ymap]}}
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
+
+(deftest never-test
+  (is (m/explain :never 1))
+  (is (= ::m/invalid (m/parse :never 1)))
+  (is (= ::m/invalid (m/unparse :never 1)))
+  (is (not (m/validate :never 1))))
+
+(deftest into-map-test
+  (is (m/validate [:into-map [:sequential [:tuple :int :int]]]
+                  {1 2 3 4}))
+  (is (not (m/validate [:into-map [:sequential [:tuple :int :int]]]
+                       {1 2 nil 4})))
+  (is (nil? (m/explain [:into-map [:sequential [:tuple :int :int]]]
+                       {1 2 3 4})))
+  (is (m/explain [:into-map [:sequential [:tuple :int :int]]]
+                 {1 2 nil 4})))

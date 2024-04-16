@@ -90,6 +90,7 @@
                                   (str "either " (->> (m/children schema) butlast (str/join ", "))
                                        " or " (last (m/children schema))))))}}
    :any {:error/message {:en "should be any"}}
+   :never {:error/message {:en "should never exist"}}
    :nil {:error/message {:en "should be nil"}}
    :string {:error/fn {:en (fn [{:keys [schema value]} _]
                              (let [{:keys [min max]} (m/properties schema)]
