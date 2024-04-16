@@ -2,6 +2,7 @@
 (ns malli.generator
   (:require [clojure.spec.gen.alpha :as ga]
             [clojure.string :as str]
+            [clojure.set :as set]
             [clojure.test.check :as check]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
@@ -12,7 +13,7 @@
             [malli.impl.util :refer [-last -merge]]
             #?(:clj [borkdude.dynaload :as dynaload])))
 
-(declare generator generate -create)
+(declare generator generate -create sampling-eduction)
 
 (defprotocol Generator
   (-generator [this options] "returns generator for schema"))
@@ -323,11 +324,19 @@
                                         #(generator dschema (assoc-in options [::rec-gen ref-id] %))))))))
 
 (defn -=>-gen [schema options]
-  (let [output-generator (generator (:output (m/-function-info schema)) options)]
-    (gen/return (m/-instrument {:schema schema} (fn [& _] (generate output-generator options))))))
+  (let [output-generator (-> schema m/-function-info :output (generator options))
+        next-output (let [a (atom (sampling-eduction output-generator
+                                                     (update options :size #(or % 30))))]
+                      (fn []
+                        (ffirst (swap-vals! a rest))))]
+    (gen/return (m/-instrument {:schema schema}
+                               (fn [& _]
+                                 (next-output))
+                               options))))
 
 (defn -function-gen [schema options]
-  (gen/return (m/-instrument {:schema schema, :gen #(generate % options)} options)))
+  (gen/return (m/-instrument {:schema schema, :gen #(generate % options)} nil options)))
+
 
 (defn -regex-generator [schema options]
   (if (m/-regex-op? schema)
@@ -531,31 +540,84 @@
 ;; public api
 ;;
 
+(defn- current-time []
+  #?(:clj  (System/currentTimeMillis)
+     :cljs (.valueOf (js/Date.))))
+
+(defn init-generator-options [options]
+  (-> options
+      (update ::state #(or % (atom {})))))
+
 (defn generator
+  ":seed - set seed
+   :size - set size"
   ([?schema]
    (generator ?schema nil))
   ([?schema options]
-   (if (::rec-gen options)
-     ;; disable cache while calculating recursive schemas. caches don't distinguish options.
-     (-create (m/schema ?schema options) options)
-     (m/-cached (m/schema ?schema options) :generator #(-create % options)))))
+   (let [options (init-generator-options options)]
+     (-> (if (::rec-gen options)
+           ;; disable cache while calculating recursive schemas. caches don't distinguish options.
+           (-create (m/schema ?schema options) options)
+           (m/-cached (m/schema ?schema options) :generator #(-create % options)))
+         (vary-meta assoc ::options options)))))
 
 (defn generate
+  ":seed - set seed
+   :size - set size"
   ([?gen-or-schema]
    (generate ?gen-or-schema nil))
-  ([?gen-or-schema {:keys [seed size] :or {size 30} :as options}]
-   (let [gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
+  ([?gen-or-schema options]
+   (let [{::keys [seed size] :as options} (init-generator-options
+                                            (-> options
+                                                (update ::seed #(or (:seed options) % (current-time)))
+                                                (update ::size #(or (:size options) % 10))
+                                                (dissoc :samples :seed :size)))
+         gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
      (rose/root (gen/call-gen gen (-random seed) size)))))
 
 (defn sample
+  "An infinite eduction of generator samples, or length :samples.
+  
+  :seed - set seed
+  :size - set size
+  :samples - set number of samples, or :size is used"
   ([?gen-or-schema]
    (sample ?gen-or-schema nil))
-  ([?gen-or-schema {:keys [seed size] :or {size 10} :as options}]
-   (let [gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
+  ([?gen-or-schema {:keys [samples] :as options}]
+   (let [{::keys [seed size] :as options} (init-generator-options
+                                            (-> options
+                                                (update ::seed #(or (:seed options) % (current-time)))
+                                                (update ::size #(or (:size options) % 10))
+                                                (dissoc :samples)))
+         gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
      (->> (gen/make-size-range-seq size)
           (map #(rose/root (gen/call-gen gen %1 %2))
                (gen/lazy-random-states (-random seed)))
-          (take size)))))
+          (take (or size samples))))))
+
+(defn sampling-eduction
+  "An infinite eduction of generator samples, or length :samples.
+  
+  :seed - set seed
+  :size - set size
+  :samples - set number of samples, or infinite"
+  ([?gen-or-schema]
+   (sampling-eduction ?gen-or-schema nil))
+  ([?gen-or-schema {:keys [samples] :as options}]
+   (let [{::keys [seed size] :as options} (init-generator-options
+                                            (-> options
+                                                (update ::seed #(or (:seed options) %))
+                                                (update ::size #(or (:size options) %))
+                                                (dissoc :seed :size :samples)))
+         gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))
+         states (atom (gen/lazy-random-states (-random seed)))]
+     (eduction
+       (map (fn [size]
+              (let [rnd (ffirst (swap-vals! states rest))]
+                (rose/root (gen/call-gen gen rnd size)))))
+       (or (some-> samples take)
+           identity)
+       (gen/make-size-range-seq size)))))
 
 ;;
 ;; functions
@@ -564,7 +626,8 @@
 (defn function-checker
   ([?schema] (function-checker ?schema nil))
   ([?schema {::keys [=>iterations] :or {=>iterations 100} :as options}]
-   (let [schema (m/schema ?schema options)
+   (let [{:keys [seed] :as options} (init-generator-options options)
+         schema (m/schema ?schema options)
          -try (fn [f] (try [(f) true] (catch #?(:clj Exception, :cljs js/Error) e [e false])))
          check (fn [schema]
                  (let [{:keys [input output guard]} (m/-function-info schema)
@@ -573,8 +636,10 @@
                        valid-guard? (if guard (m/validator guard options) (constantly true))
                        validate (fn [f args] (as-> (apply f args) $ (and (valid-output? $) (valid-guard? [args $]))))]
                    (fn [f]
-                     (let [{:keys [result shrunk]} (->> (prop/for-all* [input-generator] #(validate f %))
-                                                        (check/quick-check =>iterations))
+                     (let [{:keys [result shrunk]} (check/quick-check
+                                                     =>iterations
+                                                     (prop/for-all* [input-generator] #(validate f %))
+                                                     :seed seed)
                            smallest (-> shrunk :smallest first)]
                        (when-not (true? result)
                          (let [explain-input (m/explain input smallest)
