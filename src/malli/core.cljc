@@ -2578,10 +2578,13 @@
 
 #?(:clj
    (defmacro all
-     "Children of :all are internal and subject to change. They will not be walked.
+     "Children of :all are read-only. Only construct an :all with this macro.
+     Children will not be walked.
 
-     The only public interface for :all is inst and -bounds. Ensure entire form is quoted
-     when splicing into evaluation position in macros.
+     The only public interface for :all is inst and -bounds.
+
+     Treat type variables as opaque variables in body. i.e., only pass them around,
+     don't inspect or test them.
 
      Use deref to instantiate the body with each type variable's upper bounds."
      [binder body]
@@ -2610,27 +2613,49 @@
 (defn -raw-body [all]
   (quoted (second (-children all))))
 
-(defn- -inst* [binder inst schemas options]
-  (let [inst (quoted inst)
-        syms (mapv (fn [b] (-> b (cond-> (vector? b) first) symbol)) binder)
-        bounds (mapv (fn [b] (when-not (keyword? b) (second b))) binder)]
+(defn- -inst* [binder body schemas options]
+  (let [kws (mapv (fn [b] (-> b (cond-> (vector? b) first))) binder)
+        bounds (mapv (fn [b] (when-not (keyword? b) (second b))) binder)
+        schemas (map (fn [bound s]
+                       (form
+                         (if (and s bound)
+                           (if (= s bound)
+                             s
+                             [:and s bound])
+                           (or s bound :any))
+                         options))
+                     bounds (or schemas (repeat (count binder) nil)))
+        forbidden-kws (volatile! (set kws))
+        _ (doseq [frm (cons body schemas)]
+            (walk/postwalk (fn [v]
+                             (when (keyword? v)
+                               (vswap! forbidden-kws conj v))
+                             v)
+                           frm))
+        ;;TODO walk schema and rename all variables to non-forbidden kws
+        ;; add renamed variables to forbidden-kws
+        ;; then do the same for each schemas. Then it should be safe
+        ;; to instantiate.
+        _ (prn forbidden-kws)]
     (when-not (= (count schemas)
                  (count binder))
       (-fail! ::wrong-number-of-schemas-to-inst
               {:binder binder :schemas schemas}))
-    (schema (apply (eval (doto `(fn ~syms ~inst)))
-                   (map (fn [bound s] (if bound [:and s bound] s)) bounds schemas))
-            options)))
+    (-> (walk/postwalk-replace (zipmap kws schemas) body)
+        #_(schema options))))
 
 (defn- -inst [all schemas options]
-  (let [[binder inst] (-children all)]
-    (-inst* binder inst schemas options)))
+  (let [[binder body] (-children all)]
+    (-inst* binder body schemas options)))
 
 (defn inst
-  "Instantiate an :all schema with a vector of schemas."
+  "Instantiate an :all schema with a vector of schemas. If a schema
+  is nil, its upper bound will be used. If ?schemas is nil, same as
+  vector of nils."
+  ([?all] (inst ?all nil nil))
   ([?all ?schemas] (inst ?all ?schemas nil))
   ([?all ?schemas options]
-   (-inst (schema ?all options) (mapv #(schema % options) ?schemas) options)))
+   (-inst (schema ?all options) ?schemas options)))
 
 (comment
   (clojure.test/is (= [:all [:x] [:=> [:cat :x] :x]]
@@ -2641,20 +2666,30 @@
                       (all [x] [:=> [:cat (all [y] y)] x])))
   (clojure.test/is (= [:all [:x0] [:=> [:cat [:all [:x] :x]] :x0]]
                       (all [x] [:=> [:cat (all [x] x)] x])))
-  ;;TODO eval body and subst
-  (all `([x#] [:=> (all [y#] y#) x#]))
-  (-raw-body (schema (all [x] [:=> [:cat x] x])))
-  (all `([x#] [:=> [:cat x#] x#]))
-  (do [:all (list 'quote `([x#] [:=> [:cat x#] x#]))])
+  (clojure.test/is (= [:=> [:cat :any] :any]
+                      (inst (all [x] [:=> [:cat x] x]) [nil])))
+  (clojure.test/is (= [:=> [:cat [:all [:x] [:=> [:cat :x] :x]]] [:all [:x] [:=> [:cat :x] :x]]]
+                      (inst (all [x] [:=> [:cat x] x]) [(all [x] [:=> [:cat x] x])])))
+  ;;FIXME
+  (clojure.test/is (= [:all [:y0] [:all [:y1] :y1]]
+                      (inst (all [x] (all [y] x))
+                            [(all [y] y)])))
+  (clojure.test/is (= [:all [:x] :x]
+                      (inst (all [x] (all [x] x))
+                            [(all [x] x)])))
+  (clojure.test/is (= [:all [:x] :x]
+                      (inst (all [x] (all [x] x))
+                            [(all [y] y)])))
   )
 
 (defn -all-schema [_]
   (-proxy-schema {:type :all :min 2 :max 2
                   :childs 0
-                  :fn (fn [properties [binder inst :as c] options]
-                        [c c (-inst* binder inst (mapv (fn [_] :any) binder) options)])}))
+                  :fn (fn [properties [binder body :as c] options]
+                        [c c (-inst* binder body (repeat (count binder) nil) options)])}))
 (comment
-  (form (schema (all [x] [:=> [:cat x] x])))
+  (inst (schema (all [x] [:=> [:cat x] x])))
+  (inst (schema (all [x] [:=> [:cat x] x])))
   (form (schema (all [x] [:=> [:cat x] x])))
   (do (list 'quote `([x#] [:=> [:cat x#] x#])))
 )
