@@ -15,31 +15,6 @@
 
 (declare generator generate -create sampling-eduction)
 
-(def ^:dynamic *state*
-  "Either nil or an atom containing a map locally shared amongst all
-  generators involved in a quick-check run."
-  nil)
-
-;;https://blog.ambrosebs.com/2022/09/08/break-your-macros.html
-(defn- body-thunk [body] `#(let [disallow-recur# (do ~@body)] disallow-recur#))
-
-(defn ensure-state* [options f]
-  (if-some [bs (when-not *state*
-                 {#'*state* (atom {::options options})})]
-    (with-bindings* bs f)
-    (f)))
-
-(defn- get-current-time-millis []
-  #?(:clj  (System/currentTimeMillis)
-     :cljs (.valueOf (js/Date.))))
-
-(defn current-seed []
-  (when-some [{{:keys [seed]} ::options} *state*]
-    seed))
-
-(defmacro ensure-state [options & body]
-  `(ensure-state* ~options ~(body-thunk body)))
-
 (defprotocol Generator
   (-generator [this options] "returns generator for schema"))
 
@@ -93,6 +68,41 @@
 (defn -not-unreachable [g] (when-not (-unreachable-gen? g) g))
 
 (defn- -random [seed] (if seed (random/make-random seed) (random/make-random)))
+
+(defn- seeded
+  "Creates a generator that depends on the seed parameter.
+  `sized-gen` is a function that takes an integer and returns
+  a generator.
+
+  Examples:
+
+      ;; generates an :int with the same seed as the outer sample.
+      (gen/sample (seeded (fn [seed]
+                            (gen/tuple (gen/return seed)
+                                       (generator :int {:seed seed})))))
+      => ([-9189345824394269271 0]
+          [2069340105756572361 -1]
+          [-382523443817476848 -1]
+          [-727106358269903677 0]
+          [3041036363633372983 -1]
+          [-3816606844531533988 1]
+          [-5643022030666591503 -1]
+          [7456223948749621027 -1]
+          [5327329620473603684 34]
+          [8284970028005224634 12])"
+  [seeded-gen]
+  (#'gen/make-gen
+   (fn [^clojure.test.check.random.JavaUtilSplittableRandom rnd size]
+     (let [seeded-gen (seeded-gen (or (.-state rnd)
+                                      (throw (m/-exception ::failed-to-recover-seed))))]
+       (gen/call-gen seeded-gen rnd size)))))
+
+(comment
+  (gen/sample (seeded (fn [seed] (gen/return seed))))
+  ((requiring-resolve 'clojure.pprint/pprint) (gen/sample (seeded (fn [seed]
+                        (gen/tuple (gen/return seed)
+                                   (generator :int {:seed seed}))))))
+  )
 
 (defn ^:deprecated -recur [_schema options]
   (println (str `-recur " is deprecated, please update your generators. See instructions in malli.generator."))
@@ -362,13 +372,12 @@
 (defn- summarize-string [x]
   (non-zero (reduce #(unchecked-add %1 (int %2)) 0 x)))
 
-(defn- schema->function [?schema {:keys [seed size] :or {size 30}}]
+(defn- generate-pure-=> [?schema {:keys [seed size]}]
+  (assert seed)
+  (assert size)
   (let [state (or *state*
-                  (prn "warning: no state in schema->function"))
+                  (prn "warning: no state in generate-pure-=>"))
         _ (when state (prn "found state!" state))
-        seed (or seed
-                 (current-seed)
-                 0)
         schema (m/schema ?schema)
         options (m/options schema)
         _ (assert (= :=> (m/type schema)))
@@ -423,7 +432,7 @@
                                                    (unchecked-add n (known c v))))
                                                0 (range (count cs)))))
                               :=> (let [[input output guard] (m/children schema)
-                                        _ (assert (not guard) (str `schema->function " TODO :=> guard"))
+                                        _ (assert (not guard) (str `generate-pure-=> " TODO :=> guard"))
                                         ;;TODO use output-candidates
                                         args (generate input {:size size :seed seed})]
                                     (prn ":=>" {:f x :args args :schema schema :input input :output output})
@@ -443,22 +452,22 @@
   (m/parse [:cat] [])
   (m/parse [:cat :int :int] [1 2 3])
   (m/parse [:cat [:* :int] :int] [1 2 3])
-  (schema->function 0 10 [:=> [:cat :int] :int])
-  (clojure.test/is (= -106 ((schema->function [:=> [:cat :int] :int] {:seed 0 :size 10}) 2)))
-  (clojure.test/is (= -7 ((schema->function [:=> [:cat :int] :int] {:seed 2 :size 5}) 8)))
-  (clojure.test/is (= -1134619 ((schema->function [:=> [:cat :boolean] :int] {:seed 0}) true)))
-  (clojure.test/is (= -6 ((schema->function [:=> [:cat :boolean] :int] {:seed 1}) true)))
-  (clojure.test/is (= true ((schema->function [:=> [:cat :boolean] :boolean] {:size 2 :seed 1}) false)))
-  (clojure.test/is (= false ((schema->function [:=> [:cat :boolean] :boolean] {:size 2 :seed 2}) false)))
-  (clojure.test/is (= true ((schema->function [:=> [:cat :string] :boolean] {:size 4 :seed 5}) "abc")))
-  (clojure.test/is (= false ((schema->function [:=> [:cat :string] :boolean] {:size 4 :seed 5}) "abcd")))
-  (clojure.test/is (= true ((schema->function [:=> [:cat :any] :boolean] {:size 4 :seed 5}) nil)))
-  (clojure.test/is (= true ((schema->function [:=> [:cat :any] :boolean] {:size 4 :seed 5}) nil)))
-  (clojure.test/is (= nil ((schema->function [:=> [:cat :any] :any] {:size 0 :seed 5}) nil)))
-  (clojure.test/is (= 0 ((schema->function [:=> [:cat [:=> [:cat :int] :int]] :int] {:size 0 :seed 0}) identity)))
-  (clojure.test/is (= -1 ((schema->function [:=> [:cat [:=> [:cat :int] :int]] :int] {:size 1 :seed 0}) identity)))
+  (generate-pure-=> 0 10 [:=> [:cat :int] :int])
+  (clojure.test/is (= -106 ((generate-pure-=> [:=> [:cat :int] :int] {:seed 0 :size 10}) 2)))
+  (clojure.test/is (= -7 ((generate-pure-=> [:=> [:cat :int] :int] {:seed 2 :size 5}) 8)))
+  (clojure.test/is (= -1134619 ((generate-pure-=> [:=> [:cat :boolean] :int] {:seed 0}) true)))
+  (clojure.test/is (= -6 ((generate-pure-=> [:=> [:cat :boolean] :int] {:seed 1}) true)))
+  (clojure.test/is (= true ((generate-pure-=> [:=> [:cat :boolean] :boolean] {:size 2 :seed 1}) false)))
+  (clojure.test/is (= false ((generate-pure-=> [:=> [:cat :boolean] :boolean] {:size 2 :seed 2}) false)))
+  (clojure.test/is (= true ((generate-pure-=> [:=> [:cat :string] :boolean] {:size 4 :seed 5}) "abc")))
+  (clojure.test/is (= false ((generate-pure-=> [:=> [:cat :string] :boolean] {:size 4 :seed 5}) "abcd")))
+  (clojure.test/is (= true ((generate-pure-=> [:=> [:cat :any] :boolean] {:size 4 :seed 5}) nil)))
+  (clojure.test/is (= true ((generate-pure-=> [:=> [:cat :any] :boolean] {:size 4 :seed 5}) nil)))
+  (clojure.test/is (= nil ((generate-pure-=> [:=> [:cat :any] :any] {:size 0 :seed 5}) nil)))
+  (clojure.test/is (= 0 ((generate-pure-=> [:=> [:cat [:=> [:cat :int] :int]] :int] {:size 0 :seed 0}) identity)))
+  (clojure.test/is (= -1 ((generate-pure-=> [:=> [:cat [:=> [:cat :int] :int]] :int] {:size 1 :seed 0}) identity)))
   (clojure.test/is (= -585680477447
-                      ((schema->function [:=>
+                      ((generate-pure-=> [:=>
                                           [:cat
                                            [:=>
                                             [:cat [:=> [:cat :int] :int]]
@@ -467,28 +476,34 @@
                                                                       (prn "arg" f)
                                                                       (f 13)))))
   (generate [:cat :int])
-  ;;FIXME
-  ;(generate [:=> {:gen/impure true} [:cat :int] :int])
+  (let [f (generate [:=> {:gen/impure true} [:cat :int] :int]
+                    {:seed 0})]
+    (clojure.test/is (= '(0 -1 0 -3 0 1 16 0 7 3)
+                        (repeatedly 10 #(f 1)))))
   )
 
+(defn generate-impure-=> [schema options]
+  (let [a (atom (sampling-eduction (:output (m/-function-info schema)) options))]
+    (m/-instrument {:schema schema} (fn [& _] (ffirst (swap-vals! a rest))))))
+
 (defn -=>-gen [schema options]
-  (if (or (:seed options)
-          (not (:gen/impure (m/properties schema))))
-    (gen/sized #(gen/return (schema->function schema {:seed (current-seed) :size %})))
-    (gen/sized (fn [size]
-                 (let [a (atom (sampling-eduction (:output (m/-function-info schema))
-                                                  (-> options
-                                                      (assoc :size size)
-                                                      (dissoc :seed))))]
-                   (m/-instrument {:schema schema} (fn [& _] (ffirst (swap-vals! a rest)))))))))
+  (let [generate-=> (if (:gen/impure (m/properties schema)) generate-impure-=> generate-pure-=>)]
+    (gen/sized
+      (fn [size]
+        (seeded
+          (fn [seed]
+            (gen/return
+              (generate-=> schema (assoc options :seed seed :size size)))))))))
 
 (defn -function-gen [schema options]
-  (gen/sized (fn [size]
-               (gen/return (m/-instrument {:schema schema, :gen #(generate % options)}
-                                          nil
-                                          (-> options
-                                              (assoc :size size)
-                                              (assoc :seed (current-seed))))))))
+  (gen/sized
+    (fn [size]
+      (seeded
+        (fn [seed]
+          (let [options (-> options
+                            (assoc :size size)
+                            (assoc :seed seed))]
+            (gen/return (m/-instrument {:schema schema, :gen #(generate % options)} nil options))))))))
 
 (defn -regex-generator [schema options]
   (if (m/-regex-op? schema)
@@ -712,15 +727,14 @@
      (m/-cached (m/schema ?schema options) :generator #(-create % options)))))
 
 (defn- gen-root [options gen rnd size]
-  (ensure-state options
-    (rose/root (gen/call-gen gen rnd size))))
+  (rose/root (gen/call-gen gen rnd size)))
 
 (defn generate
   ([?gen-or-schema]
    (generate ?gen-or-schema nil))
   ([?gen-or-schema {:keys [seed size] :or {size 30} :as options}]
    (let [gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
-     (ensure-state options (rose/root (gen/call-gen gen (-random seed) size))))))
+     (gen-root options gen (-random seed) size))))
 
 (defn sample
   "An infinite eduction of generator samples, or length :samples.
