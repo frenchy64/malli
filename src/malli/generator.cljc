@@ -363,8 +363,13 @@
   (non-zero (reduce #(unchecked-add %1 (int %2)) 0 x)))
 
 (defn- schema->function [?schema {:keys [seed size] :or {size 30}}]
-  (prn "warning: no seed in schema->function")
-  (let [schema (m/schema ?schema)
+  (let [state (or *state*
+                  (prn "warning: no state in schema->function"))
+        _ (when state (prn "found state!" state))
+        seed (or seed
+                 (current-seed)
+                 0)
+        schema (m/schema ?schema)
         options (m/options schema)
         _ (assert (= :=> (m/type schema)))
         [input output guard] (m/children schema)
@@ -372,65 +377,66 @@
         ;;TODO only generate a validator if it's 100% accurate
         valid-out? (m/validator output)]
     (fn [& args]
-      (let [output-candidates (atom []) ;; TODO how to best use this? maybe small size == reuse more input?
-            n (letfn [(record [x]
-                        #_(when (valid-out? x)
-                            (swap! output-candidates conj x)))
-                      (summarize-ident [x]
-                        (non-zero (unchecked-add (unknown (namespace x))
-                                                 (unknown (name x)))))
-                      (unknown [x]
-                        (record x)
-                        (cond
-                          (boolean? x) (if x 1 0)
-                          (int? x) x
-                          (string? x) (summarize-string x)
-                          (ident? x) (summarize-ident x)
-                          (coll? x) (reduce #(unchecked-add %1 (unknown %2)) 0
-                                            (eduction
-                                              (if (and (seq? x) (not (counted? x)))
-                                                (take 32)
-                                                identity)
-                                              x))
-                          (fn? x) 64
-                          (ifn? x) -64
-                          (instance? java.math.BigInteger x) (unknown (.toPlainString ^java.math.BigInteger x))
-                          (instance? clojure.lang.BigInt x) (unknown (str x))
-                          (instance? java.math.BigDecimal x) (unknown (.toPlainString ^java.math.BigDecimal x))
-                          (instance? Float x) (Float/floatToIntBits x)
-                          (instance? Double x) (Double/doubleToLongBits x)
-                          (instance? java.util.concurrent.atomic.AtomicInteger x) (.longValue ^java.util.concurrent.atomic.AtomicInteger x)
-                          (instance? java.util.concurrent.atomic.AtomicLong x) (.longValue ^java.util.concurrent.atomic.AtomicLong x)
-                          (instance? clojure.lang.IAtom2 x) (unchecked-add (unknown @x) 1024)
-                          :else 0))
-                      (known [schema x]
-                        (record x)
-                        (unchecked-multiply
-                          (case (m/type schema)
-                            :cat (let [cs (m/children schema)
-                                       vs (m/parse schema x options)]
-                                   (if (= vs ::m/invalid)
-                                     (throw (m/-exception ::invalid-cat {:schema schema :x x}))
-                                     (reduce (fn [n i]
-                                               (let [c (nth cs i)
-                                                     v (nth vs i)]
-                                                 (unchecked-add n (known c v))))
-                                             0 (range (count cs)))))
-                            :=> (let [[input output guard] (m/children schema)
-                                      _ (assert (not guard) (str `schema->function " TODO :=> guard"))
-                                      ;;TODO use output-candidates
-                                      args (generate input {:size size :seed seed})]
-                                  (prn ":=>" {:f x :args args :schema schema :input input :output output})
-                                  (known output (apply x args)))
-                            (do (or (m/validate schema x)
-                                    (throw (m/-exception ::invalid-cat {:schema schema :x x})))
-                                (unchecked-add
-                                  (unknown (m/type schema))
-                                  (unknown x))))
-                          (unchecked-inc size)))]
-                (known input args))
-            seed (cond-> n seed (unchecked-add seed))]
-        (generate output {:size size :seed seed})))))
+      (binding [*state* {::output {:seed seed}}]
+        (let [output-candidates (atom []) ;; TODO how to best use this? maybe small size == reuse more input?
+              n (letfn [(record [x]
+                          #_(when (valid-out? x)
+                              (swap! output-candidates conj x)))
+                        (summarize-ident [x]
+                          (non-zero (unchecked-add (unknown (namespace x))
+                                                   (unknown (name x)))))
+                        (unknown [x]
+                          (record x)
+                          (cond
+                            (boolean? x) (if x 1 0)
+                            (int? x) x
+                            (string? x) (summarize-string x)
+                            (ident? x) (summarize-ident x)
+                            (coll? x) (reduce #(unchecked-add %1 (unknown %2)) 0
+                                              (eduction
+                                                (if (and (seq? x) (not (counted? x)))
+                                                  (take 32)
+                                                  identity)
+                                                x))
+                            (fn? x) 64
+                            (ifn? x) -64
+                            (instance? java.math.BigInteger x) (unknown (.toPlainString ^java.math.BigInteger x))
+                            (instance? clojure.lang.BigInt x) (unknown (str x))
+                            (instance? java.math.BigDecimal x) (unknown (.toPlainString ^java.math.BigDecimal x))
+                            (instance? Float x) (Float/floatToIntBits x)
+                            (instance? Double x) (Double/doubleToLongBits x)
+                            (instance? java.util.concurrent.atomic.AtomicInteger x) (.longValue ^java.util.concurrent.atomic.AtomicInteger x)
+                            (instance? java.util.concurrent.atomic.AtomicLong x) (.longValue ^java.util.concurrent.atomic.AtomicLong x)
+                            (instance? clojure.lang.IAtom2 x) (unchecked-add (unknown @x) 1024)
+                            :else 0))
+                        (known [schema x]
+                          (record x)
+                          (unchecked-multiply
+                            (case (m/type schema)
+                              :cat (let [cs (m/children schema)
+                                         vs (m/parse schema x options)]
+                                     (if (= vs ::m/invalid)
+                                       (throw (m/-exception ::invalid-cat {:schema schema :x x}))
+                                       (reduce (fn [n i]
+                                                 (let [c (nth cs i)
+                                                       v (nth vs i)]
+                                                   (unchecked-add n (known c v))))
+                                               0 (range (count cs)))))
+                              :=> (let [[input output guard] (m/children schema)
+                                        _ (assert (not guard) (str `schema->function " TODO :=> guard"))
+                                        ;;TODO use output-candidates
+                                        args (generate input {:size size :seed seed})]
+                                    (prn ":=>" {:f x :args args :schema schema :input input :output output})
+                                    (known output (apply x args)))
+                              (do (or (m/validate schema x)
+                                      (throw (m/-exception ::invalid-cat {:schema schema :x x})))
+                                  (unchecked-add
+                                    (unknown (m/type schema))
+                                    (unknown x))))
+                            (unchecked-inc size)))]
+                  (known input args))
+              seed (cond-> n seed (unchecked-add seed))]
+          (generate output {:size size :seed seed}))))))
 
 (comment
   (m/parse [:cat :int :int] [1 2])
@@ -451,18 +457,20 @@
   (clojure.test/is (= nil ((schema->function [:=> [:cat :any] :any] {:size 0 :seed 5}) nil)))
   (clojure.test/is (= 0 ((schema->function [:=> [:cat [:=> [:cat :int] :int]] :int] {:size 0 :seed 0}) identity)))
   (clojure.test/is (= -1 ((schema->function [:=> [:cat [:=> [:cat :int] :int]] :int] {:size 1 :seed 0}) identity)))
-  ((schema->function [:=>
-                      [:cat
-                       [:=>
-                        [:cat [:=> [:cat :int] :int]]
-                        :int]]
-                      :int] {:size 0 :seed 0}) (fn me [f] 
-                                                 (prn "arg" f)
-                                                 (f 13)))
+  (clojure.test/is (= -585680477447
+                      ((schema->function [:=>
+                                          [:cat
+                                           [:=>
+                                            [:cat [:=> [:cat :int] :int]]
+                                            :int]]
+                                          :int] {:size 50 :seed 1}) (fn me [f] 
+                                                                      (prn "arg" f)
+                                                                      (f 13)))))
   (generate [:cat :int])
   )
 
 (defn -=>-gen [schema options]
+  (prn *state*)
   (gen/sized #(gen/return (schema->function schema {:seed (current-seed) :size %}))))
 
 (defn -function-gen [schema options]
