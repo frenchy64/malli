@@ -387,7 +387,13 @@
         valid-out? (m/validator output)]
     (fn [& args]
       (binding [*state* {::output {:seed seed}}]
-        (let [output-candidates (atom []) ;; TODO how to best use this? maybe small size == reuse more input?
+        (let [;;TODO this kind of thing would help generate polymorphic functions
+              ;; e.g., (all [x] [:-> x x]) would instantiate to something like:
+              ;;       [:-> [:any {:tv x'}] [:any {:tv x'}]]
+              ;;       Then we can remember seeing the input when generating the output
+              ;;       and match them up.
+              ;; might be more challenges with higher-order polymorphic functions.
+              output-candidates (atom []) ;; TODO how to best use this? maybe small size == reuse more input?
               n (letfn [(record [x]
                           #_(when (valid-out? x)
                               (swap! output-candidates conj x)))
