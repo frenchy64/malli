@@ -467,7 +467,8 @@
                                                                       (prn "arg" f)
                                                                       (f 13)))))
   (generate [:cat :int])
-  (generate [:=> {:gen/impure true} [:cat :int] :int])
+  ;;FIXME
+  ;(generate [:=> {:gen/impure true} [:cat :int] :int])
   )
 
 (defn -=>-gen [schema options]
@@ -737,13 +738,12 @@
           (take size)))))
 
 (defn sampling-eduction
-  "An infinite eduction of generator samples, or length :samples.
+  "An infinite eduction of generator samples.
   
   :seed - set seed
   :size - set size
-  :samples - set number of samples, or infinite
   
-  Second argument can be a transducer  that is applied at the end of the eduction.
+  Second argument can be a transducer that is applied at the end of the eduction.
   For 2-arity, transducer must be fn?, otherwise is treated as options.
 
   (sampling-eduction :int (take 15))
@@ -767,12 +767,6 @@
                         (gen-root options gen rnd size))))
        (or xform identity)
        (gen/lazy-random-states (-random seed))))))
-
-(comment
-  ;=> (-1 0 -1 3 1 3 -2 -2 5 0 -1 -1 -2 3 -5)
-  (let [e (sampling-eduction :int (take 50))]
-    (repeatedly 30 #(first e)))
-)
 
 ;;
 ;; functions
