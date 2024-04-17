@@ -2529,51 +2529,69 @@
           (-ref [_])
           (-deref [_] schema))))))
 
-(defn -all-form [binder quoted-body body]
-  (let [binder (mapv (fn [b]
-                       (if (simple-symbol? b)
-                         (keyword b)
-                         (if (and (vector? b)
-                                  (= 2 (count b))
-                                  (simple-symbol? (first b)))
-                           (update b 0 keyword)
-                           ;;TODO map syntax for more options {:name a :upper :any :lower :int}
-                           (-fail! ::invalid-all-binder {:binder binder}))))
-                     binder)
-        kws (into [] (map (fn [k]
-                            (cond-> k
-                              (vector? k) k
-                              (map? k) :name)))
-                  binder)
-        uuids (mapv (fn [_] (random-uuid)) kws)
-        forbidden-set (into #{} (mapcat (juxt identity symbol)) kws)
-        found-kws (volatile! #{})
-        _ (walk/postwalk (fn [v]
-                           (when (keyword? v)
-                             (vswap! found-kws conj v))
-                           v)
-                         (apply body uuids))
-        found-kws @found-kws
-        kws (mapv (fn [k]
-                    (if (found-kws k)
-                      (loop [i 0]
-                        (let [k' (keyword (str (name k) i))]
-                          (if (found-kws k')
-                            (recur (inc i))
-                            k')))
-                      k))
-                  kws)
-        binder (mapv (fn [b k]
-                       (if (simple-keyword? b)
-                         k
-                         (if (and (vector? b)
-                                  (= 2 (count b))
-                                  (simple-keyword? (first b)))
-                           (assoc b 0 k)
-                           ;;TODO map syntax for more options {:name a :upper :any :lower :int}
-                           (-fail! ::invalid-all-binder {:binder binder}))))
-                     binder kws)
-        body (apply body kws)]
+(defn -all-binder-upper-bounds [binder]
+  (into [] (map (fn [b]
+                  (if (simple-ident? b)
+                    :any
+                    (if (and (vector? b)
+                             (= 2 (count b))
+                             (simple-ident? (first b)))
+                      (second b)
+                      (if (and (map? b)
+                               (simple-ident? (:name b)))
+                        (:upper b)
+                        (-fail! ::invalid-all-binder {:binder binder}))))))
+        binder))
+
+(defn- -visit-binder-names [binder f]
+  (mapv (fn [b]
+          (if (simple-ident? b)
+            (f b)
+            (if (and (vector? b)
+                     (= 2 (count b))
+                     (simple-ident? (first b)))
+              (update b 0 f)
+              (if (and (map? b)
+                       (simple-ident? (:name b)))
+                (update b :name f)
+                (-fail! ::invalid-all-binder {:binder binder})))))
+        binder))
+
+(defn -all-binder-names [binder]
+  (let [vol (volatile! [])]
+    (-visit-binder-names binder #(do (vswap! vol conj %) %))
+    @vol))
+
+(defn- -find-kws [vol form]
+  (walk/postwalk (fn [v]
+                   (when (simple-keyword? v)
+                     (vswap! vol conj v))
+                   v)
+                 form))
+
+(defn- -rename-all-binder [forbidden-kws binder]
+  (-visit-binder-names
+    binder
+    (fn [k]
+      (if (@forbidden-kws k)
+        (loop [i 0]
+          (let [k' (keyword (str (name k) i))]
+            (if (@forbidden-kws k')
+              (recur (inc i))
+              (do (vswap! forbidden-kws conj k')
+                  k'))))
+        k))))
+
+(defn -all-form [binder body]
+  (let [nbound (count binder)
+        binder (-visit-binder-names binder (fn [k]
+                                             (when-not (simple-symbol? k)
+                                               (-fail! ::binder-must-use-simple-symbols {:k k}))
+                                             (keyword k)))
+        forbidden-kws (doto (volatile! #{})
+                        (-find-kws (apply body (repeatedly nbound random-uuid))))
+        binder (-rename-all-binder forbidden-kws binder)
+        body (apply body (-all-binder-names binder))]
     [:all binder body]))
 
 #?(:clj
@@ -2597,7 +2615,7 @@
                             (:name b)
                             (-fail! ::bad-all-binder {:binder binder})))))
                     binder)]
-       `(-all-form '~binder '~body (fn ~bv ~body)))))
+       `(-all-form '~binder (fn ~bv ~body)))))
 
 (defn -quoted [[q v :as l]]
   (when-not (and (seq? l)
@@ -2614,17 +2632,20 @@
   (quoted (second (-children all))))
 
 (defn- -inst* [binder body schemas options]
-  (let [kws (mapv (fn [b] (-> b (cond-> (vector? b) first))) binder)
-        bounds (mapv (fn [b] (when-not (keyword? b) (second b))) binder)
-        schemas (map (fn [bound s]
+  (when-not (= (count schemas)
+               (count binder))
+    (-fail! ::wrong-number-of-schemas-to-inst
+            {:binder binder :schemas schemas}))
+  (let [kws (-all-binder-names binder)
+        ubounds (-all-binder-upper-bounds binder)
+        schemas (map (fn [ubound s]
                        (form
-                         (if (and s bound)
-                           (if (= s bound)
-                             s
-                             [:and s bound])
-                           (or s bound :any))
+                         (if (or (= s ubound)
+                                 (= :any (type s options)))
+                           s
+                           [:and s ubound])
                          options))
-                     bounds (or schemas (repeat (count binder) nil)))
+                     ubounds (or schemas (repeat (count binder) nil)))
         forbidden-kws (volatile! (set kws))
         _ (doseq [frm (cons body schemas)]
             (walk/postwalk (fn [v]
@@ -2636,11 +2657,17 @@
         ;; add renamed variables to forbidden-kws
         ;; then do the same for each schemas. Then it should be safe
         ;; to instantiate.
-        _ (prn forbidden-kws)]
-    (when-not (= (count schemas)
-                 (count binder))
-      (-fail! ::wrong-number-of-schemas-to-inst
-              {:binder binder :schemas schemas}))
+        [binder body] ()
+        schemas (mapv (fn [s]
+                        (prn "s" s)
+                        (walk s (fn [s _ _ options]
+                                  (prn "s'" s)
+                                  (if (= :all (type s))
+                                    (assert nil 'todo)
+                                    s))
+                              options))
+                      schemas)
+        kws (-all-binder-names binder)]
     (-> (walk/postwalk-replace (zipmap kws schemas) body)
         #_(schema options))))
 
@@ -2650,36 +2677,17 @@
 
 (defn inst
   "Instantiate an :all schema with a vector of schemas. If a schema
-  is nil, its upper bound will be used. If ?schemas is nil, same as
-  vector of nils."
+  is nil, its upper bound will be used. If ?schemas is nil or not provided, same as
+  vector of nils. ?schemas-or-options are treated as options if map?, otherwise ?schemas."
   ([?all] (inst ?all nil nil))
-  ([?all ?schemas] (inst ?all ?schemas nil))
+  ([?all ?schemas-or-options] (let [options? (map? ?schemas-or-options)
+                                    ?schemas (when-not options? ?schemas-or-options)
+                                    options (when options? ?schemas-or-options)]
+                                (inst ?all ?schemas options)))
   ([?all ?schemas options]
    (-inst (schema ?all options) ?schemas options)))
 
 (comment
-  (clojure.test/is (= [:all [:x] [:=> [:cat :x] :x]]
-                      (all [x] [:=> [:cat x] x])))
-  (clojure.test/is (= [:all [:x0] [:=> [:x :x0] :x0]]
-                      (all [x] [:=> [:x x] x])))
-  (clojure.test/is (= [:all [:x] [:=> [:cat [:all [:y] :y]] :x]]
-                      (all [x] [:=> [:cat (all [y] y)] x])))
-  (clojure.test/is (= [:all [:x0] [:=> [:cat [:all [:x] :x]] :x0]]
-                      (all [x] [:=> [:cat (all [x] x)] x])))
-  (clojure.test/is (= [:=> [:cat :any] :any]
-                      (inst (all [x] [:=> [:cat x] x]) [nil])))
-  (clojure.test/is (= [:=> [:cat [:all [:x] [:=> [:cat :x] :x]]] [:all [:x] [:=> [:cat :x] :x]]]
-                      (inst (all [x] [:=> [:cat x] x]) [(all [x] [:=> [:cat x] x])])))
-  ;;FIXME
-  (clojure.test/is (= [:all [:y0] [:all [:y1] :y1]]
-                      (inst (all [x] (all [y] x))
-                            [(all [y] y)])))
-  (clojure.test/is (= [:all [:x] :x]
-                      (inst (all [x] (all [x] x))
-                            [(all [x] x)])))
-  (clojure.test/is (= [:all [:x] :x]
-                      (inst (all [x] (all [x] x))
-                            [(all [y] y)])))
   )
 
 (defn -all-schema [_]

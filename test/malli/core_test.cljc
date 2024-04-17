@@ -3224,3 +3224,33 @@
                                              ::xymap [:merge ::xmap ::ymap]}}
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
+
+(deftest all-test
+  ;; no alpha-renaming needed
+  (is (= [:all [:x] [:=> [:cat :x] :x]]
+         (m/all [x] [:=> [:cat x] x])))
+  ;; alpha-rename binder if clashing keyword in body form
+  (is (= [:all [:x0] [:=> [:x :x0] :x0]]
+         (m/all [x] [:=> [:x x] x])))
+  (is (= [:all [:x] [:=> [:cat [:all [:y] :y]] :x]]
+         (m/all [x] [:=> [:cat (m/all [y] y)] x])))
+  ;; alpha-rename outer binder if clashing :all inside (actually just 
+  ;; a naive keyword occurrence check on the form of the body).
+  (is (= [:all [:x0] [:=> [:cat [:all [:x] :x]] :x0]]
+         (m/all [x] [:=> [:cat (m/all [x] x)] x])))
+  ;;FIXME
+  (is (= [:=> [:cat :any] :any]
+         (m/inst (m/all [x] [:=> [:cat x] x]) [nil])))
+  (is (= [:=> [:cat [:all [:x] [:=> [:cat :x] :x]]] [:all [:x] [:=> [:cat :x] :x]]]
+         (m/inst (m/all [x] [:=> [:cat x] x]) [(m/all [x] [:=> [:cat x] x])])))
+  ;;FIXME
+  (is (= [:all [:y0] [:all [:y1] :y1]]
+         (m/inst (m/all [x] (m/all [y] x))
+               [(m/all [y] y)])))
+  (is (= [:all [:x] :x]
+         (m/inst (m/all [x] (m/all [x] x))
+               [(m/all [x] x)])))
+  (is (= [:all [:x] :x]
+         (m/inst (m/all [x] (m/all [x] x))
+               [(m/all [y] y)])))
+  )
