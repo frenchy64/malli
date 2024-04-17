@@ -29,6 +29,14 @@
     (with-bindings* bs f)
     (f)))
 
+(defn- get-current-time-millis []
+  #?(:clj  (System/currentTimeMillis)
+     :cljs (.valueOf (js/Date.))))
+
+(defn current-seed []
+  (when-some [{{:keys [seed]} ::options} *state*]
+    seed))
+
 (defmacro ensure-state [options & body]
   `(ensure-state* ~options ~(body-thunk body)))
 
@@ -354,12 +362,8 @@
 (defn- summarize-string [x]
   (non-zero (reduce #(unchecked-add %1 (int %2)) 0 x)))
 
-(defn get-current-time-millis []
-  #?(:clj  (System/currentTimeMillis)
-     :cljs (.valueOf (js/Date.))))
-
-(defn- schema->function [?schema {:keys [seed size] :or {size 30
-                                                         seed (get-current-time-millis)}}]
+(defn- schema->function [?schema {:keys [seed size] :or {size 30}}]
+  (prn "warning: no seed in schema->function")
   (let [schema (m/schema ?schema)
         options (m/options schema)
         _ (assert (= :=> (m/type schema)))
@@ -425,7 +429,7 @@
                                   (unknown x))))
                           (unchecked-inc size)))]
                 (known input args))
-            seed (unchecked-add seed n)]
+            seed (cond-> n seed (unchecked-add seed))]
         (generate output {:size size :seed seed})))))
 
 (comment
@@ -459,25 +463,15 @@
   )
 
 (defn -=>-gen [schema options]
-  (let [state *state*]
-    (gen/sized (fn [size]
-                 (let [seed (when (and (::seed options) state)
-                              (first (swap-vals! state)))
-                       output-generator (-> schema m/-function-info :output (generator options))
-                       next-output (let [a (atom (sampling-eduction output-generator
-                                                                    (-> options
-                                                                        (update :size #(or % 30))
-                                                                        (cond-> seed (assoc :seed seed)))))]
-                                     (fn []
-                                       (ffirst (swap-vals! a rest))))]
-                   (gen/return
-                     (m/-instrument {:schema schema}
-                                    (fn [& _]
-                                      (next-output))
-                                    (assoc options :size size))))))))
+  (gen/sized #(gen/return (schema->function schema {:seed (current-seed) :size %}))))
 
 (defn -function-gen [schema options]
-  (gen/return (m/-instrument {:schema schema, :gen #(generate % options)} nil options)))
+  (gen/sized (fn [size]
+               (gen/return (m/-instrument {:schema schema, :gen #(generate % options)}
+                                          nil
+                                          (-> options
+                                              (assoc :size size)
+                                              (assoc :seed (current-seed))))))))
 
 (defn -regex-generator [schema options]
   (if (m/-regex-op? schema)
@@ -709,7 +703,7 @@
    (generate ?gen-or-schema nil))
   ([?gen-or-schema {:keys [seed size] :or {size 30} :as options}]
    (let [gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
-     (rose/root (gen/call-gen gen (-random seed) size)))))
+     (ensure-state options (rose/root (gen/call-gen gen (-random seed) size))))))
 
 (defn sample
   "An infinite eduction of generator samples, or length :samples.
