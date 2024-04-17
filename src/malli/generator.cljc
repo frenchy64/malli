@@ -15,6 +15,23 @@
 
 (declare generator generate -create sampling-eduction)
 
+(def ^:dynamic *state*
+  "Either nil or an atom containing a map locally shared amongst all
+  generators involved in a quick-check run."
+  nil)
+
+;;https://blog.ambrosebs.com/2022/09/08/break-your-macros.html
+(defn- body-thunk [body] `#(let [disallow-recur# (do ~@body)] disallow-recur#))
+
+(defn ensure-state* [options f]
+  (if-some [bs (when-not *state*
+                 {#'*state* (atom {::options options})})]
+    (with-bindings* bs f)
+    (f)))
+
+(defmacro ensure-state [options & body]
+  `(ensure-state* ~options ~(body-thunk body)))
+
 (defprotocol Generator
   (-generator [this options] "returns generator for schema"))
 
@@ -323,20 +340,144 @@
             (realized? scalar-ref-gen) (gen/recursive-gen
                                         #(generator dschema (assoc-in options [::rec-gen ref-id] %))))))))
 
+;; # Function generators
+;;
+;; A naive implementation of a function generator might be to mg/generate the output schema every time
+;; the function is called and return the result. Without a seed, this is not reproducible and is not pure.
+;; With a seed, mg/generate will return the same value every time---a very boring pure function.
+;;
+;; 
+
+(defn- non-zero [n]
+  (cond-> n (zero? n) unchecked-inc))
+
+(defn- summarize-string [x]
+  (non-zero (reduce #(unchecked-add %1 (int %2)) 0 x)))
+
+(defn get-current-time-millis []
+  #?(:clj  (System/currentTimeMillis)
+     :cljs (.valueOf (js/Date.))))
+
+(defn- schema->function [?schema {:keys [seed size] :or {size 30
+                                                         seed (get-current-time-millis)}}]
+  (let [schema (m/schema ?schema)
+        options (m/options schema)
+        _ (assert (= :=> (m/type schema)))
+        [input output guard] (m/children schema)
+        _ (assert (not guard) "NYI guards")
+        ;;TODO only generate a validator if it's 100% accurate
+        valid-out? (m/validator output)]
+    (fn [& args]
+      (let [output-candidates (atom []) ;; TODO how to best use this? maybe small size == reuse more input?
+            n (letfn [(record [x]
+                        #_(when (valid-out? x)
+                            (swap! output-candidates conj x)))
+                      (summarize-ident [x]
+                        (non-zero (unchecked-add (unknown (namespace x))
+                                                 (unknown (name x)))))
+                      (unknown [x]
+                        (record x)
+                        (cond
+                          (boolean? x) (if x 1 0)
+                          (int? x) x
+                          (string? x) (summarize-string x)
+                          (ident? x) (summarize-ident x)
+                          (coll? x) (reduce #(unchecked-add %1 (unknown %2)) 0
+                                            (eduction
+                                              (if (and (seq? x) (not (counted? x)))
+                                                (take 32)
+                                                identity)
+                                              x))
+                          (fn? x) 64
+                          (ifn? x) -64
+                          (instance? java.math.BigInteger x) (unknown (.toPlainString ^java.math.BigInteger x))
+                          (instance? clojure.lang.BigInt x) (unknown (str x))
+                          (instance? java.math.BigDecimal x) (unknown (.toPlainString ^java.math.BigDecimal x))
+                          (instance? Float x) (Float/floatToIntBits x)
+                          (instance? Double x) (Double/doubleToLongBits x)
+                          (instance? java.util.concurrent.atomic.AtomicInteger x) (.longValue ^java.util.concurrent.atomic.AtomicInteger x)
+                          (instance? java.util.concurrent.atomic.AtomicLong x) (.longValue ^java.util.concurrent.atomic.AtomicLong x)
+                          (instance? clojure.lang.IAtom2 x) (unchecked-add (unknown @x) 1024)
+                          :else 0))
+                      (known [schema x]
+                        (record x)
+                        (unchecked-multiply
+                          (case (m/type schema)
+                            :cat (let [cs (m/children schema)
+                                       vs (m/parse schema x options)]
+                                   (if (= vs ::m/invalid)
+                                     (throw (m/-exception ::invalid-cat {:schema schema :x x}))
+                                     (reduce (fn [n i]
+                                               (let [c (nth cs i)
+                                                     v (nth vs i)]
+                                                 (unchecked-add n (known c v))))
+                                             0 (range (count cs)))))
+                            :=> (let [[input output guard] (m/children schema)
+                                      _ (assert (not guard) (str `schema->function " TODO :=> guard"))
+                                      ;;TODO use output-candidates
+                                      args (generate input {:size size :seed seed})]
+                                  (prn ":=>" {:f x :args args :schema schema :input input :output output})
+                                  (known output (apply x args)))
+                            (do (or (m/validate schema x)
+                                    (throw (m/-exception ::invalid-cat {:schema schema :x x})))
+                                (unchecked-add
+                                  (unknown (m/type schema))
+                                  (unknown x))))
+                          (unchecked-inc size)))]
+                (known input args))
+            seed (unchecked-add seed n)]
+        (generate output {:size size :seed seed})))))
+
+(comment
+  (m/parse [:cat :int :int] [1 2])
+  (m/parse [:cat] [])
+  (m/parse [:cat :int :int] [1 2 3])
+  (m/parse [:cat [:* :int] :int] [1 2 3])
+  (schema->function 0 10 [:=> [:cat :int] :int])
+  (clojure.test/is (= -106 ((schema->function [:=> [:cat :int] :int] {:seed 0 :size 10}) 2)))
+  (clojure.test/is (= -7 ((schema->function [:=> [:cat :int] :int] {:seed 2 :size 5}) 8)))
+  (clojure.test/is (= -1134619 ((schema->function [:=> [:cat :boolean] :int] {:seed 0}) true)))
+  (clojure.test/is (= -6 ((schema->function [:=> [:cat :boolean] :int] {:seed 1}) true)))
+  (clojure.test/is (= true ((schema->function [:=> [:cat :boolean] :boolean] {:size 2 :seed 1}) false)))
+  (clojure.test/is (= false ((schema->function [:=> [:cat :boolean] :boolean] {:size 2 :seed 2}) false)))
+  (clojure.test/is (= true ((schema->function [:=> [:cat :string] :boolean] {:size 4 :seed 5}) "abc")))
+  (clojure.test/is (= false ((schema->function [:=> [:cat :string] :boolean] {:size 4 :seed 5}) "abcd")))
+  (clojure.test/is (= true ((schema->function [:=> [:cat :any] :boolean] {:size 4 :seed 5}) nil)))
+  (clojure.test/is (= true ((schema->function [:=> [:cat :any] :boolean] {:size 4 :seed 5}) nil)))
+  (clojure.test/is (= nil ((schema->function [:=> [:cat :any] :any] {:size 0 :seed 5}) nil)))
+  (clojure.test/is (= 0 ((schema->function [:=> [:cat [:=> [:cat :int] :int]] :int] {:size 0 :seed 0}) identity)))
+  (clojure.test/is (= -1 ((schema->function [:=> [:cat [:=> [:cat :int] :int]] :int] {:size 1 :seed 0}) identity)))
+  ((schema->function [:=>
+                      [:cat
+                       [:=>
+                        [:cat [:=> [:cat :int] :int]]
+                        :int]]
+                      :int] {:size 0 :seed 0}) (fn me [f] 
+                                                 (prn "arg" f)
+                                                 (f 13)))
+  (generate [:cat :int])
+  )
+
 (defn -=>-gen [schema options]
-  (let [output-generator (-> schema m/-function-info :output (generator options))
-        next-output (let [a (atom (sampling-eduction output-generator
-                                                     (update options :size #(or % 30))))]
-                      (fn []
-                        (ffirst (swap-vals! a rest))))]
-    (gen/return (m/-instrument {:schema schema}
-                               (fn [& _]
-                                 (next-output))
-                               options))))
+  (let [state *state*]
+    (gen/sized (fn [size]
+                 (let [seed (when (and (::seed options) state)
+                              (first (swap-vals! state)))
+                       output-generator (-> schema m/-function-info :output (generator options))
+                       next-output (let [a (atom (sampling-eduction output-generator
+                                                                    (-> options
+                                                                        (update :size #(or % 30))
+                                                                        (cond-> seed (assoc :seed seed)))))]
+                                     (fn []
+                                       (ffirst (swap-vals! a rest))))]
+                   (gen/return
+                     (m/-instrument {:schema schema}
+                                    (fn [& _]
+                                      (next-output))
+                                    (assoc options :size size))))))))
 
 (defn -function-gen [schema options]
   (gen/return (m/-instrument {:schema schema, :gen #(generate % options)} nil options)))
-
 
 (defn -regex-generator [schema options]
   (if (m/-regex-op? schema)
@@ -561,18 +702,15 @@
            (m/-cached (m/schema ?schema options) :generator #(-create % options)))
          (vary-meta assoc ::options options)))))
 
+(defn- gen-root [options gen rnd size]
+  (ensure-state options
+    (rose/root (gen/call-gen gen rnd size))))
+
 (defn generate
-  ":seed - set seed
-   :size - set size"
   ([?gen-or-schema]
    (generate ?gen-or-schema nil))
-  ([?gen-or-schema options]
-   (let [{::keys [seed size] :as options} (init-generator-options
-                                            (-> options
-                                                (update ::seed #(or (:seed options) % (current-time)))
-                                                (update ::size #(or (:size options) % 10))
-                                                (dissoc :samples :seed :size)))
-         gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
+  ([?gen-or-schema {:keys [seed size] :or {size 30} :as options}]
+   (let [gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
      (rose/root (gen/call-gen gen (-random seed) size)))))
 
 (defn sample
@@ -591,7 +729,7 @@
                                                 (dissoc :samples)))
          gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
      (->> (gen/make-size-range-seq size)
-          (map #(rose/root (gen/call-gen gen %1 %2))
+          (map #(gen-root options gen %1 %2)
                (gen/lazy-random-states (-random seed)))
           (take (or size samples))))))
 
@@ -614,7 +752,7 @@
      (eduction
        (map (fn [size]
               (let [rnd (ffirst (swap-vals! states rest))]
-                (rose/root (gen/call-gen gen rnd size)))))
+                (gen-root options gen rnd size))))
        (or (some-> samples take)
            identity)
        (gen/make-size-range-seq size)))))
