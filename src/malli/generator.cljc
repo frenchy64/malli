@@ -470,8 +470,11 @@
   )
 
 (defn -=>-gen [schema options]
-  (prn *state*)
-  (gen/sized #(gen/return (schema->function schema {:seed (current-seed) :size %}))))
+  (if (or (:seed options)
+          (not (:gen/impure (m/properties schema))))
+    (gen/sized #(gen/return (schema->function schema {:seed (current-seed) :size %})))
+    (gen/return (let [a (atom (sampling-eduction schema options))]
+                  (fn [& args] (ffirst (swap-vals! a rest)))))))
 
 (defn -function-gen [schema options]
   (gen/sized (fn [size]
