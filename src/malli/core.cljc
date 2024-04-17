@@ -1,7 +1,7 @@
 (ns malli.core
   (:refer-clojure :exclude [eval type -deref deref -lookup -key assert])
   #?(:cljs (:require-macros malli.core))
-  (:require #?(:clj [clojure.walk :as walk])
+  (:require [clojure.walk :as walk]
             [clojure.core :as c]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
@@ -2096,7 +2096,7 @@
    (-parent (schema ?schema options))))
 
 (defn walk
-  "Postwalks recursively over the Schema and it's children.
+  "Postwalks recursively over the Schema and its children.
    The walker callback is a arity4 function with the following
    arguments: schema, path, (walked) children and options."
   ([?schema f]
@@ -2489,6 +2489,148 @@
                                   :re-transformer (fn [_ children] (apply re/alt-transformer children))
                                   :re-min-max (fn [_ children] (reduce -re-alt-min-max {:max 0} (-vmap last children)))})})
 
+(defn -proxy-schema [{:keys [type min max childs type-properties fn]}]
+  ^{:type ::into-schema}
+  (reify IntoSchema
+    (-type [_] type)
+    (-type-properties [_] type-properties)
+    (-properties-schema [_ _])
+    (-children-schema [_ _])
+    (-into-schema [parent properties children options]
+      (-check-children! type properties children min max)
+      (let [[children forms schema] (fn properties (vec children) options)
+            form (delay (-create-form type properties forms options))
+            cache (-create-cache options)]
+        ^{:type ::schema}
+        (reify
+          Schema
+          (-validator [_] (-validator schema))
+          (-explainer [_ path] (-explainer schema path))
+          (-parser [_] (-parser schema))
+          (-unparser [_] (-unparser schema))
+          (-transformer [this transformer method options]
+            (-parent-children-transformer this [schema] transformer method options))
+          (-walk [this walker path options]
+            (let [children (if childs (subvec children 0 childs) children)]
+              (when (-accept walker this path options)
+                (-outer walker this path (-inner-indexed walker path children options) options))))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] @form)
+          Cached
+          (-cache [_] cache)
+          LensSchema
+          (-keep [_])
+          (-get [_ key default] (clojure.core/get children key default))
+          (-set [_ key value] (into-schema type properties (clojure.core/assoc children key value)))
+          RefSchema
+          (-ref [_])
+          (-deref [_] schema))))))
+
+(defn -all-form [binder+body]
+  (prn binder+body)
+  (let [[binder body] binder+body
+        binder (mapv (fn [b]
+                       (if (simple-symbol? b)
+                         (keyword b)
+                         (if (and (vector? b)
+                                  (= 2 (count b))
+                                  (simple-symbol? (first b)))
+                           (update b 0 keyword)
+                           ;;TODO map syntax for more options {:name a :upper :any :lower :int}
+                           (-fail! ::invalid-all-binder {:binder binder}))))
+                     binder)
+        kws (into #{} (map (fn [k]
+                             (cond-> k
+                               (vector? k) k
+                               (map? k) :name)))
+                  binder)
+        quote-body? (volatile! false)
+        _ (walk/postwalk (fn [v]
+                           (when (or (and (seq? v) (seq v))
+                                     (kws v))
+                             (vreset! quote-body? true))
+                           v)
+                         body)
+        body (if @quote-body?
+               (list 'quote body)
+               (let [sym->kw (into {} (map (fn [k]
+                                             [(symbol k) k]))
+                                   kws)]
+                 (walk/postwalk (fn [v]
+                                  (sym->kw v v))
+                                body)))]
+    [:all binder body]))
+
+#?(:clj
+   (defmacro all
+     "Children of :all are internal and subject to change. They will not be walked.
+
+     The only public interface for :all is inst and -bounds. Ensure entire form is quoted
+     when splicing into evaluation position in macros.
+
+     Use deref to instantiate the body with each type variable's upper bounds."
+     ([binder+body] `(-all-form ~binder+body))
+     ([binder body] `(all ['~binder '~body]))))
+
+(defn -quoted [[q v :as l]]
+  (when-not (and (seq? l)
+                 (= 2 (count l))
+                 (= 'quote (first l)))
+    (-fail! ::children-of-all-schema-must-be-quoted
+            {:l l}))
+  (second v))
+
+(defn -binder [all]
+  (first (-children all)))
+
+(defn -raw-body [all]
+  (quoted (second (-children all))))
+
+(defn- -inst* [binder inst schemas options]
+  (let [inst (quoted inst)
+        syms (mapv (fn [b] (-> b (cond-> (vector? b) first) symbol)) binder)
+        bounds (mapv (fn [b] (when-not (keyword? b) (second b))) binder)]
+    (when-not (= (count schemas)
+                 (count binder))
+      (-fail! ::wrong-number-of-schemas-to-inst
+              {:binder binder :schemas schemas}))
+    (schema (apply (eval (doto `(fn ~syms ~inst)))
+                   (map (fn [bound s] (if bound [:and s bound] s)) bounds schemas))
+            options)))
+
+(defn- -inst [all schemas options]
+  (let [[binder inst] (-children all)]
+    (-inst* binder inst schemas options)))
+
+(defn inst
+  "Instantiate an :all schema with a vector of schemas."
+  ([?all ?schemas] (inst ?all ?schemas nil))
+  ([?all ?schemas options]
+   (-inst (schema ?all options) (mapv #(schema % options) ?schemas) options)))
+
+(comment
+  (all [x] [:=> [:cat x] x])
+  (all [x] [:=> [:x x] x])
+  (all `([x#] [:=> (all [y#] y#) x#]))
+  (-raw-body (schema (all [x] [:=> [:cat x] x])))
+  (all `([x#] [:=> [:cat x#] x#]))
+  (do [:all (list 'quote `([x#] [:=> [:cat x#] x#]))])
+  )
+
+(defn -all-schema [_]
+  (-proxy-schema {:type :all :min 2 :max 2
+                  :childs 0
+                  :fn (fn [properties [binder inst :as c] options]
+                        [c c (-inst* binder inst (mapv (fn [_] :any) binder) options)])}))
+(comment
+  (form (schema (all [x] [:=> [:cat x] x])))
+  (form (schema (all [x] [:=> [:cat x] x])))
+  (do (list 'quote `([x#] [:=> [:cat x#] x#])))
+)
+
 (defn base-schemas []
   {:and (-and-schema)
    :or (-or-schema)
@@ -2507,6 +2649,7 @@
    :fn (-fn-schema)
    :ref (-ref-schema)
    :=> (-=>-schema)
+   :all (-all-schema nil)
    :function (-function-schema nil)
    :schema (-schema-schema nil)
    ::schema (-schema-schema {:raw true})})

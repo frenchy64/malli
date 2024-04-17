@@ -10,10 +10,14 @@
             [clojure.test.check.rose-tree :as rose]
             [malli.core :as m]
             [malli.registry :as mr]
+            [malli.util :as u]
             [malli.impl.util :refer [-last -merge]]
             #?(:clj [borkdude.dynaload :as dynaload])))
 
 (declare generator generate -create sampling-eduction)
+
+; {'x {:last-nth 2 :examples [1 2 3 4]}}
+(def ^:private +type-variable-examples+ (atom {}))
 
 (defprotocol Generator
   (-generator [this options] "returns generator for schema"))
@@ -372,13 +376,10 @@
 (defn- summarize-string [x]
   (non-zero (reduce #(unchecked-add %1 (int %2)) 0 x)))
 
-(defn- generate-pure-=> [?schema {:keys [seed size]}]
+(defn- generate-pure-=> [?schema {:keys [seed size] :as options}]
   (assert seed)
   (assert size)
-  (let [state (or *state*
-                  (prn "warning: no state in generate-pure-=>"))
-        _ (when state (prn "found state!" state))
-        schema (m/schema ?schema)
+  (let [schema (m/schema ?schema)
         options (m/options schema)
         _ (assert (= :=> (m/type schema)))
         [input output guard] (m/children schema)
@@ -386,47 +387,52 @@
         ;;TODO only generate a validator if it's 100% accurate
         valid-out? (m/validator output)]
     (fn [& args]
-      (binding [*state* {::output {:seed seed}}]
-        (let [;;TODO this kind of thing would help generate polymorphic functions
-              ;; e.g., (all [x] [:-> x x]) would instantiate to something like:
-              ;;       [:-> [:any {:tv x'}] [:any {:tv x'}]]
-              ;;       Then we can remember seeing the input when generating the output
-              ;;       and match them up.
-              ;; might be more challenges with higher-order polymorphic functions.
-              output-candidates (atom []) ;; TODO how to best use this? maybe small size == reuse more input?
-              n (letfn [(record [x]
-                          #_(when (valid-out? x)
-                              (swap! output-candidates conj x)))
-                        (summarize-ident [x]
-                          (non-zero (unchecked-add (unknown (namespace x))
-                                                   (unknown (name x)))))
-                        (unknown [x]
-                          (record x)
-                          (cond
-                            (boolean? x) (if x 1 0)
-                            (int? x) x
-                            (string? x) (summarize-string x)
-                            (ident? x) (summarize-ident x)
-                            (coll? x) (reduce #(unchecked-add %1 (unknown %2)) 0
-                                              (eduction
-                                                (if (and (seq? x) (not (counted? x)))
-                                                  (take 32)
-                                                  identity)
-                                                x))
-                            (fn? x) 64
-                            (ifn? x) -64
-                            (instance? java.math.BigInteger x) (unknown (.toPlainString ^java.math.BigInteger x))
-                            (instance? clojure.lang.BigInt x) (unknown (str x))
-                            (instance? java.math.BigDecimal x) (unknown (.toPlainString ^java.math.BigDecimal x))
-                            (instance? Float x) (Float/floatToIntBits x)
-                            (instance? Double x) (Double/doubleToLongBits x)
-                            (instance? java.util.concurrent.atomic.AtomicInteger x) (.longValue ^java.util.concurrent.atomic.AtomicInteger x)
-                            (instance? java.util.concurrent.atomic.AtomicLong x) (.longValue ^java.util.concurrent.atomic.AtomicLong x)
-                            (instance? clojure.lang.IAtom2 x) (unchecked-add (unknown @x) 1024)
-                            :else 0))
-                        (known [schema x]
-                          (record x)
-                          (unchecked-multiply
+      (let [;;TODO this kind of thing would help generate polymorphic functions
+            ;; e.g., (all [x] [:-> x x]) would instantiate to something like:
+            ;;       [:-> [:any {:tv x'}] [:any {:tv x'}]]
+            ;;       Then we can remember seeing the input when generating the output
+            ;;       and match them up.
+            ;; might be more challenges with higher-order polymorphic functions.
+            output-candidates (atom {}) ;; TODO how to best use this? maybe small size == reuse more input?
+            n (letfn [(record
+                        ([x] (record nil x))
+                        ([schema x]
+                         (let [poly (when schema (::poly-poc (m/properties schema)))]
+                           (when poly
+                             (swap! output-candidates update-in [::poly poly] (fnil conj []) x))
+                           #_(when (valid-out? x)
+                               (swap! output-candidates conj x)))))
+                      (summarize-ident [x]
+                        (non-zero (unchecked-add (unknown (namespace x))
+                                                 (unknown (name x)))))
+                      (unknown [x]
+                        (record nil x)
+                        (cond
+                          (boolean? x) (if x 1 0)
+                          (int? x) x
+                          (string? x) (summarize-string x)
+                          (ident? x) (summarize-ident x)
+                          (coll? x) (reduce #(unchecked-add %1 (unknown %2)) 0
+                                            (eduction
+                                              (if (and (seq? x) (not (counted? x)))
+                                                (take 32)
+                                                identity)
+                                              x))
+                          (fn? x) 64
+                          (ifn? x) -64
+                          (instance? java.math.BigInteger x) (unknown (.toPlainString ^java.math.BigInteger x))
+                          (instance? clojure.lang.BigInt x) (unknown (str x))
+                          (instance? java.math.BigDecimal x) (unknown (.toPlainString ^java.math.BigDecimal x))
+                          (instance? Float x) (Float/floatToIntBits x)
+                          (instance? Double x) (Double/doubleToLongBits x)
+                          (instance? java.util.concurrent.atomic.AtomicInteger x) (.longValue ^java.util.concurrent.atomic.AtomicInteger x)
+                          (instance? java.util.concurrent.atomic.AtomicLong x) (.longValue ^java.util.concurrent.atomic.AtomicLong x)
+                          (instance? clojure.lang.IAtom2 x) (unchecked-add (unknown @x) 1024)
+                          :else 0))
+                      (known [schema x]
+                        (record schema x)
+                        (unchecked-multiply
+                          (let []
                             (case (m/type schema)
                               :cat (let [cs (m/children schema)
                                          vs (m/parse schema x options)]
@@ -447,13 +453,21 @@
                                       (throw (m/-exception ::invalid-cat {:schema schema :x x})))
                                   (unchecked-add
                                     (unknown (m/type schema))
-                                    (unknown x))))
-                            (unchecked-inc size)))]
-                  (known input args))
-              seed (cond-> n seed (unchecked-add seed))]
-          (generate output {:size size :seed seed}))))))
+                                    (unknown x)))))
+                          (unchecked-inc size)))]
+                (known input args))
+            seed (cond-> n seed (unchecked-add seed))]
+        (generate output (update options ::poly-examples
+                                 (fn [poly-examples]
+                                   (merge-with (fn [l r]
+                                                 )
+                                               poly-examples
+                                               (update-vals (::poly @output-candidates))))))))))
 
 (comment
+
+  ((generate (all [x] [:=> [:cat x] x]))
+   1)
   (m/parse [:cat :int :int] [1 2])
   (m/parse [:cat] [])
   (m/parse [:cat :int :int] [1 2 3])
@@ -678,7 +692,11 @@
 (extend-protocol Generator
   #?(:clj Object, :cljs default)
   (-generator [schema options]
-    (-schema-generator schema (assoc options ::original-generator-schema schema))))
+    (if-some [poly (::poly-poc (m/properties schema))]
+      (let []
+        (gen/sized (fn [size]
+                     (rand-nth ))))
+      (-schema-generator schema (assoc options ::original-generator-schema schema)))))
 
 (defn- -create-from-gen
   [props schema options]
