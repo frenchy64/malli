@@ -467,14 +467,19 @@
                                                                       (prn "arg" f)
                                                                       (f 13)))))
   (generate [:cat :int])
+  (generate [:=> {:gen/impure true} [:cat :int] :int])
   )
 
 (defn -=>-gen [schema options]
   (if (or (:seed options)
           (not (:gen/impure (m/properties schema))))
     (gen/sized #(gen/return (schema->function schema {:seed (current-seed) :size %})))
-    (gen/return (let [a (atom (sampling-eduction schema options))]
-                  (fn [& args] (ffirst (swap-vals! a rest)))))))
+    (gen/sized (fn [size]
+                 (let [a (atom (sampling-eduction (:output (m/-function-info schema))
+                                                  (-> options
+                                                      (assoc :size size)
+                                                      (dissoc :seed))))]
+                   (m/-instrument {:schema schema} (fn [& _] (ffirst (swap-vals! a rest)))))))))
 
 (defn -function-gen [schema options]
   (gen/sized (fn [size]
@@ -736,24 +741,38 @@
   
   :seed - set seed
   :size - set size
-  :samples - set number of samples, or infinite"
+  :samples - set number of samples, or infinite
+  
+  Second argument can be a transducer  that is applied at the end of the eduction.
+  For 2-arity, transducer must be fn?, otherwise is treated as options.
+
+  (sampling-eduction :int (take 15))
+  ;=> (-1 -1 1 -1 -2 -11 0 -7 -46 122 -1 0 -1 0 0)
+  (sequence (take 15) (sampling-eduction :int {:seed 10}))
+  ;=> (-1 0 -1 3 1 3 -2 -2 5 0 -1 -1 -2 3 -5)
+  (sampling-eduction :int (take 15) {:seed 10})
+  ;=> (-1 0 -1 3 1 3 -2 -2 5 0 -1 -1 -2 3 -5)."
   ([?gen-or-schema]
-   (sampling-eduction ?gen-or-schema nil))
-  ([?gen-or-schema {:keys [samples] :as options}]
-   (let [{::keys [seed size] :as options} (init-generator-options
-                                            (-> options
-                                                (update ::seed #(or (:seed options) %))
-                                                (update ::size #(or (:size options) %))
-                                                (dissoc :seed :size :samples)))
-         gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))
-         states (atom (gen/lazy-random-states (-random seed)))]
+   (sampling-eduction ?gen-or-schema identity nil))
+  ([?gen-or-schema ?options-or-xform-fn]
+   (let [xform? (fn? ?options-or-xform-fn)]
+     (sampling-eduction ?gen-or-schema
+                        (if xform? ?options-or-xform-fn identity)
+                        (when-not xform? ?options-or-xform-fn))))
+  ([?gen-or-schema xform {:keys [seed size] :or {size 10} :as options}]
+   (let [gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
      (eduction
-       (map (fn [size]
-              (let [rnd (ffirst (swap-vals! states rest))]
-                (gen-root options gen rnd size))))
-       (or (some-> samples take)
-           identity)
-       (gen/make-size-range-seq size)))))
+       (map-indexed (fn [iter rnd]
+                      (let [size (mod iter size)]
+                        (gen-root options gen rnd size))))
+       (or xform identity)
+       (gen/lazy-random-states (-random seed))))))
+
+(comment
+  ;=> (-1 0 -1 3 1 3 -2 -2 5 0 -1 -1 -2 3 -5)
+  (let [e (sampling-eduction :int (take 50))]
+    (repeatedly 30 #(first e)))
+)
 
 ;;
 ;; functions
