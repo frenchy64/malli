@@ -695,12 +695,10 @@
   ([?schema]
    (generator ?schema nil))
   ([?schema options]
-   (let [options (init-generator-options options)]
-     (-> (if (::rec-gen options)
-           ;; disable cache while calculating recursive schemas. caches don't distinguish options.
-           (-create (m/schema ?schema options) options)
-           (m/-cached (m/schema ?schema options) :generator #(-create % options)))
-         (vary-meta assoc ::options options)))))
+   (if (::rec-gen options)
+     ;; disable cache while calculating recursive schemas. caches don't distinguish options.
+     (-create (m/schema ?schema options) options)
+     (m/-cached (m/schema ?schema options) :generator #(-create % options)))))
 
 (defn- gen-root [options gen rnd size]
   (ensure-state options
@@ -721,17 +719,12 @@
   :samples - set number of samples, or :size is used"
   ([?gen-or-schema]
    (sample ?gen-or-schema nil))
-  ([?gen-or-schema {:keys [samples] :as options}]
-   (let [{::keys [seed size] :as options} (init-generator-options
-                                            (-> options
-                                                (update ::seed #(or (:seed options) % (current-time)))
-                                                (update ::size #(or (:size options) % 10))
-                                                (dissoc :samples)))
-         gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
+  ([?gen-or-schema {:keys [seed size] :or {size 10} :as options}]
+   (let [gen (if (gen/generator? ?gen-or-schema) ?gen-or-schema (generator ?gen-or-schema options))]
      (->> (gen/make-size-range-seq size)
-          (map #(gen-root options gen %1 %2)
+          (map #(rose/root (gen/call-gen gen %1 %2))
                (gen/lazy-random-states (-random seed)))
-          (take (or size samples))))))
+          (take size)))))
 
 (defn sampling-eduction
   "An infinite eduction of generator samples, or length :samples.
@@ -764,8 +757,7 @@
 (defn function-checker
   ([?schema] (function-checker ?schema nil))
   ([?schema {::keys [=>iterations] :or {=>iterations 100} :as options}]
-   (let [{:keys [seed] :as options} (init-generator-options options)
-         schema (m/schema ?schema options)
+   (let [schema (m/schema ?schema options)
          -try (fn [f] (try [(f) true] (catch #?(:clj Exception, :cljs js/Error) e [e false])))
          check (fn [schema]
                  (let [{:keys [input output guard]} (m/-function-info schema)
@@ -774,10 +766,9 @@
                        valid-guard? (if guard (m/validator guard options) (constantly true))
                        validate (fn [f args] (as-> (apply f args) $ (and (valid-output? $) (valid-guard? [args $]))))]
                    (fn [f]
-                     (let [{:keys [result shrunk]} (check/quick-check
-                                                     =>iterations
-                                                     (prop/for-all* [input-generator] #(validate f %))
-                                                     :seed seed)
+                     (let [{:keys [result shrunk]} (->> (prop/for-all* [input-generator] #(validate f %))
+                                                        ;;TODO propagate seed/size
+                                                        (check/quick-check =>iterations))
                            smallest (-> shrunk :smallest first)]
                        (when-not (true? result)
                          (let [explain-input (m/explain input smallest)
