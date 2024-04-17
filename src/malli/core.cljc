@@ -2529,10 +2529,8 @@
           (-ref [_])
           (-deref [_] schema))))))
 
-(defn -all-form [binder+body]
-  (prn binder+body)
-  (let [[binder body] binder+body
-        binder (mapv (fn [b]
+(defn -all-form [binder quoted-body body]
+  (let [binder (mapv (fn [b]
                        (if (simple-symbol? b)
                          (keyword b)
                          (if (and (vector? b)
@@ -2542,26 +2540,40 @@
                            ;;TODO map syntax for more options {:name a :upper :any :lower :int}
                            (-fail! ::invalid-all-binder {:binder binder}))))
                      binder)
-        kws (into #{} (map (fn [k]
-                             (cond-> k
-                               (vector? k) k
-                               (map? k) :name)))
+        kws (into [] (map (fn [k]
+                            (cond-> k
+                              (vector? k) k
+                              (map? k) :name)))
                   binder)
-        quote-body? (volatile! false)
+        uuids (mapv (fn [_] (random-uuid)) kws)
+        forbidden-set (into #{} (mapcat (juxt identity symbol)) kws)
+        found-kws (volatile! #{})
         _ (walk/postwalk (fn [v]
-                           (when (or (and (seq? v) (seq v))
-                                     (kws v))
-                             (vreset! quote-body? true))
+                           (when (keyword? v)
+                             (vswap! found-kws conj v))
                            v)
-                         body)
-        body (if @quote-body?
-               (list 'quote body)
-               (let [sym->kw (into {} (map (fn [k]
-                                             [(symbol k) k]))
-                                   kws)]
-                 (walk/postwalk (fn [v]
-                                  (sym->kw v v))
-                                body)))]
+                         (apply body uuids))
+        found-kws @found-kws
+        kws (mapv (fn [k]
+                    (if (found-kws k)
+                      (loop [i 0]
+                        (let [k' (keyword (str (name k) i))]
+                          (if (found-kws k')
+                            (recur (inc i))
+                            k')))
+                      k))
+                  kws)
+        binder (mapv (fn [b k]
+                       (if (simple-keyword? b)
+                         k
+                         (if (and (vector? b)
+                                  (= 2 (count b))
+                                  (simple-keyword? (first b)))
+                           (assoc b 0 k)
+                           ;;TODO map syntax for more options {:name a :upper :any :lower :int}
+                           (-fail! ::invalid-all-binder {:binder binder}))))
+                     binder kws)
+        body (apply body kws)]
     [:all binder body]))
 
 #?(:clj
@@ -2572,8 +2584,17 @@
      when splicing into evaluation position in macros.
 
      Use deref to instantiate the body with each type variable's upper bounds."
-     ([binder+body] `(-all-form ~binder+body))
-     ([binder body] `(all ['~binder '~body]))))
+     [binder body]
+     (let [bv (mapv (fn [b]
+                      (if (symbol? b)
+                        b
+                        (if (vector? b)
+                          (first b)
+                          (if (map? b)
+                            (:name b)
+                            (-fail! ::bad-all-binder {:binder binder})))))
+                    binder)]
+       `(-all-form '~binder '~body (fn ~bv ~body)))))
 
 (defn -quoted [[q v :as l]]
   (when-not (and (seq? l)
@@ -2612,8 +2633,15 @@
    (-inst (schema ?all options) (mapv #(schema % options) ?schemas) options)))
 
 (comment
-  (all [x] [:=> [:cat x] x])
-  (all [x] [:=> [:x x] x])
+  (clojure.test/is (= [:all [:x] [:=> [:cat :x] :x]]
+                      (all [x] [:=> [:cat x] x])))
+  (clojure.test/is (= [:all [:x0] [:=> [:x :x0] :x0]]
+                      (all [x] [:=> [:x x] x])))
+  (clojure.test/is (= [:all [:x] [:=> [:cat [:all [:y] :y]] :x]]
+                      (all [x] [:=> [:cat (all [y] y)] x])))
+  (clojure.test/is (= [:all [:x0] [:=> [:cat [:all [:x] :x]] :x0]]
+                      (all [x] [:=> [:cat (all [x] x)] x])))
+  ;;TODO eval body and subst
   (all `([x#] [:=> (all [y#] y#) x#]))
   (-raw-body (schema (all [x] [:=> [:cat x] x])))
   (all `([x#] [:=> [:cat x#] x#]))
