@@ -2657,7 +2657,7 @@
         ;; add renamed variables to forbidden-kws
         ;; then do the same for each schemas. Then it should be safe
         ;; to instantiate.
-        [binder body] ()
+        [binder body] (assert nil)
         schemas (mapv (fn [s]
                         (prn "s" s)
                         (walk s (fn [s _ _ options]
