@@ -545,10 +545,36 @@
       #_(is (= 1 (m/decode schema "1" mt/string-transformer)))
       #_(is (= "1" (m/decode schema "1" mt/json-transformer)))
 
-      (testing "map enums require nil properties"
-        (let [schema [:enum nil {:a 1} {:b 2}]]
-          (is (= nil (m/properties schema)))
-          (is (= [{:a 1} {:b 2}] (m/children schema)))))
+      (testing "nil enums without properties require empty properties"
+        (let [schema [:enum nil nil]]
+          (testing (pr-str schema)
+            (is (= nil (m/properties schema)))
+            (is (= [nil] (m/children schema)))
+            (is (= schema (m/form schema)))
+            (is (= schema (-> schema m/form m/schema m/form))))))
+
+      (testing "nil nums support properties"
+        (let [schema [:enum {:foo :bar} nil]]
+          (is (= {:foo :bar} (m/properties schema)))
+          (is (= [nil] (m/children schema)))
+          (is (= schema (m/form schema)))
+          (is (= schema (-> schema m/form m/schema m/form)))))
+
+      (testing "map enums without properties require empty properties"
+        (doseq [schema [[:enum nil {:a 1} {:b 2}]
+                        [:enum {} {:a 1} {:b 2}]]]
+          (testing (pr-str schema)
+            (is (= nil (m/properties schema)))
+            (is (= [{:a 1} {:b 2}] (m/children schema)))
+            (is (= [:enum nil {:a 1} {:b 2}] (m/form schema)))
+            (is (= [:enum nil {:a 1} {:b 2}] (-> schema m/form m/schema m/form))))))
+
+      (testing "map enums support properties"
+        (let [schema [:enum {:foo :bar} {:a 1} {:b 2}]]
+          (is (= {:foo :bar} (m/properties schema)))
+          (is (= [{:a 1} {:b 2}] (m/children schema)))
+          (is (= schema (m/form schema)))
+          (is (= schema (-> schema m/form m/schema m/form)))))
 
       (is (true? (m/validate (over-the-wire schema) 1)))
 
@@ -3357,6 +3383,60 @@
                                              ::xymap [:merge ::xmap ::ymap]}}
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
+
+(deftest all-test
+  ;; no alpha-renaming needed
+  (is (= [:all [:x] [:=> [:cat :x] :x]]
+         (m/form (m/all [x] [:=> [:cat x] x]))))
+  (is (= [:all [:x] [:-> :x :x]]
+         (m/form (m/all [x] [:-> x x]))))
+  ;; alpha-rename binder if clashing keyword in body form
+  (is (= [:all [:x0] [:=> [:x :x0] :x0]]
+         (m/form (m/all [x] [:=> [:x x] x]))))
+  (is (= [:all [:x] [:=> [:cat [:all [:y] :y]] :x]]
+         (m/form (m/all [x] [:=> [:cat (m/all [y] y)] x]))))
+  ;; alpha-rename outer binder if clashing :all inside (actually just 
+  ;; a naive keyword occurrence check on the form of the body).
+  (is (= [:all [:x0] [:=> [:cat [:all [:x] :x]] :x0]]
+         (m/form (m/all [x] [:=> [:cat (m/all [x] x)] x]))))
+  (is (= [:all [:x0] [:-> [:all [:x] :x] :x0]]
+         (m/form (m/all [x] [:-> (m/all [x] x) x]))))
+  (is (= [:=> [:cat [:schema :any]] [:schema :any]]
+         (m/form (m/inst (m/all [x] [:=> [:cat x] x]) [:any]))))
+  (is (= [:->
+          [:schema [:all [:x] [:-> :x :x]]]
+          [:schema [:all [:x] [:-> :x :x]]]]
+         (m/form (m/inst (m/all [x] [:-> x x])
+                         [(m/all [x] [:-> x x])])))) ;;FIXME
+  (is (= [:all [:y0] [:schema [:all [:y] :y]]]
+         (m/form (m/inst (m/all [x] (m/all [y] x))
+                         [(m/all [y] y)]))))
+  ;;TODO could be smarter here since no substitution occurs
+  (is (= [:all [:x1] :x1]
+         (m/form (m/inst (m/all [x] (m/all [x] x))
+                         [(m/all [x] x)]))))
+  (is (= [:=> [:cat [:schema :any]] [:schema :any]]
+         (m/form (m/deref (m/all [a] [:=> [:cat a] a])))))
+  (is (= [:-> [:schema :any] [:schema :any]]
+         (m/form (m/deref (m/all [a] [:-> a a])))))
+  (is (= [:=> [:cat [:schema [:maybe :map]] [:schema :any]]
+          [:merge [:schema [:maybe :map]] [:map [:x [:schema :any]]]]]
+         (m/form
+           (let [options {:registry (mr/composite-registry m/default-registry (mu/schemas))}]
+             (-> (m/all [[M [:maybe :map]] X] [:=> [:cat M X] [:merge M [:map [:x X]]]])
+                 (m/schema options)
+                 m/deref)))))
+  (is (= [:->
+          [:schema [:maybe :map]]
+          [:schema :any]
+          [:merge
+           [:schema [:maybe :map]]
+           [:map [:x [:schema :any]]]]]
+         (m/form
+           (let [options {:registry (mr/composite-registry m/default-registry (mu/schemas))}]
+             (-> (m/all [[M [:maybe :map]] X] [:-> M X [:merge M [:map [:x X]]]])
+                 (m/schema options)
+                 m/deref))))))
 
 (deftest proxy-schema-explain-path
   (let [y-schema [:int {:doc "int"}]

@@ -198,6 +198,7 @@
 (defmethod accept :-> [_ s _ _] (-accept-=> s))
 
 (defmethod accept :function [_ _ _children _] "function")
+(defmethod accept :all [_ schema _ {::keys [describe] :as options}] (describe (m/deref schema) options))
 (defmethod accept :fn [_ _ _ _] "function")
 
 (defn -tagged [children] (map (fn [[tag _ c]] (str c " (tag: " tag ")")) children))
