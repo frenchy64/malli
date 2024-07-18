@@ -4,13 +4,27 @@
             [malli.registry :as mr]))
 
 (deftest mutable-test
-  (let [registry* (atom {})
+  (let [registry* (atom (m/default-schemas))
         registry (mr/mutable-registry registry*)
         register! (fn [t ?s] (swap! registry* assoc t ?s))]
-    (testing "default registy"
+    (testing "default registry"
       (is (thrown? #?(:clj Exception, :cljs js/Error) (m/validate :str "kikka" {:registry registry})))
       (register! :str (m/-string-schema))
-      (is (true? (m/validate :str "kikka" {:registry registry}))))))
+      (is (true? (m/validate :str "kikka" {:registry registry})))
+      (register! ::foo (m/schema [:tuple :int]))
+      (is (= ::foo
+             (-> (m/schema ::foo {:registry registry})
+                 m/form)))
+      (is (= [::foo {:doc ""}]
+             (-> (m/schema [::foo {:doc ""}] {:registry registry})
+                 m/form)))
+      (register! ::bare [:tuple :int])
+      (is (= ::bare
+             (-> (m/schema ::bare {:registry registry})
+                 m/form)))
+      (is (= [::bare {:doc ""}]
+             (-> (m/schema [::bare {:doc ""}] {:registry registry})
+                 m/form))))))
 
 (deftest composite-test
   (let [registry* (atom {})
