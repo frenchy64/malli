@@ -100,23 +100,22 @@
       (let [[binder body-syntax] children
             ;;TODO parse binder + kind
             self-inst (delay (inst [:all binder body-syntax] options))
-            body' (reduce
-                    (fn [s _]
-                      (m/schema (mln/-scoped s) options))
+            names (-all-binder-names binder)
+            body' (mln/-abstract-many
                     (m/schema body-syntax
                               (update options :registry
                                       #(mr/composite-registry
-                                         (into {} (map-indexed (fn [i n] [n (m/schema [::mln/b i] options)]))
-                                               (rseq (-all-binder-names binder)))
+                                         (into {} (map (fn [n] [n (m/schema [::mln/f n] options)])) names)
                                          (or % {}))))
-                    (range (count binder)))
+                    names
+                    options)
             form (delay
                    (m/-create-form :all properties
                                    (assoc children 1
                                           (-> body'
                                               (-instantiate-many 
                                                 (mapv (fn [n] (m/schema [::mln/f n] options))
-                                                      (-all-binder-names binder))
+                                                      names)
                                                 options)
                                               m/form))
                                    options))

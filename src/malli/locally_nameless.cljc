@@ -7,9 +7,9 @@
 ;; See "I am not a number: I am a free variable" - Conor McBride and James McKinna
 
 (defn -scoped
-  ([s] (-scoped s 1))
+  ([s] [:schema {::scope true} s])
   ([s n]
-   (reduce (fn [acc _] [:schema {::scope true} acc])
+   (reduce (fn [acc _] (-scoped acc))
            s (range n))))
 
 (defn -abstract [?schema nme options]
