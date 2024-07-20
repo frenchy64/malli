@@ -7,110 +7,10 @@
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
-            [malli.sci :as ms]
+            [malli.locally-nameless :as mln :refer [-instantiate-many]]
             [malli.poly-protocols :refer [AllSchema -bounds -inst]]))
 
 (declare inst)
-
-;; -abstract / -instantiate for locally nameless representation
-;; See "I am not a number: I am a free variable" - Conor McBride and James McKinna
-
-(defn -abstract [?schema nme options]
-  (let [inner (fn [this s path options]
-                (let [properties (m/properties s)
-                      options (cond-> options
-                                (::scope properties) (update ::abstract-index inc))
-                      s (cond-> s
-                          (:registry properties)
-                          (-> (m/ast options)
-                              (update :registry #(not-empty
-                                                   (into {} (map (fn [[k ast]]
-                                                                   [k (-> ast
-                                                                          (m/from-ast options)
-                                                                          (m/-walk this (conj path :registry k) options)
-                                                                          (m/ast options))]))
-                                                         %)))
-                              (m/from-ast options)))]
-                  (m/-walk s this path options)))
-        outer (fn [s path children {::keys [abstract-index] :as options}]
-                (let [s (m/-set-children s children)]
-                  (case (m/type s)
-                    ::f (let [[id] children]
-                          (if (= nme id)
-                            (m/schema [::b abstract-index] options)
-                            s))
-                    ::m/val (first children)
-                    s)))]
-    (m/schema
-      [:schema {::scope true}
-       (inner
-         (reify m/Walker
-           (-accept [_ s path options] true)
-           (-inner [this s path options] (inner this s path options))
-           (-outer [_ schema path children options]
-             (outer schema path children options)))
-         (m/schema ?schema options)
-         []
-         (assoc options
-                ::m/walk-refs false
-                ::m/walk-schema-refs false
-                ::m/walk-entry-vals true
-                ::abstract-index 0))]
-      options)))
-
-(defn -abstract-many [s names options]
-  (reduce (fn [s nme]
-            (-abstract s nme options))
-          s names))
-
-(defn -instantiate [?scope to options]
-  (let [to (m/schema to options)
-        inner (fn [this s path options]
-                (let [properties (m/properties s)
-                      options (cond-> options
-                                (::scope (m/-properties s)) (update ::instantiate-index inc))
-                      s (cond-> s
-                          (:registry properties)
-                          (-> (m/ast options)
-                              (update :registry #(not-empty
-                                                   (into {} (map (fn [[k ast]]
-                                                                   [k (-> ast
-                                                                          (m/from-ast options)
-                                                                          (m/-walk this (conj path :registry k) options)
-                                                                          (m/ast options))]))
-                                                         %)))
-                              (m/from-ast options)))]
-                  (m/-walk s this path options)))
-        outer (fn [s path children {::keys [instantiate-index] :as options}]
-                (let [s (m/-set-children s children)]
-                  (case (m/type s)
-                    ::b (let [[id] children]
-                          (if (= instantiate-index id)
-                            to
-                            s))
-                    ::m/val (first children)
-                    s)))
-        s (m/schema ?scope options)
-        _ (when-not (-> s m/-properties ::scope)
-            (m/-fail! ::instantiate-non-scope {:schema s}))]
-    (inner
-      (reify m/Walker
-        (-accept [_ s path options] true)
-        (-inner [this s path options] (inner this s path options))
-        (-outer [_ schema path children options]
-          (outer schema path children options)))
-      (first (m/-children s))
-      []
-      (assoc options
-             ::m/walk-refs false
-             ::m/walk-schema-refs false
-             ::m/walk-entry-vals true
-             ::instantiate-index 0))))
-
-(defn -instantiate-many [s images options]
-  (reduce (fn [s image]
-            (-instantiate s image options))
-          s images))
 
 (defn -all-names [s]
   (map #(nth % 0) (-bounds s)))
@@ -187,49 +87,6 @@
 (defn -all-binder-defaults [binder]
   (mapv :default (-all-binder-bounds binder)))
 
-(defn -free-schema [{:keys [type] :or {type ::f}}]
-  ^{:type ::m/into-schema}
-  (reify
-    m/AST
-    (-from-ast [parent ast options] (m/-from-value-ast parent ast options))
-    m/IntoSchema
-    (-type [_] type)
-    (-type-properties [_])
-    (-properties-schema [_ _])
-    (-children-schema [_ _])
-    (-into-schema [parent properties children options]
-      (m/-check-children! type properties children 1 1)
-      (when-not (case type
-                  ::f (-> children first simple-keyword?)
-                  ::b (-> children first nat-int?))
-        (m/-fail! ::free-should-have-simple-keyword {:children children}))
-      (let [form (delay (case type
-                          ::f (-> children first)
-                          (m/-simple-form parent properties children identity options)))
-            cache (m/-create-cache options)]
-        ^{:type ::m/schema}
-        (reify
-          m/AST
-          (-to-ast [this _] (m/-to-value-ast this))
-          m/Schema
-          (-validator [_] (m/-fail! ::cannot-validate-free))
-          (-explainer [this path] (m/-fail! ::cannot-explain-free))
-          (-parser [this] (m/-fail! ::cannot-parse-free))
-          (-unparser [this] (m/-fail! ::cannot-unparse-free))
-          (-transformer [this transformer method options]
-            (m/-intercepting (m/-value-transformer transformer this method options)))
-          (-walk [this walker path options] (m/-walk-leaf this walker path options))
-          (-properties [_] properties)
-          (-options [_] options)
-          (-children [_] children)
-          (-parent [_] parent)
-          (-form [_] @form)
-          m/Cached
-          (-cache [_] cache)
-          m/LensSchema
-          (-keep [_])
-          (-get [_ _ default] default)
-          (-set [this key _] (m/-fail! ::non-associative-schema {:schema this, :key key})))))))
 
 (defn -all-schema [_]
   ^{:type ::m/into-schema}
@@ -245,11 +102,11 @@
             self-inst (delay (inst [:all binder body-syntax] options))
             body' (reduce
                     (fn [s _]
-                      (m/schema [:schema {::scope true} s] options))
+                      (m/schema (mln/-scoped s) options))
                     (m/schema body-syntax
                               (update options :registry
                                       #(mr/composite-registry
-                                         (into {} (map-indexed (fn [i n] [n (m/schema [::b i] options)]))
+                                         (into {} (map-indexed (fn [i n] [n (m/schema [::mln/b i] options)]))
                                                (rseq (-all-binder-names binder)))
                                          (or % {}))))
                     (range (count binder)))
@@ -258,7 +115,7 @@
                                    (assoc children 1
                                           (-> body'
                                               (-instantiate-many 
-                                                (mapv (fn [n] (m/schema [::f n] options))
+                                                (mapv (fn [n] (m/schema [::mln/f n] options))
                                                       (-all-binder-names binder))
                                                 options)
                                               m/form))
@@ -333,9 +190,7 @@
   ([?all insts options] (-inst (m/schema ?all options) (mapv #(m/schema % options) insts))))
 
 (defn schemas []
-  {:all (-all-schema nil)
-   ::f (-free-schema {:type ::f})
-   ::b (-free-schema {:type ::b})})
+  (into (mln/schemas) {:all (-all-schema nil)}))
 
 (comment
   (m/ast [:schema {:registry {::a :int}} ::a])
