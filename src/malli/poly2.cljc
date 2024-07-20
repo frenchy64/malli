@@ -87,7 +87,6 @@
 (defn -all-binder-defaults [binder]
   (mapv :default (-all-binder-bounds binder)))
 
-
 (defn -all-schema [_]
   ^{:type ::m/into-schema}
   (reify m/IntoSchema
