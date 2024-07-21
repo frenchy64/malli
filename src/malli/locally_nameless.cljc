@@ -105,6 +105,44 @@
              ::m/walk-entry-vals true
              ::instantiate-index 0))))
 
+(defn -fv [?schema options]
+  (let [fvs (atom #{})
+        inner (fn [this s path options]
+                (let [properties (m/properties s)
+                      s (cond-> s
+                          (:registry properties)
+                          (-> (m/ast options)
+                              (update :registry #(not-empty
+                                                   (into {} (map (fn [[k ast]]
+                                                                   [k (-> ast
+                                                                          (m/from-ast options)
+                                                                          (m/-walk this (conj path :registry k) options)
+                                                                          (m/ast options))]))
+                                                         %)))
+                              (m/from-ast options)))]
+                  (m/-walk s this path options)))
+        outer (fn [s path children {::keys [instantiate-index] :as options}]
+                (let [s (m/-set-children s children)]
+                  (case (m/type s)
+                    ::f (let [[id] children]
+                          (swap! fvs conj id)
+                          s)
+                    ::m/val (first children)
+                    s)))]
+    (inner
+      (reify m/Walker
+        (-accept [_ s path options] true)
+        (-inner [this s path options] (inner this s path options))
+        (-outer [_ schema path children options]
+          (outer schema path children options)))
+      (m/schema ?schema options)
+      []
+      (assoc options
+             ::m/walk-refs false
+             ::m/walk-schema-refs false
+             ::m/walk-entry-vals true))
+    @fvs))
+
 ;; TODO single pass
 (defn -instantiate-many [s images options]
   (reduce (fn [s image]

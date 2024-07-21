@@ -57,7 +57,14 @@
                (-unparser [this] (m/-unparser @unfold))
                (-transformer [_ transformer method options] (m/-transformer @unfold transformer method options))
                ;;TODO
-               (-walk [this walker path options] (m/-walk-leaf this walker path options))
+               (-walk [this walker path options]
+                 (when (m/-accept walker this path options)
+                   (m/-outer walker this path
+                             (let [gname (-> bname name gensym keyword)
+                                   gbody (mln/-instantiate body' [::mln/f gname] options)]
+                               (prn "gbody" gbody)
+                               [[gname] (m/-inner walker gbody (conj path 1) options)])
+                             options)))
                (-properties [_] properties)
                (-options [_] options)
                (-children [_] children)

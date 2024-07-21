@@ -144,6 +144,7 @@
               (fn [x] (if (validator x) x ::m/invalid))))
           (-unparser [this] (m/-parser this))
           (-transformer [_ _ _ _])
+          ;;FIXME critical for nested types like [:all [:x] [:all [:y] :x]]
           (-walk [this walker path options] (m/-walk-leaf this walker path options))
           (-properties [_] properties)
           (-options [_] options)
