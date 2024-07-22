@@ -683,6 +683,75 @@
     (testing "mutual recursion"
       (let [registry {::ping [:maybe [:tuple [:= "ping"] [:ref ::pong]]]
                       ::pong [:maybe [:tuple [:= "pong"] [:ref ::ping]]]}]
+        #_
+        (do
+          ((letfn [(ping [v] (or (nil? v)
+                                 (and (vector? v)
+                                      (= 2 (count v))
+                                      (= "ping" (nth v 0))
+                                      (pong (nth v 1)))))
+                   (pong [v] (or (nil? v)
+                                 (and (vector? v)
+                                      (= 2 (count v))
+                                      (= "pong" (nth v 0))
+                                      (ping (nth v 1)))))]
+             ping)
+           ["ping" ["pong" nil]])
+          ((let [pong (fn [ping v]
+                        (or (nil? v)
+                            (and (vector? v)
+                                 (= 2 (count v))
+                                 (= "pong" (nth v 0))
+                                 (ping (nth v 1)))))
+                 ping (fn [pong]
+                        (fn ping [v]
+                          (or (nil? v)
+                              (and (vector? v)
+                                   (= 2 (count v))
+                                   (= "ping" (nth v 0))
+                                   (pong ping (nth v 1))))))]
+             (ping pong))
+           ["ping" ["pong" nil]])
+          ((letfn [(ping [v] (or (nil? v)
+                                 (and (vector? v)
+                                      (= 2 (count v))
+                                      (= "ping" (nth v 0))
+                                      (pong (nth v 1)))))
+                   (pong [v] (or (nil? v)
+                                 (and (vector? v)
+                                      (= 2 (count v))
+                                      (= "pong" (nth v 0))
+                                      (ping (nth v 1)))))]
+             ping)
+           ["ping" ["pong" nil]])
+          ((let [ping-atom (atom nil)
+                 pong-atom (atom nil)
+                 ping (fn [v]
+                        ((or @ping-atom
+                             (reset! ping-atom (fn [v]
+                                                 (or (nil? v)
+                                                     (and (vector? v)
+                                                          (= 2 (count v))
+                                                          (= "ping" (nth v 0))
+                                                          (@pong-atom (nth v 1)))))))
+                         v))
+                 pong (fn [v]
+                        ((or @pong-atom
+                             (reset! pong-atom (fn [v]
+                                                 (or (nil? v)
+                                                     (and (vector? v)
+                                                          (= 2 (count v))
+                                                          (= "pong" (nth v 0))
+                                                          (ping (nth v 1)))))))
+                         v))]
+             (fn [v]
+               (or (nil? v)
+                   (and (vector? v)
+                        (= 2 (count v))
+                        (= "ping" (nth v 0))
+                        (pong (nth v 1))))))
+           ["ping" ["pong" nil]])
+          )
 
         (is (true? (m/validate
                     ::ping
