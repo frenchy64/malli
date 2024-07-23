@@ -7,7 +7,9 @@
   * [Function Guards](#function-guards)
   * [Generating Functions](#generating-functions)
   * [Multi-arity Functions](#multi-arity-functions)
+  * [Polymorphic Functions](#polymorphic-functions)
   * [Instrumentation](#instrumentation)
+    * [Instrumentation of Polymorphic Functions](#instrumentation-of-polymorphic-functions)
   * [Flat Arrow Function Schemas](#flat-arrow-function-schemas)
 * [Defn Schemas](#defn-schemas)
   * [Defining Function Schemas](#defining-function-schemas)
@@ -65,7 +67,7 @@ Enter, function schemas.
 
 ## Function Schemas
 
-Function values can be described with `:=>` and `:function` schemas. They allows description of both function arguments (as [sequence schemas](https://github.com/metosin/malli#sequence-schemas)) and function return values.
+Function values can be described with `:=>`, `:function`, and `m/all` schemas. They allow descriptions of both function arguments (as [sequence schemas](https://github.com/metosin/malli#sequence-schemas)) and function return values.
 
 Examples of function definitions:
 
@@ -91,11 +93,18 @@ Examples of function definitions:
 [:function
  [:=> [:cat :int] :int]
  [:=> [:cat :int :int [:* :int]] :int]]      
+
+;; polymorphic identity function
+(m/all [a] [:-> a a])
+
+;; polymorphic map function
+(m/all [a b]
+  [:-> [:-> a b] [:sequential a] [:sequential b]])
 ```
 
 What is that `:cat` all about in the input schemas? Wouldn't it be simpler without it? Sure, check out [Flat Arrow Function Schema](#flat-arrow-function-schemas).
 
-Function definition for the `plus` looks like this:
+The schema for `plus` looks like this:
 
 ```clojure
 (def =>plus [:=> [:cat :int :int] :int])
@@ -319,11 +328,74 @@ Generating multi-arity functions:
 ; => -2326
 ```
 
+### Polymorphic Functions
+
+A polymorphic function using `m/all` is generatively tested by instantiating schema variables with generated schemas
+and then using the resulting schema for generative testing.
+
+In the same way as function arguments are chosen during generative testing, schema variable instantiations start
+small and then grow after successful runs, and failures are shrunk for reporting purposes.
+
+For example, the polymorphic identity schema
+
+```clojure
+(m/all [a] [:-> a a])
+```
+
+is tested by choosing progressively largers schemas for `a`,
+and then checking each instantiated schema against the function like usual
+using generative testing.
+
+The current implementation for generating schemas for `a` is unsophisticated.
+The upper bound of `a` (implicitly `:any`) is used to generate (successively larger)
+values, and those values are wrapped in singleton schema. On failure, the `:any`
+generator will be shrunk, and in turn the schemas will also shrink.
+
+A run might generate values `nil`, `50` and `5333344553` from `a`'s upper bound,
+which are then converted to schemas like so:
+
+```clojure
+:nil
+[:enum 50]
+[:enum 5333344553]
+```
+
+Then, the first three runs will use these schemas to instantiate the polymorphic schema,
+resulting in:
+
+```clojure
+;; first run
+[:-> [:schema :nil] [:schema :nil]]
+
+;; second run
+[:-> [:schema [:enum 50]] [:schema [:enum 50]]]
+
+;; third run
+[:-> [:schema [:enum 5333344553]] [:schema [:enum 5333344553]]]
+```
+
+The extra `:schema` calls are added by `m/inst` to prevent regex schema splicing.
+
+If the third run fails, the value `5333344553` will be shrunk using `:any`'s generator,
+perhaps resulting in the final shrunk failing schema
+
+```clojure
+[:-> [:schema [:enum 51]] [:schema [:enum 51]]]
+```
+
+Note a gotcha with generated `:enum` schemas: if the first child is a map, it will print with `nil` properties.
+For example, `[:enum nil {}]` validates `{}` but not `nil`.
+
+Shrinking is currently not supported for higher-order polymorphic functions.
+
+Generating schemas for other kinds of schema variables such as regexes is not yet implemented
+and will throw an error.
+
 ### Instrumentation
 
 Besides testing function schemas as values, we can also instrument functions to enable runtime validation of arguments and return values.
 
-Simplest way to do this is to use `m/-instrument` which takes an options map and a function and returns an instrumented function. Valid options include:
+The simplest way to do this is to use `m/-instrument` which takes an options map and a function and returns an instrumented function. Valid options include:
 
 | key       | description |
 | ----------|-------------|
@@ -396,6 +468,25 @@ With `:gen` we can omit the function body. Here's an example to generate random 
 (pow-gen 10 20 30)
 ; =throws=> :malli.core/invalid-arity {:arity 3, :arities #{1 2}, :args (10 20 30), :input nil, :schema [:function [:=> [:cat :int] [:int {:max 6}]] [:=> [:cat :int :int] [:int {:max 6}]]]}
 ```
+
+### Instrumentation of Polymorphic Functions
+
+A polymorphic function will be instrumented as if all its schema variables were instantiated with
+their upper bounds, usually `:any`. The instrumented schema is calculated via `m/deref`.
+
+Schema variables by default do not allow regex splicing, so instantiations are wrapped in `:schema`.
+
+```clojure
+(-> (m/all [a] [:-> a a]) m/deref)
+;=> [:-> [:schema :any] [:schema :any]]
+
+(def options {:registry (mr/composite-registry m/default-registry (mu/schemas))})
+
+(-> (m/all [[M [:maybe :map]] X] [:-> M X [:merge M [:map [:x X]]]])
+    (m/schema options)
+    m/deref)
+;=> [:-> [:schema [:maybe :map]] [:schema :any]
+;    [:merge [:schema [:maybe :map]] [:map [:x [:schema :any]]]]]
 
 ### Flat Arrow Function Schemas
 
