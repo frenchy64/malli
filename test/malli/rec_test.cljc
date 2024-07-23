@@ -36,7 +36,7 @@
                           options))))
   (is (= [:rec [:y] :y]
          (m/form [:rec [:y] :y] options)))
-  (is (= [:rec [:y] :y]
+  (is (= [:rec [:y] [:rec [:y] :y]]
          (m/form [:rec [:y] [:rec [:y] :y]] options)))
   (is (= [:rec [:x] [:rec [:y] :x]]
          (m/form [:rec [:x] [:rec [:y] :x]]
@@ -49,16 +49,15 @@
                           options))))
   (is (= [:rec [:x] :x]
          (m/form (m/deref [:rec [:x] [:rec [:x] :x]]
-                            [[:rec [:x] :x]]
-                            options))))
-  (is (= [:=> [:cat :any] :any]
+                          options))))
+  (is (= [:=> [:cat [:rec [:a] [:=> [:cat :a] :a]]] [:rec [:a] [:=> [:cat :a] :a]]]
          (m/form (m/deref [:rec [:a] [:=> [:cat :a] :a]] options))))
-  (is (= [:-> :any :any]
+  (is (= [:-> [:rec [:a] [:-> :a :a]] [:rec [:a] [:-> :a :a]]]
          (m/form (m/deref [:rec [:a] [:-> :a :a]] options))))
   (is (= [:=> [:cat [:maybe :map] :any]
           [:merge [:maybe :map] [:map [:x :any]]]]
-         (-> [:rec [[:M [:maybe :map]] :X]
-              [:=> [:cat :M :X] [:merge :M [:map [:x :X]]]]]
+         (-> [:rec [:M]
+              [:=> [:cat :M :M] [:merge :M [:map [:x :M]]]]]
              (m/schema options)
              m/deref
              m/form)))

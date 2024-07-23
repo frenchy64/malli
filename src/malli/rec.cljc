@@ -46,7 +46,11 @@
             cache (m/-create-cache options)
             ->checker (if function-checker #(function-checker % options) (constantly nil))
             this (volatile! nil)
-            unfold (delay (mln/-instantiate body' @this options))]
+            unfold (delay
+                     ;;https://clojure.atlassian.net/browse/CLJ-2861
+                     (when-not this
+                       (throw (Exception. "recursion!")))
+                     (mln/-instantiate body' @this options))]
         (->> ^{:type ::m/schema}
              (reify
                m/Schema
