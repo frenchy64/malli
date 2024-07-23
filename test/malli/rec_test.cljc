@@ -61,14 +61,11 @@
              (m/schema options)
              m/deref
              m/form)))
-  (is (= [:->
-          [:maybe :map]
-          :any
-          [:merge
-           [:maybe :map]
-           [:map [:x :any]]]]
-         (-> [:rec [[:M [:maybe :map]] :X]
-              [:-> :M :X [:merge :M [:map [:x :X]]]]]
+  (is (= [:-> [:rec [:M] [:-> :M [:merge :M]]]
+          [:merge [:rec [:M]
+                   [:-> :M [:merge :M]]]]]
+         (-> [:rec [:M]
+              [:-> :M [:merge :M]]]
              (m/schema options)
              m/deref
              m/form))))
