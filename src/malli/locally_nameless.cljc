@@ -67,6 +67,7 @@
                 (let [properties (m/properties s)
                       options (cond-> options
                                 (::scope properties) (update ::instantiate-index inc))
+                      _ (prn "inner" s (::instantiate-index options))
                       s (cond-> s
                           (:registry properties)
                           (-> (m/ast options)
@@ -80,6 +81,7 @@
                               (m/from-ast options)))]
                   (m/-walk s this path options)))
         outer (fn [s path children {::keys [instantiate-index] :as options}]
+                (prn "instantiate-index" instantiate-index)
                 (let [s (m/-set-children s children)]
                   (case (m/type s)
                     ::b (let [[id] children]

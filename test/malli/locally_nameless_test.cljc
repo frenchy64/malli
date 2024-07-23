@@ -49,4 +49,5 @@
 (deftest fv-test
   (is (= #{:a123} (mln/-fv [::mln/f :a123] options)))
   (is (= #{:a :b} (mln/-fv [:schema {:registry {::a [::mln/f :b]}}
-                            [::mln/f :a]] options))))
+                            [::mln/f :a]]
+                           options))))

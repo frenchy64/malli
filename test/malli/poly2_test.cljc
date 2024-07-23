@@ -25,8 +25,6 @@
          (m/form [:all [:x] [:-> :x :x]] options)))
   (is (= [:all [:x] [:=> [:cat [:all [:y] :y]] :x]]
          (m/form [:all [:x] [:=> [:cat [:all [:y] :y]] :x]] options)))
-  ;; alpha-rename outer binder if clashing :all inside (actually just 
-  ;; a naive keyword occurrence check on the form of the body).
   (is (= [:all [:x] [:-> [:all [:x] :x] :x]]
          (m/form [:all [:x] [:-> [:all [:x] :x] :x]] options)))
   (is (= [:=> [:cat :any] :any]
@@ -37,6 +35,8 @@
          (m/form (poly/inst [:all [:x] [:-> :x :x]]
                             [[:all [:x] [:-> :x :x]]]
                             options))))
+  (is (= [:all [:x] [:all [:y] :x]]
+         (m/form [:all [:x] [:all [:y] :x]] options)))
   (is (= [:all [:y] :y]
          (m/form (poly/inst [:all [:x] [:all [:y] :x]]
                             [[:all [:y] :y]]

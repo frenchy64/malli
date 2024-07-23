@@ -34,6 +34,10 @@
           [:rec [:x] [:-> :x :x]]]
          (m/form (m/deref [:rec [:x] [:-> :x :x]]
                           options))))
+  (is (= [:rec [:y] :y]
+         (m/form [:rec [:y] :y] options)))
+  (is (= [:rec [:y] :y]
+         (m/form [:rec [:y] [:rec [:y] :y]] options)))
   (is (= [:rec [:x] [:rec [:y] :x]]
          (m/form [:rec [:x] [:rec [:y] :x]]
                  options)))

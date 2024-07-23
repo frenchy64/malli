@@ -16,7 +16,8 @@
     (m/-fail! ::bad-rec-binder {:binder binder}))
   kw)
 
-(defn -rec-schema [{:keys [type] :or {type :rec}}]
+(defn -rec-schema [{:keys [type]}]
+  {:pre [type]}
   ^{:type ::m/into-schema}
   (reify m/IntoSchema
     (-type [_] type)
@@ -27,14 +28,12 @@
       (m/-check-children! type properties children 2 2)
       (let [[binder body-syntax] children
             bname (-rec-binder-name binder)
-            parsed-body (m/schema body-syntax
-                                  (update options :registry
-                                          #(mr/composite-registry
-                                             {bname (m/schema [::mln/f bname] options)}
-                                             (or % {}))))
-            _ (prn "parsed-body" bname parsed-body)
-            body' (mln/-abstract parsed-body bname options)
-            _ (prn "body'" bname body')
+            body' (let [parsed-body (m/schema body-syntax
+                                              (update options :registry
+                                                      #(mr/composite-registry
+                                                         {bname (m/schema [::mln/f bname] options)}
+                                                         (or % {}))))]
+                    (mln/-abstract parsed-body bname options))
             form (delay
                    (m/-create-form type properties
                                    (assoc children 1
@@ -60,10 +59,12 @@
                (-walk [this walker path options]
                  (when (m/-accept walker this path options)
                    (m/-outer walker this path
-                             (let [gname (-> bname name gensym keyword)
-                                   gbody (mln/-instantiate body' [::mln/f gname] options)]
-                               (prn "gbody" gbody)
-                               [[gname] (m/-inner walker gbody (conj path 1) options)])
+                             (let [b (m/-inner walker body' (conj path 1) options)
+                                   fvs (mln/-fv b options)
+                                   bname (if (fvs bname)
+                                           (-> bname name gensym keyword)
+                                           bname)]
+                               [binder (mln/-instantiate b [::mln/f bname] options)])
                              options)))
                (-properties [_] properties)
                (-options [_] options)
