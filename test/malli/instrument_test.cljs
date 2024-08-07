@@ -17,6 +17,19 @@
    :malli/scope #{:input :output}}
   [x] (dec x))
 
+(defn myfn-b
+  {:malli/schema [:=> [:cat :int [:? :int] :string] :keyword]}
+  ([a b] :res3)
+  ([a b c] :res4))
+
+(defn fixed-with-variadic
+  {:malli/schema [:function
+                  [:=> [:cat :int] :keyword]
+                  [:=> [:cat :int :int] :keyword]
+                  [:=> [:cat :int :int :int] :keyword]
+                  [:=> [:cat :int :int :int [:* :int]] :keyword]]}
+  [& xs] :fixed-with-variadic)
+
 (defn multi-arity-fn
   {:malli/schema
    [:function
@@ -107,7 +120,23 @@
     (is (thrown-with-msg? js/Error #":malli.core/invalid-output" (schemas/power-full 6)))
 
     (is (thrown-with-msg? js/Error #":malli.core/invalid-input" (schemas/power-int? "2")))
-    (is (thrown-with-msg? js/Error #":malli.core/invalid-output" (schemas/power-int? 6))))
+    (is (thrown-with-msg? js/Error #":malli.core/invalid-output" (schemas/power-int? 6)))
+
+    (is (= :res3 (myfn-b 1 "a")))
+    (is (thrown-with-msg? js/Error #":malli.core/invalid-input" (myfn-b 1 2)))
+    (is (= :res4 (myfn-b 1 2 "a")))
+    (is (thrown-with-msg? js/Error #":malli.core/invalid-input" (myfn-b 1 2 3)))
+
+    (is (= :fixed-with-variadic (fixed-with-variadic 1)))
+    (is (thrown-with-msg? js/Error #":malli.core/invalid-input" (fixed-with-variadic "a")))
+    (is (= :fixed-with-variadic (fixed-with-variadic 1 2)))
+    (is (thrown-with-msg? js/Error #":malli.core/invalid-input" (fixed-with-variadic 1 "a")))
+    (is (= :fixed-with-variadic (fixed-with-variadic 1 2 3)))
+    (is (thrown-with-msg? js/Error #":malli.core/invalid-input" (fixed-with-variadic 1 2 "a")))
+    (is (= :fixed-with-variadic (fixed-with-variadic 1 2 3 4)))
+    (is (thrown-with-msg? js/Error #":malli.core/invalid-input" (fixed-with-variadic 1 2 3 "a")))
+    (is (= :fixed-with-variadic (fixed-with-variadic 1 2 3 4 5)))
+    (is (thrown-with-msg? js/Error #":malli.core/invalid-input" (fixed-with-variadic 1 2 3 4 "a"))))
 
   (testing "without instrumentation"
     (mi/unstrument! {:filters [(mi/-filter-ns 'malli.instrument-test 'malli.instrument.fn-schemas)]})
@@ -140,7 +169,12 @@
     (is (= 36 (schemas/power-arg-ns 6)))
 
     (is (= 4 (schemas/power-full "2")))
-    (is (= 36 (schemas/power-full 6)))))
+    (is (= 36 (schemas/power-full 6)))
+
+    (is (= :res3 (myfn-b 1 "a")))
+    (is (= :res3 (myfn-b 1 2)))
+    (is (= :res4 (myfn-b 1 2 "a")))
+    (is (= :res4 (myfn-b 1 2 3)))))
 
 (deftest ^:simple collect!-test
 
