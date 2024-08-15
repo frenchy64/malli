@@ -330,12 +330,10 @@
   (-vmap (fn [[i c]] (-inner walker c (conj path i) options)) (map-indexed vector children)))
 
 (defn -inner-entries [walker path entries {::keys [walk-entry-vals] :as  options}]
-  (prn "walk-entry-vals" walk-entry-vals)
   (-vmap (fn [[k s]]
            (let [s' (-inner walker s (conj path k) options)]
              (if (and walk-entry-vals (= ::val (type s')))
-               (do (prn "yes" (-properties s'))
-                   [k (-properties s') (-deref s')])
+               [k (-properties s') (-deref s')]
                [k (-properties s) s'])))
          entries))
 

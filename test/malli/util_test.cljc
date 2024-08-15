@@ -1045,30 +1045,30 @@
            {:registry (merge (mu/schemas) (m/default-schemas))}
            (mt/default-value-transformer {::mt/add-optional-keys true})))))
 
-(deftest walk-schema-test
+(deftest postwalk-schema-test
   (testing "no-op"
     (is (form= [:map {:closed true} [:x int?]]
-               (mu/walk-schema [:map {:closed true} [:x int?]] (fn [s _ _] s))))
+               (mu/postwalk-schema [:map {:closed true} [:x int?]] (fn [s _ _] s))))
     (is (form= [:map {:registry {::age [:and int? [:> 18]]}} [:age ::age]]
-               (mu/walk-schema [:map {:registry {::age [:and int? [:> 18]]}} [:age ::age]]
-                               (fn [s _ _] s))))
+               (mu/postwalk-schema [:map {:registry {::age [:and int? [:> 18]]}} [:age ::age]]
+                                   (fn [s _ _] s))))
     (testing "doesn't affect deref behaviour"
       (let [schema [:schema {:registry {"Foo" :int}} "Foo"]
-            walked (mu/walk-schema [:schema {:registry {"Foo" :int}} "Foo"]
-                                   (fn [s _ _] s))]
+            walked (mu/postwalk-schema [:schema {:registry {"Foo" :int}} "Foo"]
+                                       (fn [s _ _] s))]
         (is (form= schema walked))
         (is (form= (-> schema m/deref) (-> walked m/deref)))
         (is (form= (-> schema m/deref m/deref) (-> walked m/deref m/deref))))))
   (testing "update"
     (is (form= [:map {:closed true :foo 1} [:x [int? {:foo 1}]]]
-               (mu/walk-schema [:map {:closed true} [:x int?]]
-                               (fn [s _ _] (mu/update-properties s assoc :foo 1)))))
+               (mu/postwalk-schema [:map {:closed true} [:x int?]]
+                                   (fn [s _ _] (mu/update-properties s assoc :foo 1)))))
     (testing "deref refs"
       (is (form= [:map {:registry {::age [:and int? [:> 18]]}
                         :foo 1}
                   [:age [:malli.core/schema {:foo 1} [:and int? [:> 18]]]]]
-                 (mu/walk-schema [:map {:registry {::age [:and int? [:> 18]]}} [:age ::age]]
-                                 (fn [s _ _] (mu/update-properties s assoc :foo 1))))))))
+                 (mu/postwalk-schema [:map {:registry {::age [:and int? [:> 18]]}} [:age ::age]]
+                                     (fn [s _ _] (mu/update-properties s assoc :foo 1))))))))
 
 (deftest walk-properties-test
   (is (= [:map {:foo 1} [:a {:foo 1} [:int {:foo 1}]]]

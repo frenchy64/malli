@@ -34,48 +34,82 @@
 ;; public api
 ;;
 
+(defn walk-schema
+  ([?schema pre post] (walk-schema ?schema pre post nil))
+  ([?schema pre post options]
+   (letfn [(in [s p o]
+             (if-some [?s (pre s p
+                               (fn this
+                                 ([]  (this s o))
+                                 ([s] (this s o))
+                                 ([s o]
+                                  (m/-walk
+                                    s
+                                    (reify m/Walker
+                                      (-accept [_ _ _ _] true)
+                                      (-inner [this s p o]
+                                        (if-some [?s (pre s p
+                                                          (fn
+                                                            ([]    (in s p o))
+                                                            ([s]   (in s p o))
+                                                            ([s o] (in s p o)))
+                                                          options)]
+                                          (m/schema ?s o)
+                                          s))
+                                      (-outer [_ s p c options] (post (m/-set-children s c) p options)))
+                                    p o)))
+                               o)]
+               (m/schema ?s o)
+               s))]
+     (in (m/schema ?schema options) [] options))))
+
 (defn postwalk-schema
   "Postwalks recursively over the Schema and its children, returning a Schema.
    The walker callback is an arity3 function taking the walked schema,
    path and options, returning a Schema."
-  ([?schema f] (walk-schema ?schema f nil))
-  ([?schema f options] (m/walk ?schema (fn [s p c o] (f (m/-set-children s c) p o)) options)))
+  ([?schema f] (postwalk-schema ?schema f nil))
+  ([?schema f options] (walk-schema ?schema (fn [_ _ f _] (f)) f options)))
 
 (defn prewalk-schema
   "Prewalks recursively over the Schema and its children, returning a Schema.
    The walker callback is an arity4 function taking the unwalked schema,
-   path, a function taking 0, 1, or 2 arguments to continue walking, and options.
-
-   f must return the result of calling the function, or nil to short-circuit.
-   The result of calling f must be first processed by clojure.core/trampoline if used
-   in any other way."
+   path, a function taking 0, 1, or 2 arguments to continue walking, and options."
   ([?schema f] (prewalk-schema ?schema f nil))
   ([?schema f options]
    (letfn [(pre [s f p o]
-             (if-some [s (f s p
-                            (fn this
-                              ([]  (this s o))
-                              ([s] (this s o))
-                              ([s o]
-                               (m/-walk
-                                 s
-                                 (reify m/Walker
-                                   (-accept [_ _ _ _] true)
-                                   (-inner [this s p options] (if-some [s (f s p
-                                                                             (fn
-                                                                               ([]    (pre s f p o))
-                                                                               ([s]   (pre s f p o))
-                                                                               ([s o] (pre s f p o)))
-                                                                             options)]
-                                                                (m/schema s options)
-                                                                s))
-                                   (-outer [_ s p c options] (m/-set-children s c)))
-                                 p o)))
-                            options)]
-               s s))]
+             (if-some [?s (f s p
+                             (fn this
+                               ([]  (this s o))
+                               ([s] (this s o))
+                               ([s o]
+                                (m/-walk
+                                  s
+                                  (reify m/Walker
+                                    (-accept [_ _ _ _] true)
+                                    (-inner [this s p o]
+                                      (if-some [?s (f s p
+                                                      (fn
+                                                        ([]    (pre s f p o))
+                                                        ([s]   (pre s f p o))
+                                                        ([s o] (pre s f p o)))
+                                                      options)]
+                                        (m/schema ?s o)
+                                        s))
+                                    (-outer [_ s p c options] (m/-set-children s c)))
+                                  p o)))
+                             o)]
+               (m/schema ?s o)
+               s))]
      (pre (m/schema ?schema options) f [] options))))
 
 (comment
+  (walk-schema [:map [:a :int]]
+               (fn [s p f o]
+                 (prn "in" p s)
+                 [:schema (f)])
+               (fn [s p o]
+                 (prn "out" p s)
+                 s))
   (prewalk-schema [:map [:a :int]]
                   (fn [s p f o]
                     (prn s p)
@@ -83,16 +117,17 @@
 
   (prewalk-schema [:map [:a :int]]
                   (fn [s p f o]
-                    [:tuple (f) (f)]))
+                    [:schema (f s (c/update o :path (fnil conj []) p))]))
 
   (prewalk-schema [:map [:a :int]]
                   (fn [s p f o]
-                    (prn s)
+                    [:tuple (f) (f)]))
+  (prewalk-schema [:map [:a :int]]
+                  (fn [s p f o]
                     (when (= :map (m/type s))
                       [:schema (f)])))
   (prewalk-schema [:map [:a :int]]
                   (fn [s _ f _]
-                    (prn s)
                     (f))))
 
 (defn find-first
