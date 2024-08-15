@@ -80,6 +80,7 @@
                   (fn [s p f o]
                     (prn s p)
                     [:schema (f)]))
+
   (prewalk-schema [:map [:a :int]]
                   (fn [s p f o]
                     [:tuple (f) (f)]))
