@@ -40,19 +40,19 @@
    (letfn [(in [s p o]
              (if-some [?s (pre s p
                                (fn this
-                                 ([]  (this s o))
-                                 ([s] (this s o))
-                                 ([s o]
+                                 ([] (this s o))
+                                 ([?s] (this ?s o))
+                                 ([?s o]
                                   (m/-walk
-                                    s
+                                    (m/schema ?s o)
                                     (reify m/Walker
                                       (-accept [_ _ _ _] true)
                                       (-inner [this s p o]
                                         (if-some [?s (pre s p
                                                           (fn
-                                                            ([]    (in s p o))
-                                                            ([s]   (in s p o))
-                                                            ([s o] (in s p o)))
+                                                            ([] (in s p o))
+                                                            ([?s] (in (m/schema ?s o) p o))
+                                                            ([?s o] (in (m/schema ?s o) p o)))
                                                           options)]
                                           (m/schema ?s o)
                                           s))
@@ -107,13 +107,14 @@
      (pre (m/schema ?schema options) f [] options))))
 
 (comment
-  (walk-schema [:map [:a :int]]
+  (walk-schema [:map [:a [:tuple [:map [:b :int]]]]]
                (fn [s p f o]
-                 (prn "in" p s)
-                 [:schema (f)])
+                 (-> (f)
+                     (update-properties c/assoc :in p)))
                (fn [s p o]
-                 (prn "out" p s)
-                 #_s))
+                 (-> s
+                     (update-properties c/assoc :out p))))
+
   (prewalk-schema [:map [:a :int]]
                   (fn [s p f o]
                     (prn s p)
