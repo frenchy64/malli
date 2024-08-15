@@ -1554,7 +1554,7 @@ Schema unions (merged values of both schemas are valid for union schema):
 Adding generated example values to Schemas:
 
 ```clojure
-(m/walk
+(mu/walk-schema
   [:map
    [:name string?]
    [:description string?]
@@ -1562,9 +1562,8 @@ Adding generated example values to Schemas:
     [:map
      [:street string?]
      [:country [:enum "finland" "poland"]]]]]
-  (m/schema-walker
-    (fn [schema]
-      (mu/update-properties schema assoc :examples (mg/sample schema {:size 2, :seed 20})))))
+  (fn [schema _ _]
+    (mu/update-properties schema assoc :examples (mg/sample schema {:size 2, :seed 20}))))
 ;[:map
 ; {:examples ({:name "", :description "", :address {:street "", :country "poland"}}
 ;             {:name "W", :description "x", :address {:street "8", :country "finland"}})}
@@ -2467,9 +2466,9 @@ Schemas can be transformed using post-walking, e.g. the [Visitor Pattern](https:
 The identity walker:
 
 ```clojure
-(m/walk
+(mu/walk-schema
   Address
-  (m/schema-walker identity))
+  (fn [s _ _] s))
 ;[:map
 ; [:id string?]
 ; [:tags [:set keyword?]]
@@ -2484,9 +2483,9 @@ The identity walker:
 Adding `:title` property to schemas:
 
 ```clojure
-(m/walk
+(m/walk-schema
   Address
-  (m/schema-walker #(mu/update-properties % assoc :title (name (m/type %)))))
+  (fn [s _ _] (mu/update-properties s assoc :title (name (m/type s)))))
 ;[:map {:title "map"}
 ; [:id [string? {:title "string?"}]]
 ; [:tags [:set {:title "set"} [keyword? {:title "keyword?"}]]]

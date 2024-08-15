@@ -34,9 +34,69 @@
 ;; public api
 ;;
 
+(defn postwalk-schema
+  "Postwalks recursively over the Schema and its children, returning a Schema.
+   The walker callback is an arity3 function taking the walked schema,
+   path and options, returning a Schema."
+  ([?schema f] (walk-schema ?schema f nil))
+  ([?schema f options] (m/walk ?schema (fn [s p c o] (f (m/-set-children s c) p o)) options)))
+
+(defn prewalk-schema
+  "Prewalks recursively over the Schema and its children, returning a Schema.
+   The walker callback is an arity4 function taking the unwalked schema,
+   path, a function taking 0, 1, or 2 arguments to continue walking, and options.
+
+   f must return the result of calling the function, or nil to short-circuit.
+   The result of calling f must be first processed by clojure.core/trampoline if used
+   in any other way."
+  ([?schema f] (prewalk-schema ?schema f nil))
+  ([?schema f options]
+   (letfn [(pre [s f p o]
+             (if-some [s (f s p
+                            (fn this
+                              ([]  (this s o))
+                              ([s] (this s o))
+                              ([s o]
+                               (m/-walk
+                                 s
+                                 (reify m/Walker
+                                   (-accept [_ _ _ _] true)
+                                   (-inner [this s p options] (if-some [s (f s p
+                                                                             (fn
+                                                                               ([]    (pre s f p o))
+                                                                               ([s]   (pre s f p o))
+                                                                               ([s o] (pre s f p o)))
+                                                                             options)]
+                                                                (m/schema s options)
+                                                                s))
+                                   (-outer [_ s p c options] (m/-set-children s c)))
+                                 p o)))
+                            options)]
+               s s))]
+     (pre (m/schema ?schema options) f [] options))))
+
+(comment
+  (prewalk-schema [:map [:a :int]]
+                  (fn [s p f o]
+                    (prn s p)
+                    [:schema (f)]))
+  (prewalk-schema [:map [:a :int]]
+                  (fn [s p f o]
+                    [:tuple (f) (f)]))
+
+  (prewalk-schema [:map [:a :int]]
+                  (fn [s p f o]
+                    (prn s)
+                    (when (= :map (m/type s))
+                      [:schema (f)])))
+  (prewalk-schema [:map [:a :int]]
+                  (fn [s _ f _]
+                    (prn s)
+                    (f))))
+
 (defn find-first
   "Prewalks the Schema recursively with a 3-arity fn [schema path options], returns with
-  and as soon as the function returns non-null value."
+  and as soon as the function returns a logical true value."
   ([?schema f]
    (find-first ?schema f nil))
   ([?schema f options]
@@ -119,6 +179,14 @@
                     (m/-fail! ::no-entry {:schema schema :k k}))]
     (m/-set-entries schema [k (apply f p args)] v)))
 
+(defn walk-properties
+  "Walks the schema and its entries, updating properties to (apply f old-props args)."
+  [?schema f & args]
+  (postwalk-schema
+    ?schema
+    (fn [s _ _] (apply m/-update-properties s f args))
+    {::m/walk-entry-vals true}))
+
 (defn closed-schema
   "Maps are implicitly open by default. They can be explicitly closed or
   open by specifying the `{:closed (true|false)}` property.
@@ -130,13 +198,12 @@
   ([?schema]
    (closed-schema ?schema nil))
   ([?schema options]
-   (m/walk
+   (postwalk-schema
     ?schema
-    (m/schema-walker
-     (fn [schema]
-       (if (-ok-to-close-or-open? schema options)
-         (update-properties schema c/assoc :closed true)
-         schema)))
+    (fn [schema _ _]
+      (if (-ok-to-close-or-open? schema options)
+        (update-properties schema c/assoc :closed true)
+        schema))
     options)))
 
 (defn open-schema
@@ -150,13 +217,12 @@
   ([?schema]
    (open-schema ?schema nil))
   ([?schema options]
-   (m/walk
+   (postwalk-schema
     ?schema
-    (m/schema-walker
-     (fn [schema]
-       (if (-ok-to-close-or-open? schema options)
-         (update-properties schema c/dissoc :closed)
-         schema)))
+    (fn [schema _ _]
+      (if (-ok-to-close-or-open? schema options)
+        (update-properties schema c/dissoc :closed)
+        schema))
     options)))
 
 (defn subschemas

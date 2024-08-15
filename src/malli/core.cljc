@@ -329,8 +329,15 @@
 (defn -inner-indexed [walker path children options]
   (-vmap (fn [[i c]] (-inner walker c (conj path i) options)) (map-indexed vector children)))
 
-(defn -inner-entries [walker path entries options]
-  (-vmap (fn [[k s]] [k (-properties s) (-inner walker s (conj path k) options)]) entries))
+(defn -inner-entries [walker path entries {::keys [walk-entry-vals] :as  options}]
+  (prn "walk-entry-vals" walk-entry-vals)
+  (-vmap (fn [[k s]]
+           (let [s' (-inner walker s (conj path k) options)]
+             (if (and walk-entry-vals (= ::val (type s')))
+               (do (prn "yes" (-properties s'))
+                   [k (-properties s') (-deref s')])
+               [k (-properties s) s'])))
+         entries))
 
 (defn -walk-entries [schema walker path options]
   (when (-accept walker schema path options)
@@ -930,7 +937,7 @@
 
 (defn -val-schema
   ([schema properties]
-   (-into-schema (-val-schema) properties (list schema) (-options schema)))
+   (-into-schema (-val-schema) properties [schema] (-options schema)))
   ([]
    ^{:type ::into-schema}
    (reify
@@ -965,7 +972,7 @@
                (-walk schema walker path options)))
            (-properties [_] properties)
            (-options [_] (-options schema))
-           (-children [_] [schema])
+           (-children [_] children)
            (-parent [_] parent)
            (-form [_] @form)
            Cached
@@ -2276,9 +2283,12 @@
    (-parent (schema ?schema options))))
 
 (defn walk
-  "Postwalks recursively over the Schema and it's children.
-   The walker callback is a arity4 function with the following
-   arguments: schema, path, (walked) children and options."
+  "Postwalks recursively over the Schema and its children.
+   The walker callback is an arity4 function with the following
+   arguments: (unwalked) schema, path, (walked) children and options.
+
+   To automatically set the schema's children to the walked children
+   either wrap f with [[schema-walker]] or prefer [[malli.util/walk-schema]]."
   ([?schema f]
    (walk ?schema f nil))
   ([?schema f options]
@@ -2569,7 +2579,10 @@
 ;; schema walker
 ;;
 
-(defn schema-walker [f]
+(defn schema-walker
+  "Converts a function taking and returning a Schema to one
+  compatible with [[walk]]"
+  [f]
   (fn [schema _ children _]
     (f (-set-children schema children))))
 
