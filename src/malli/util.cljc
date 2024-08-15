@@ -56,7 +56,11 @@
                                                           options)]
                                           (m/schema ?s o)
                                           s))
-                                      (-outer [_ s p c options] (post (m/-set-children s c) p options)))
+                                      (-outer [_ s p c options]
+                                        (let [s (m/-set-children s c)]
+                                          (if-some [?s (post (m/-set-children s c) p options)]
+                                            (m/schema ?s o)
+                                            s))))
                                     p o)))
                                o)]
                (m/schema ?s o)
@@ -109,7 +113,7 @@
                  [:schema (f)])
                (fn [s p o]
                  (prn "out" p s)
-                 s))
+                 #_s))
   (prewalk-schema [:map [:a :int]]
                   (fn [s p f o]
                     (prn s p)
