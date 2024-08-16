@@ -1074,4 +1074,9 @@
   (is (= [:map {:foo 1} [:a {:foo 1} [:int {:foo 1}]]]
          (m/form (mu/walk-properties [:map [:a :int]] assoc :foo 1))))
   (is (= [:map [:a :int]]
-         (m/form (mu/walk-properties [:map {:foo 1} [:a {:foo 1} [:int {:foo 1}]]] dissoc :foo)))))
+         (m/form (mu/walk-properties [:map {:foo 1} [:a {:foo 1} [:int {:foo 1}]]] dissoc :foo))))
+  (is (= [:map {:registry {:foo :int}} [:a :int]]
+         (m/form (mu/walk-properties [:map {:registry {:foo :int}} [:a :int]] assoc :foo 1))))
+  (is (= [:map [:a :int]]
+         (m/form (mu/walk-properties [:map {:foo 1} [:a {:foo 1} [:int {:foo 1}]]] dissoc :foo))))
+)

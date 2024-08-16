@@ -35,6 +35,11 @@
 ;;
 
 (defn walk-schema
+  "Walks recursively over the Schema and its children, returning a Schema.
+   The pre walker callback is an arity4 function taking the unwalked schema,
+   path, a function taking 0, 1, or 2 arguments to continue walking, and options.
+   The post walker callback is an arity3 function taking the walked schema,
+   path and options, returning a ?schema."
   ([?schema pre post] (walk-schema ?schema pre post nil))
   ([?schema pre post options]
    (letfn [(in [s p o]
@@ -67,34 +72,21 @@
                s))]
      (in (m/schema ?schema options) [] options))))
 
-(defn postwalk-schema
-  "Postwalks recursively over the Schema and its children, returning a Schema.
-   The walker callback is an arity3 function taking the walked schema,
-   path and options, returning a Schema."
-  ([?schema f] (postwalk-schema ?schema f nil))
-  ([?schema f options] (walk-schema ?schema (fn [_ _ f _] (f)) f options)))
-
 (defn prewalk-schema
   "Prewalks recursively over the Schema and its children, returning a Schema.
-   The walker callback is an arity4 function taking the unwalked schema,
+   The walker callback is an arity4 function taking the unwalked Schema,
    path, a function taking 0, 1, or 2 arguments to continue walking, and options."
   ([?schema f] (prewalk-schema ?schema f nil))
   ([?schema f options] (walk-schema ?schema f (fn [s _ _] s))))
 
-(comment
-  (require '[clojure.tools.trace :as t]
-           '[malli.core])
-  (t/trace-vars malli.core/schema)
-  (alter-var-root #'t/trace-fn-call
-                  (fn [_]
-                    (fn [name f args]
-                      (let  [id  (gensym  "t")]
-                        (#'t/tracer id  (str  (#'t/trace-indent)  (pr-str  (cons name (take 1 args)))))
-                        (let  [value  (with-bindings  {#'t/*trace-depth*  (inc @#'t/*trace-depth*)}
-                                        (apply f args))]
-                          (#'t/tracer id  (str  (#'t/trace-indent)  "=> "  (pr-str value)))
-                          value)))))
+(defn postwalk-schema
+  "Postwalks recursively over the Schema and its children, returning a Schema.
+   The walker callback is an arity3 function taking the walked schema,
+   path and options, returning a ?schema."
+  ([?schema f] (postwalk-schema ?schema f nil))
+  ([?schema f options] (walk-schema ?schema (fn [_ _ f _] (f)) f options)))
 
+(comment
   (walk-schema (m/schema [:map [:a [:tuple [:map [:b :int]]]]])
                (fn [s p f o]
                  (-> (f)
@@ -209,11 +201,13 @@
     (m/-set-entries schema [k (apply f p args)] v)))
 
 (defn walk-properties
-  "Walks the schema and its entries, updating properties to (apply f old-props args)."
+  "Walks the schema and its entries, updating properties to (apply f old-props args).
+   Does not walk under reference schemas or within local registries."
   [?schema f & args]
   (postwalk-schema
     ?schema
-    (fn [s _ _] (apply m/-update-properties s f args))
+    (fn [s _ _]
+      (apply m/-update-properties s f args))
     {::m/walk-entry-vals true}))
 
 (defn closed-schema
