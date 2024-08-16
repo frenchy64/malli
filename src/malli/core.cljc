@@ -14,7 +14,7 @@
 
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
-         parser unparser ast from-ast -instrument)
+         parser unparser ast from-ast -instrument -update -property-registry)
 
 ;;
 ;; protocols and records
@@ -26,6 +26,9 @@
   (-properties-schema [this options] "maybe returns :map schema describing schema properties")
   (-children-schema [this options] "maybe returns sequence schema describing schema children")
   (-into-schema [this properties children options] "creates a new schema instance"))
+
+(defprotocol PrepareIntoSchema
+  (-prepare-properties-and-options [this properties options]))
 
 (defprotocol Schema
   (-validator [this] "returns a predicate function that checks if the schema is valid")
@@ -104,6 +107,15 @@
 (defn -transformer? [x] (#?(:clj instance?, :cljs implements?) malli.core.Transformer x))
 
 (extend-type #?(:clj Object, :cljs default)
+  PrepareIntoSchema
+  (-prepare-properties-and-options [_ properties options]
+    (let [properties' (when properties (when (pos? (count properties)) properties))
+          r (when properties' (properties' :registry))
+          options (if r (-update options :registry #(mr/composite-registry r (or % (-registry options)))) options)
+          properties (if r (assoc properties' :registry (-property-registry r options identity)) properties')]
+      {:properties properties
+       :options options}))
+
   FunctionSchema
   (-function-schema? [_] false)
   (-function-info [_])
@@ -207,8 +219,6 @@
                                                (fn [x] (-> x f9 f8 f7 f6 f5 f4 f3 f2 f1))))]
       :cljs [([f1 f2 f3 & fs] (let [f4 (apply -comp fs)]
                                 (fn [x] (-> x f4 f3 f2 f1))))]))
-
-(defn -update [x k f] (assoc x k (f (get x k))))
 
 (defn -equals [x y] (or (identical? x y) (= x y)))
 
@@ -1986,12 +1996,12 @@
         ^{:type ::schema}
         (reify
           Schema
-          (-validator [_] (-validator schema))
-          (-explainer [_ path] (-explainer schema (conj path ::in)))
-          (-parser [_] (-parser schema))
-          (-unparser [_] (-unparser schema))
+          (-validator [_] (-validator (force schema)))
+          (-explainer [_ path] (-explainer (force schema) (conj path ::in)))
+          (-parser [_] (-parser (force schema)))
+          (-unparser [_] (-unparser (force schema)))
           (-transformer [this transformer method options]
-            (-parent-children-transformer this [schema] transformer method options))
+            (-parent-children-transformer this [(force schema)] transformer method options))
           (-walk [this walker path options]
             (let [children (if childs (subvec children 0 childs) children)]
               (when (-accept walker this path options)
@@ -2005,24 +2015,24 @@
           (-cache [_] cache)
           LensSchema
           (-keep [_])
-          (-get [_ key default] (if (= ::in key) schema (get children key default)))
+          (-get [_ key default] (if (= ::in key) (force schema) (get children key default)))
           (-set [_ key value] (into-schema type properties (assoc children key value)))
           FunctionSchema
-          (-function-schema? [_] (-function-schema? schema))
-          (-function-info [_] (-function-info schema))
-          (-function-schema-arities [_] (-function-schema-arities schema))
-          (-instrument-f [_ props f options] (-instrument-f schema props f options))
+          (-function-schema? [_] (-function-schema? (force schema)))
+          (-function-info [_] (-function-info (force schema)))
+          (-function-schema-arities [_] (-function-schema-arities (force schema)))
+          (-instrument-f [_ props f options] (-instrument-f (force schema) props f options))
           RegexSchema
-          (-regex-op? [_] (-regex-op? schema))
-          (-regex-validator [_] (-regex-validator schema))
-          (-regex-explainer [_ path] (-regex-explainer schema path))
-          (-regex-unparser [_] (-regex-unparser schema))
-          (-regex-parser [_] (-regex-parser schema))
-          (-regex-transformer [_ transformer method options] (-regex-transformer schema transformer method options))
-          (-regex-min-max [_ nested?] (-regex-min-max schema nested?))
+          (-regex-op? [_] (-regex-op? (force schema)))
+          (-regex-validator [_] (-regex-validator (force schema)))
+          (-regex-explainer [_ path] (-regex-explainer (force schema) path))
+          (-regex-unparser [_] (-regex-unparser (force schema)))
+          (-regex-parser [_] (-regex-parser (force schema)))
+          (-regex-transformer [_ transformer method options] (-regex-transformer (force schema) transformer method options))
+          (-regex-min-max [_ nested?] (-regex-min-max (force schema) nested?))
           RefSchema
           (-ref [_])
-          (-deref [_] schema))))))
+          (-deref [_] (force schema)))))))
 
 (defn -->-schema
   "Experimental simple schema for :=> schema. AST and explain results subject to change."
@@ -2159,11 +2169,9 @@
   ([type properties children]
    (into-schema type properties children nil))
   ([type properties children options]
-   (let [properties' (when properties (when (pos? (count properties)) properties))
-         r (when properties' (properties' :registry))
-         options (if r (-update options :registry #(mr/composite-registry r (or % (-registry options)))) options)
-         properties (if r (assoc properties' :registry (-property-registry r options identity)) properties')]
-     (-into-schema (-lookup! type [type properties children] into-schema? false options) properties children options))))
+   (let [t (-lookup! type [type properties children] into-schema? false options)
+         {:keys [properties options]} (-prepare-properties-and-options t properties options)]
+     (-into-schema t properties children options))))
 
 (defn type
   "Returns the Schema type."

@@ -16,6 +16,9 @@
 ;; are implemented, it's quite difficult to update a local registry such that pointers
 ;; are also updated. this is because -deref doesn't take a dynamic environment.
 (defn -fail-if-property-registry! [s properties]
+  (when (and (m/-ref-schema? s)
+             (m/-ref s))
+    (m/-fail! ::local-registries-not-allowed {:schema s}))
   (when (seq (:registry properties))
     (m/-fail! ::local-registries-not-allowed {:schema s})))
 
@@ -60,6 +63,7 @@
 (defn -instantiate [?scope to options]
   (let [to (m/schema to options)
         inner (fn [this s path options]
+                (prn "s" s)
                 (let [properties (m/properties s)
                       _ (-fail-if-property-registry! s properties)
                       options (cond-> options

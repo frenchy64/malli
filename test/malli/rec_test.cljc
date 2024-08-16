@@ -19,6 +19,10 @@
 (def options {:registry (mr/composite-registry m/default-registry (rec/schemas) (mu/schemas))})
 
 (deftest rec-test
+  (is (= [:rec [:onion] [:seqable :onion]]
+         (m/form [:rec [:onion] [:seqable :onion]] options)))
+  (is (= [:seqable [:rec [:onion] [:seqable :onion]]]
+         (m/form (m/deref [:rec [:onion] [:seqable :onion]] options))))
   (is (= [:rec [:x] [:=> [:cat :x] :x]]
          (m/form [:rec [:x] [:=> [:cat :x] :x]] options)))
   (is (= [:rec [:x] [:-> :x :x]]
@@ -54,9 +58,7 @@
          (m/form (m/deref [:rec [:a] [:=> [:cat :a] :a]] options))))
   (is (= [:-> [:rec [:a] [:-> :a :a]] [:rec [:a] [:-> :a :a]]]
          (m/form (m/deref [:rec [:a] [:-> :a :a]] options))))
-  #_ ;;FIXME
-  (is (= [:=> [:cat [:maybe :map] :any]
-          [:merge [:maybe :map] [:map [:x :any]]]]
+  (is (= [:merge [:rec [:M] [:merge :M [:map [:x :M]]]] [:map [:x [:rec [:M] [:merge :M [:map [:x :M]]]]]]]
          (-> [:rec [:M]
               [:merge :M [:map [:x :M]]]]
              (m/schema options)
