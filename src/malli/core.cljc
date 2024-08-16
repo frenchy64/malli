@@ -1,7 +1,7 @@
 (ns malli.core
   (:refer-clojure :exclude [eval type -deref deref -lookup -key assert])
   #?(:cljs (:require-macros malli.core))
-  (:require #?(:clj [clojure.walk :as walk])
+  (:require [clojure.walk :as walk]
             [clojure.core :as c]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
@@ -85,6 +85,10 @@
   (-regex-parser [this] "returns the raw internal regex parser implementation")
   (-regex-transformer [this transformer method options] "returns the raw internal regex transformer implementation")
   (-regex-min-max [this nested?] "returns size of the sequence as {:min min :max max}. nil max means unbounded. nested? is true when this schema is nested inside an outer regex schema."))
+
+(defprotocol AllSchema
+  (-bounds [this] "return a vector of maps describing the binder")
+  (-inst [this schemas] "replace variables in polymorphic schema with schemas, or their defaults if nil"))
 
 (defprotocol FunctionSchema
   (-function-schema? [this])
@@ -2276,7 +2280,7 @@
    (-parent (schema ?schema options))))
 
 (defn walk
-  "Postwalks recursively over the Schema and it's children.
+  "Postwalks recursively over the Schema and its children.
    The walker callback is a arity4 function with the following
    arguments: schema, path, (walked) children and options."
   ([?schema f]
@@ -2749,24 +2753,26 @@
        (-fail! ::register-function-schema {:ns ns, :name name, :schema ?schema, :data data, :key key, :exception ex})))))
 
 #?(:clj
-   (defmacro => [given-sym value]
-     (let [cljs-resolve (when (:ns &env) (ns-resolve 'cljs.analyzer.api 'resolve))
-           cljs-resolve-symbols (fn [env d]
-                                  (walk/postwalk (fn [x] (cond->> x (symbol? x) (or (:name (cljs-resolve env x)))))
-                                                 d))
-           name-str (name given-sym)
-           ns-str (str (or (not-empty (namespace given-sym)) *ns*))
-           name' `'~(symbol name-str)
-           ns' `'~(symbol ns-str)
-           sym `'~(symbol ns-str name-str)
-           value' (cond->> value (:ns &env) (cljs-resolve-symbols &env))]
-       ;; in cljs we need to register the schema in clojure (the cljs compiler)
-       ;; so it is visible in the (function-schemas :cljs) map at macroexpansion time.
-       (if (:ns &env)
-         (do
-           (-register-function-schema! (symbol ns-str) (symbol name-str) value' (meta given-sym) :cljs identity)
-           `(do (-register-function-schema! ~ns' ~name' ~value' ~(meta given-sym) :cljs identity) ~sym))
-         `(do (-register-function-schema! ~ns' ~name' ~value' ~(meta given-sym)) ~sym)))))
+   (defmacro =>
+     ([given-sym value] `(=> ~given-sym ~value nil))
+     ([given-sym value options]
+      (let [cljs-resolve (when (:ns &env) (ns-resolve 'cljs.analyzer.api 'resolve))
+            cljs-resolve-symbols (fn [env d]
+                                   (walk/postwalk (fn [x] (cond->> x (symbol? x) (or (:name (cljs-resolve env x)))))
+                                                  d))
+            name-str (name given-sym)
+            ns-str (str (or (not-empty (namespace given-sym)) *ns*))
+            name' `'~(symbol name-str)
+            ns' `'~(symbol ns-str)
+            sym `'~(symbol ns-str name-str)
+            value' (cond->> value (:ns &env) (cljs-resolve-symbols &env))]
+        ;; in cljs we need to register the schema in clojure (the cljs compiler)
+        ;; so it is visible in the (function-schemas :cljs) map at macroexpansion time.
+        (if (:ns &env)
+          (do
+            (-register-function-schema! (symbol ns-str) (symbol name-str) value' (meta given-sym) :cljs identity)
+            `(do (-register-function-schema! ~ns' ~name' ~value' ~(meta given-sym) :cljs #(schema % ~options)) ~sym))
+          `(do (-register-function-schema! ~ns' ~name' ~value' ~(meta given-sym) :clj #(function-schema (schema % ~options))) ~sym))))))
 
 (defn -instrument
   "Takes an instrumentation properties map and a function and returns a wrapped function,
