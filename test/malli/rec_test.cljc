@@ -73,15 +73,19 @@
              m/deref
              m/form))))
 
+(def ping-pong-rec-validator (m/validator
+                               [:rec [:ping]
+                                [:maybe [:tuple [:= "ping"]
+                                         [:maybe [:tuple [:= "pong"]
+                                                  :ping]]]]]
+                               options))
+
 (deftest rec-validator-test
-  (is (= nil
-         (m/validate [:rec [:ping]
-                      [:maybe [:tuple [:= "ping"]
-                               [:maybe [:tuple [:= "pong"]
-                                        :ping]]]]]
-                     nil
-                     options)))
-  )
+  (is (ping-pong-rec-validator nil))
+  (is (ping-pong-rec-validator ["ping" nil]))
+  (is (not (ping-pong-rec-validator ["ping"]))))
+
+;(deftest walk-test)
 
 #_
 (deftest f-in-registry-test

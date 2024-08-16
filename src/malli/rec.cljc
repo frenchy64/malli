@@ -16,6 +16,9 @@
     (m/-fail! ::bad-rec-binder {:binder binder}))
   kw)
 
+;; necessary since -validator, -explainer etc don't take options
+(def ^:dynamic *seen-validator* {})
+
 (defn -rec-schema [{:keys [type]}]
   {:pre [type]}
   ^{:type ::m/into-schema}
@@ -51,12 +54,16 @@
                      (when-not this
                        (throw (Exception. "recursion!")))
                      (mln/-instantiate body' @this options))]
+        (prn "create rec")
         (->> ^{:type ::m/schema}
              (reify
                m/Schema
-               (-validator [this]
-                 (prn (hash this) @unfold)
-                 (m/-validator @unfold))
+               (-validator [this] (or (*seen-validator* this)
+                                      (let [vol (volatile! nil)
+                                            f (fn [v] (@vol v))]
+                                        (vreset! vol (binding [*seen-validator* (assoc *seen-validator* this f)]
+                                                       (m/-validator @unfold)))
+                                        f)))
                (-explainer [this path] (m/-explainer @unfold path))
                (-parser [this] (m/-parser @unfold))
                (-unparser [this] (m/-unparser @unfold))
