@@ -79,35 +79,23 @@
    The walker callback is an arity4 function taking the unwalked schema,
    path, a function taking 0, 1, or 2 arguments to continue walking, and options."
   ([?schema f] (prewalk-schema ?schema f nil))
-  ([?schema f options]
-   (letfn [(pre [s f p o]
-             (if-some [?s (f s p
-                             (fn this
-                               ([]  (this s o))
-                               ([s] (this s o))
-                               ([s o]
-                                (m/-walk
-                                  s
-                                  (reify m/Walker
-                                    (-accept [_ _ _ _] true)
-                                    (-inner [this s p o]
-                                      (if-some [?s (f s p
-                                                      (fn
-                                                        ([]    (pre s f p o))
-                                                        ([s]   (pre s f p o))
-                                                        ([s o] (pre s f p o)))
-                                                      options)]
-                                        (m/schema ?s o)
-                                        s))
-                                    (-outer [_ s p c options] (m/-set-children s c)))
-                                  p o)))
-                             o)]
-               (m/schema ?s o)
-               s))]
-     (pre (m/schema ?schema options) f [] options))))
+  ([?schema f options] (walk-schema ?schema f (fn [s _ _] s))))
 
 (comment
-  (walk-schema [:map [:a [:tuple [:map [:b :int]]]]]
+  (require '[clojure.tools.trace :as t]
+           '[malli.core])
+  (t/trace-vars malli.core/schema)
+  (alter-var-root #'t/trace-fn-call
+                  (fn [_]
+                    (fn [name f args]
+                      (let  [id  (gensym  "t")]
+                        (#'t/tracer id  (str  (#'t/trace-indent)  (pr-str  (cons name (take 1 args)))))
+                        (let  [value  (with-bindings  {#'t/*trace-depth*  (inc @#'t/*trace-depth*)}
+                                        (apply f args))]
+                          (#'t/tracer id  (str  (#'t/trace-indent)  "=> "  (pr-str value)))
+                          value)))))
+
+  (walk-schema (m/schema [:map [:a [:tuple [:map [:b :int]]]]])
                (fn [s p f o]
                  (-> (f)
                      (update-properties c/assoc :in p)))
