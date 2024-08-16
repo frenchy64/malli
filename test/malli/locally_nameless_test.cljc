@@ -9,8 +9,10 @@
 (deftest -abstract-test
   (is (= (mln/-scoped [::mln/b 0])
          (m/form (mln/-abstract [::mln/f :a] :a options))))
-  (is (= (mln/-scoped [:schema {:registry {::a [::mln/b 0]}} ::a])
-         (m/form (mln/-abstract [:schema {:registry {::a [::mln/f :a]}} ::a] :a options))))
+  (is (thrown-with-msg?
+        Exception
+        #"malli\.locally-nameless/local-registries-not-allowed"
+        (mln/-abstract [:schema {:registry {::a [::mln/f :a]}} ::a] :a options)))
   (is (= (mln/-scoped [::mln/b 1] 2)
          (m/form (mln/-abstract (mln/-scoped [::mln/f :a]) :a options))))
   (is (= (mln/-scoped [::mln/b 2] 3)
@@ -22,11 +24,12 @@
   (is (= :any
          (m/form
            (mln/-instantiate (mln/-scoped [::mln/b 0]) :any options))))
-  (is (= [:schema {:registry {::a :a}} ::a]
-         (m/form
-           (mln/-instantiate (mln/-scoped [:schema {:registry {::a [::mln/b 0]}} ::a])
-                             [::mln/f :a]
-                             options))))
+  (is (thrown-with-msg?
+        Exception
+        #"malli\.locally-nameless/local-registries-not-allowed"
+        (mln/-instantiate (mln/-scoped [:schema {:registry {::a [::mln/b 0]}} ::a])
+                          [::mln/f :a]
+                          options)))
   (is (= (mln/-scoped :int)
          (m/form
            (mln/-instantiate
@@ -48,6 +51,9 @@
 
 (deftest fv-test
   (is (= #{:a123} (mln/-fv [::mln/f :a123] options)))
-  (is (= #{:a :b} (mln/-fv [:schema {:registry {::a [::mln/f :b]}}
-                            [::mln/f :a]]
-                           options))))
+  (is (thrown-with-msg?
+        Exception
+        #"malli\.locally-nameless/local-registries-not-allowed"
+        (mln/-fv [:schema {:registry {::a [::mln/f :b]}}
+                  [::mln/f :a]]
+                 options))))

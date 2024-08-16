@@ -54,7 +54,9 @@
         (->> ^{:type ::m/schema}
              (reify
                m/Schema
-               (-validator [this] (m/-validator @unfold))
+               (-validator [this]
+                 (prn (hash this) @unfold)
+                 (m/-validator @unfold))
                (-explainer [this path] (m/-explainer @unfold path))
                (-parser [this] (m/-parser @unfold))
                (-unparser [this] (m/-unparser @unfold))

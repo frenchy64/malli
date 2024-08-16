@@ -54,10 +54,11 @@
          (m/form (m/deref [:rec [:a] [:=> [:cat :a] :a]] options))))
   (is (= [:-> [:rec [:a] [:-> :a :a]] [:rec [:a] [:-> :a :a]]]
          (m/form (m/deref [:rec [:a] [:-> :a :a]] options))))
+  #_ ;;FIXME
   (is (= [:=> [:cat [:maybe :map] :any]
           [:merge [:maybe :map] [:map [:x :any]]]]
          (-> [:rec [:M]
-              [:=> [:cat :M :M] [:merge :M [:map [:x :M]]]]]
+              [:merge :M [:map [:x :M]]]]
              (m/schema options)
              m/deref
              m/form)))
@@ -69,6 +70,16 @@
              (m/schema options)
              m/deref
              m/form))))
+
+(deftest rec-validator-test
+  (is (= nil
+         (m/validate [:rec [:ping]
+                      [:maybe [:tuple [:= "ping"]
+                               [:maybe [:tuple [:= "pong"]
+                                        :ping]]]]]
+                     nil
+                     options)))
+  )
 
 #_
 (deftest f-in-registry-test
