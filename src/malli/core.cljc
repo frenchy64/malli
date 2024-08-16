@@ -1666,22 +1666,25 @@
    (-ref-schema nil))
   ([{:keys [lazy type-properties]}]
    ^{:type ::into-schema}
+   (let [type (if lazy :reference :ref)]
    (reify
      AST
      (-from-ast [parent ast options] (-from-value-ast parent ast options))
      IntoSchema
-     (-type [_] :ref)
+     (-type [_] type)
      (-type-properties [_] type-properties)
      (-into-schema [parent properties [ref :as children] {::keys [allow-invalid-refs] :as options}]
-       (-check-children! :ref properties children 1 1)
+       (-check-children! type properties children 1 1)
        (when-not (-reference? ref)
          (-fail! ::invalid-ref {:ref ref}))
        (let [rf (or (and lazy (-memoize (fn [] (schema (mr/-schema (-registry options) ref) options))))
                     (when-let [s (mr/-schema (-registry options) ref)] (-memoize (fn [] (schema s options))))
                     (when-not allow-invalid-refs
-                      (-fail! ::invalid-ref {:type :ref, :ref ref})))
+                      (-fail! ::invalid-ref {:type type, :ref ref})))
              children (vec children)
-             form (delay (-simple-form parent properties children identity options))
+             form (delay (if (and lazy (empty? properties))
+                           ref
+                           (-simple-form parent properties children identity options)))
              cache (-create-cache options)
              ->parser (fn [f] (let [parser (-memoize (fn [] (f (rf))))]
                                 (fn [x] ((parser) x))))]
@@ -1732,7 +1735,7 @@
            (-regex-parser [this] (-fail! ::potentially-recursive-seqex this))
            (-regex-unparser [this] (-fail! ::potentially-recursive-seqex this))
            (-regex-transformer [this _ _ _] (-fail! ::potentially-recursive-seqex this))
-           (-regex-min-max [this _] (-fail! ::potentially-recursive-seqex this))))))))
+           (-regex-min-max [this _] (-fail! ::potentially-recursive-seqex this)))))))))
 
 (defn -schema-schema [{:keys [id raw]}]
   ^{:type ::into-schema}
@@ -2240,7 +2243,7 @@
                            (into-schema t ?p (when (< 2 n) (subvec ?schema 2 n)) options)
                            (into-schema t nil (when (< 1 n) (subvec ?schema 1 n)) options)))
      :else (if-let [?schema' (and (-reference? ?schema) (-lookup ?schema options))]
-             (-pointer ?schema (schema ?schema' options) options)
+             (-lazy ?schema options)
              (-> ?schema (-lookup! ?schema nil false options) (recur options))))))
 
 (defn form
@@ -2701,6 +2704,7 @@
    :re (-re-schema false)
    :fn (-fn-schema)
    :ref (-ref-schema)
+   :reference (-ref-schema {:lazy true})
    :=> (-=>-schema)
    :-> (-->-schema nil)
    :function (-function-schema nil)

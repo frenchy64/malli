@@ -37,7 +37,8 @@
 (defn walk-schema
   "Walks recursively over the Schema and its children, returning a Schema.
    The pre walker callback is an arity4 function taking the unwalked schema,
-   path, a function taking 0, 1, or 2 arguments to continue walking, and options.
+   path, a function taking 0, 1, or 2 arguments to continue walking, and options,
+   returning a ?schema.
    The post walker callback is an arity3 function taking the walked schema,
    path and options, returning a ?schema."
   ([?schema pre post] (walk-schema ?schema pre post nil))
@@ -75,7 +76,8 @@
 (defn prewalk-schema
   "Prewalks recursively over the Schema and its children, returning a Schema.
    The walker callback is an arity4 function taking the unwalked Schema,
-   path, a function taking 0, 1, or 2 arguments to continue walking, and options."
+   path, a function taking 0, 1, or 2 arguments to continue walking, and options,
+   returning a ?schema."
   ([?schema f] (prewalk-schema ?schema f nil))
   ([?schema f options] (walk-schema ?schema f (fn [s _ _] s))))
 
