@@ -359,7 +359,13 @@
 
 (defn -set-properties [schema properties]
   (if (-equals properties (-properties schema))
-    schema (-into-schema (-parent schema) properties (or (and (-entry-schema? schema) (-entry-parser schema)) (-children schema)) (-options schema))))
+    schema
+    (-into-schema (-parent schema)
+                  properties
+                  (or (and (-entry-schema? schema) (-entry-parser schema))
+                      (-children schema))
+                  ;;FIXME update registry
+                  (-options schema))))
 
 (defn -update-properties [schema f & args]
   (-set-properties schema (not-empty (apply f (-properties schema) args))))
