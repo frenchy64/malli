@@ -59,12 +59,14 @@
         (->> ^{:type ::m/schema}
              (reify
                m/Schema
-               (-validator [this] (or (*seen-validator* this)
+               (-validator [this] (or (force (*seen-validator* this))
                                       (let [vol (volatile! nil)
-                                            f (fn [v] (@vol v))]
+                                            f (delay (fn [v] (@vol v)))]
                                         (vreset! vol (binding [*seen-validator* (assoc *seen-validator* this f)]
                                                        (m/-validator @unfold)))
-                                        f)))
+                                        (if (realized? f)
+                                          @f
+                                          @vol))))
                ;;TODO
                (-explainer [this path] (m/-explainer @unfold path))
                ;;TODO
