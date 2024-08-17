@@ -37,6 +37,8 @@
                                                          {bname (m/schema [::mln/f bname] options)}
                                                          (or % {}))))]
                     (mln/-abstract parsed-body bname options))
+            _ (prn "body'" body')
+            ;;TODO ensure frees in body aren't shadowed
             form (delay
                    (m/-create-form type properties
                                    (assoc children 1
@@ -54,7 +56,6 @@
                      (when-not this
                        (throw (Exception. "recursion!")))
                      (mln/-instantiate body' @this options))]
-        (prn "create rec")
         (->> ^{:type ::m/schema}
              (reify
                m/Schema
@@ -64,9 +65,13 @@
                                         (vreset! vol (binding [*seen-validator* (assoc *seen-validator* this f)]
                                                        (m/-validator @unfold)))
                                         f)))
+               ;;TODO
                (-explainer [this path] (m/-explainer @unfold path))
+               ;;TODO
                (-parser [this] (m/-parser @unfold))
+               ;;TODO
                (-unparser [this] (m/-unparser @unfold))
+               ;;TODO
                (-transformer [_ transformer method options] (m/-transformer @unfold transformer method options))
                ;;TODO
                (-walk [this walker path options]

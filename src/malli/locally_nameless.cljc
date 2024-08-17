@@ -7,12 +7,13 @@
 ;; See "I am not a number: I am a free variable" - Conor McBride and James McKinna
 
 (defn -scoped
-  ([s] [:schema {::scope true} s])
+  ([s] [::scope {::scopes 1} s])
   ([s n]
+   ;;TODO increment ::scopes property
    (reduce (fn [acc _] (-scoped acc))
            s (range n))))
 
-;;TODO disallow free variables under registries. because of the way pointers/refs/derefs
+;; disallow free variables under registries. because of the way pointers/refs/derefs
 ;; are implemented, it's quite difficult to update a local registry such that pointers
 ;; are also updated. this is because -deref doesn't take a dynamic environment.
 (defn -fail-if-property-registry! [s properties]
@@ -27,7 +28,7 @@
                 (let [properties (m/properties s)
                       _ (-fail-if-property-registry! s properties)
                       options (cond-> options
-                                (::scope properties) (update ::abstract-index inc))]
+                                (= ::scope (m/type s)) (update ::abstract-index + (::scopes properties)))]
                   (m/-walk s this path options)))
         outer (fn [s path children {::keys [abstract-index] :as options}]
                 (let [s (m/-set-children s children)]
@@ -63,11 +64,10 @@
 (defn -instantiate [?scope to options]
   (let [to (m/schema to options)
         inner (fn [this s path options]
-                (prn "s" s)
                 (let [properties (m/properties s)
                       _ (-fail-if-property-registry! s properties)
                       options (cond-> options
-                                (::scope properties) (update ::instantiate-index inc))]
+                                (= ::scope (m/type s)) (update ::instantiate-index + (::scopes properties)))]
                   (m/-walk s this path options)))
         outer (fn [s path children {::keys [instantiate-index] :as options}]
                 (let [s (m/-set-children s children)]
@@ -78,7 +78,7 @@
                             s))
                     s)))
         s (m/schema ?scope options)
-        _ (when-not (-> s m/-properties ::scope)
+        _ (when-not (= ::scope (m/type s))
             (m/-fail! ::instantiate-non-scope {:schema s}))]
     (inner
       (reify m/Walker
@@ -172,6 +172,15 @@
           (-get [_ _ default] default)
           (-set [this key _] (m/-fail! ::non-associative-schema {:schema this, :key key})))))))
 
+(defn -scope-schema []
+  (m/-proxy-schema {:type ::scope :min 1 :max 1
+                    :fn (fn [properties children options]
+                          (when-not (= [::scopes] (keys properties))
+                            (m/-fail! ::invalid-scope-properties {:properties properties}))
+                          (let [children (mapv #(m/schema % options) children)]
+                            [children (mapv m/form children) (delay (m/-fail! ::cannot-use-scope-schema {:schema children}))]))}))
+
 (defn schemas []
   {::f (-free-or-bound-schema {:type ::f})
-   ::b (-free-or-bound-schema {:type ::b})})
+   ::b (-free-or-bound-schema {:type ::b})
+   ::scope (-scope-schema)})

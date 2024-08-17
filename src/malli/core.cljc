@@ -220,6 +220,8 @@
       :cljs [([f1 f2 f3 & fs] (let [f4 (apply -comp fs)]
                                 (fn [x] (-> x f4 f3 f2 f1))))]))
 
+(defn -update [x k f] (assoc x k (f (get x k))))
+
 (defn -equals [x y] (or (identical? x y) (= x y)))
 
 (defn -vmap ([os] (miu/-vmap identity os)) ([f os] (miu/-vmap f os)))

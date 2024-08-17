@@ -85,7 +85,16 @@
   (is (ping-pong-rec-validator ["ping" nil]))
   (is (not (ping-pong-rec-validator ["ping"]))))
 
-;(deftest walk-test)
+(deftest walk-test
+  (is (= ::TODO
+         (m/walk [:rec [:ping]
+                  [:maybe [:tuple [:= "ping"]
+                           [:maybe [:tuple [:= "pong"]
+                                    :ping]]]]]
+                 (fn [s p c o]
+                   (prn (m/type s))
+                   s)
+                 options))))
 
 #_
 (deftest f-in-registry-test
