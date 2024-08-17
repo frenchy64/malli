@@ -17,7 +17,17 @@
   kw)
 
 ;; necessary since -validator, -explainer etc don't take options
-(def ^:dynamic *seen-validator* {})
+(def ^:dynamic *seen* {})
+
+(defn- gen-rec [k gen this wrap-vol]
+  (or (force (get-in *seen* [k this]))
+      (let [vol (volatile! nil)
+            f (delay (wrap-vol vol))]
+        (vreset! vol (binding [*seen* (assoc-in *seen* [k this] f)]
+                       (gen)))
+        (if (realized? f)
+          @f
+          @vol))))
 
 (defn -rec-schema [{:keys [type]}]
   {:pre [type]}
@@ -59,22 +69,11 @@
         (->> ^{:type ::m/schema}
              (reify
                m/Schema
-               (-validator [this] (or (force (*seen-validator* this))
-                                      (let [vol (volatile! nil)
-                                            f (delay (fn [v] (@vol v)))]
-                                        (vreset! vol (binding [*seen-validator* (assoc *seen-validator* this f)]
-                                                       (m/-validator @unfold)))
-                                        (if (realized? f)
-                                          @f
-                                          @vol))))
-               ;;TODO
-               (-explainer [this path] (m/-explainer @unfold path))
-               ;;TODO
-               (-parser [this] (m/-parser @unfold))
-               ;;TODO
-               (-unparser [this] (m/-unparser @unfold))
-               ;;TODO
-               (-transformer [_ transformer method options] (m/-transformer @unfold transformer method options))
+               (-validator [this] (gen-rec ::m/validator #(m/-validator @unfold) this #(fn [v] (@% v))))
+               (-explainer [this path] (gen-rec ::m/explainer #(m/-explainer @unfold path) this #(fn [x in acc] (@% x in acc))))
+               (-parser [this] (gen-rec ::m/parser #(m/-parser @unfold) this) #(fn [v] (@% v)))
+               (-unparser [this] (gen-rec ::m/unparser #(m/-unparser @unfold) this #(fn [v] (@% v))))
+               (-transformer [_ transformer method options] (gen-rec ::m/transformer #(m/-transformer @unfold transformer method options) this #(fn [v] (@% v))))
                ;;TODO
                (-walk [this walker path options]
                  (when (m/-accept walker this path options)

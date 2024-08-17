@@ -81,12 +81,21 @@
                        :ping]]]]]
     options))
 
-(def ping-pong-rec-validator (m/validator ping-pong-rec-schema))
+(deftest rec-functions-test
+  (is (m/validate ping-pong-rec-schema nil))
+  (is (m/validate ping-pong-rec-schema ["ping" nil]))
+  (is (m/validate ping-pong-rec-schema ["ping" ["pong" nil]]))
+  (is (m/validate ping-pong-rec-schema ["ping" ["pong" ["ping" nil]]]))
+  (is (m/validate ping-pong-rec-schema ["ping" ["pong" ["ping" ["pong" nil]]]]))
+  (is (not (m/validate ping-pong-rec-schema ["ping"])))
 
-(deftest rec-validator-test
-  (is (ping-pong-rec-validator nil))
-  (is (ping-pong-rec-validator ["ping" nil]))
-  (is (not (ping-pong-rec-validator ["ping"]))))
+  (is (nil? (m/explain ping-pong-rec-schema nil)))
+  (is (nil? (m/explain ping-pong-rec-schema ["ping" nil])))
+  (is (= '({:path [0], :in [], :schema [:tuple [:= "ping"] [:maybe [:tuple [:= "pong"] [:rec [:ping] [:maybe [:tuple [:= "ping"] [:maybe [:tuple [:= "pong"] :ping]]]]]]]], :value ["ping"], :type :malli.core/tuple-size})
+       (mapv #(update % :schema m/form) (:errors (m/explain ping-pong-rec-schema ["ping"])))))
+
+  ;;TODO parser, unparser, transformer
+  )
 
 (deftest walk-test
   (is (= ::TODO
