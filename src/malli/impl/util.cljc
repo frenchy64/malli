@@ -84,3 +84,26 @@
   [f coll]
   (let [seen (atom #{})]
     (filter (fn [x] (let [v (f x)] (when-not (@seen v) (swap! seen conj v)))) coll)))
+
+;; also doubles as a predicate for the :every schema to bound the number
+;; of elements to check, so don't add potentially-infinite countable things like seq's.
+(defn -safely-countable? [x]
+  (or (nil? x)
+      (counted? x)
+      (indexed? x)
+      ;; note: js/Object not ISeqable
+      #?(:clj (instance? java.util.Map x))
+      ;; many Seq's are List's, so just pick some popular classes
+      #?@(:bb  []
+          :clj [(instance? java.util.AbstractList x)
+                (instance? java.util.Vector x)])
+      #?(:clj  (instance? CharSequence x)
+         :cljs (string? x))
+      #?(:clj  (.isArray (class x))
+         :cljs (identical? js/Array (c/type x)))))
+
+
+(defn -safe-count [x]
+  (if (-safely-countable? x)
+    (count x)
+    (reduce (fn [cnt _] (inc cnt)) 0 x)))

@@ -16,7 +16,7 @@
 
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
-         parser unparser ast from-ast -instrument validator validate explain ^:private -safely-countable?)
+         parser unparser ast from-ast -instrument validator validate explain)
 
 ;;
 ;; protocols and records
@@ -661,12 +661,7 @@
       (and max f) (fn [x] (<= (f x) max))
       max (fn [x] (<= x max)))))
 
-(defn- -safe-count [x]
-  (if (-safely-countable? x)
-    (count x)
-    (reduce (fn [cnt _] (inc cnt)) 0 x)))
-
-(defn -validate-limits [min max] (or ((-min-max-pred -safe-count) {:min min :max max}) (constantly true)))
+(defn -validate-limits [min max] (or ((-min-max-pred miu/-safe-count) {:min min :max max}) (constantly true)))
 
 (defn -needed-bounded-checks [min max options]
   (c/max (or (some-> max inc) 0)
@@ -1332,7 +1327,7 @@
                                                       (fn [x v]
                                                         (if (child-validator v) x (reduced ::invalid)))
                                                       x (cond->> x
-                                                          (not (-safely-countable? x))
+                                                          (not (miu/-safely-countable? x))
                                                           (eduction (take bounded)))))
                                                    (let [x' (reduce
                                                              (fn [acc v]
@@ -1358,7 +1353,7 @@
                                      (constraint-validator x))
                                  (reduce (fn [acc v] (if (validator v) acc (reduced false))) true
                                          (cond->> x
-                                           (and bounded (not (-safely-countable? x)))
+                                           (and bounded (not (miu/-safely-countable? x)))
                                            (eduction (take bounded))))))))
                 (-explainer [this path]
                   (let [explainer (-explainer schema (conj path 0))
@@ -1369,7 +1364,7 @@
                         ;;TODO accumulate all errors from here?
                         (not (validate-limits x)) (conj acc (miu/-error path in this x ::limits))
                         (and constraint-validator (not (constraint-validator x))) (conj (miu/-error path in this x ::constraint-violation))
-                        :else (let [size (when (and bounded (not (-safely-countable? x)))
+                        :else (let [size (when (and bounded (not (miu/-safely-countable? x)))
                                            bounded)]
                                 (loop [acc acc, i 0, [x & xs :as ne] (seq x)]
                                   (if (and ne (or (not size) (< i #?(:cljs    ^number size

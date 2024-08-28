@@ -114,7 +114,7 @@
                (me/humanize)))))
 
   (testing "vector"
-    (is (= '[_ _ [_ ("4" :-> "should be an int")]]
+    (is (= '[nil nil [nil ["should be an int"]]]
            (-> [:vector [:vector int?]]
                (m/explain [[1 2] [2 2] [3 "4"]])
                (me/humanize)))))

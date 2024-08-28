@@ -13,7 +13,7 @@
 (defn- -count [v]
   (if (string? v)
     (.codePointCount ^String v 0 (count v))
-    (count v)))
+    (miu/-safe-count v)))
 
 (defn validators []
   {:max-count (-first-child (fn [n] #(<= (count %) n)))
