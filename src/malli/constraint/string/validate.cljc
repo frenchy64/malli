@@ -4,8 +4,7 @@
             [malli.core :as-alias m]
             [malli.constraint.char :as char]
             [malli.constraint.string.util :refer [code-point-seq]]
-            [malli.impl.util :as miu])
-  #?(:clj (:import java.lang.Character$UnicodeScript)))
+            [malli.impl.util :as miu]))
 
 (defn- -flip? [{:keys [constraint]} _]
   (false? (second constraint)))
