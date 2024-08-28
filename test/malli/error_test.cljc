@@ -143,6 +143,7 @@
                (me/humanize)))))
 
   (testing "so nested"
+    ;; IDEA
     #_'{:data [{:x [("1" :-> "should be an int")
                     _
                     ("3" :-> "should be an int")]}
@@ -181,7 +182,8 @@
                (me/humanize)))))
 
   (testing "maps have errors inside"
-    (is (= '{:person ({} :-> "should be a seq")}
+    (is (= ;'{:person ({} :-> "should be a seq")}
+           '{:person ["should be a seq"]}
            (-> [:map [:person seq?]]
                (m/explain {:person {}})
                (me/humanize))))))
@@ -202,11 +204,17 @@
                :d {:f "invalid"}}]
 
     (testing "with default locale"
-      (is (= '{:a ("invalid" :-> "should be an int")
-               :b ("invalid" :-> "should be a positive int")
-               :c ("invalid" :-> "STAY POSITIVE"),
-               :d {:e "missing required key"
-                   :f ("invalid" :-> "SHOULD BE ZIP")}}
+      (is (= {:a ["should be an int"]
+              :b ["should be a positive int"]
+              :c ["STAY POSITIVE"],
+              :d {:e ["missing required key"]
+                  :f ["SHOULD BE ZIP"]}}
+             ;;IDEA
+             ;'{:a ("invalid" :-> "should be an int")
+             ;  :b ("invalid" :-> "should be a positive int")
+             ;  :c ("invalid" :-> "STAY POSITIVE"),
+             ;  :d {:e "missing required key"
+             ;      :f ("invalid" :-> "SHOULD BE ZIP")}}
              (-> (m/explain schema value)
                  (me/humanize)))))
 
