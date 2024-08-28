@@ -237,7 +237,6 @@
 (defn- -path [{:keys [schema]}
               {:keys [locale default-locale]
                :or {default-locale :en}}]
-  (prn "-path" schema)
   (let [properties (m/properties schema)]
     (or (-maybe-localized (:error/path properties) locale)
         (-maybe-localized (:error/path properties) default-locale))))
@@ -308,7 +307,6 @@
   ([error]
    (error-path error nil))
   ([error options]
-   (prn "error-path" error)
    (into (:in error) (-path error options))))
 
 (defn error-message
