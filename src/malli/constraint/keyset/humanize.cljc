@@ -1,5 +1,6 @@
 (ns malli.constraint.keyset.humanize
-  (:require [malli.core :as m]
+  (:require [malli.core :as-alias m]
+            [malli.constraint.keyset.utils :as mcku]
             [malli.impl.util :as miu]))
 
 (defn humanizers []
@@ -29,7 +30,7 @@
                (when-not (next constraint)
                  (miu/-fail! ::dispatch-constraint-must-supply-dispatch-fn {:constraint constraint}))
                (let [[_ dispatch & clauses] constraint
-                     dispatch (m/eval dispatch options)
+                     dispatch (mcku/eval-dispatch dispatch options)
                      {::m/keys [default] :as dispatch-map} (into {} clauses)
                      c (dispatch-map (dispatch value) default)]
                  (when-not ((constraint-validator c) value)
