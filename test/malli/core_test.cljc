@@ -259,6 +259,24 @@
              (m/decode
               [:and {:decode/string '{:enter #(str "olipa_" %), :leave #(str % "_avaruus")}} string?]
               "kerran" mt/string-transformer)))
+      (is (= "3_1_kerran_2_4"
+             (m/decode
+              [:and
+               [:string {:decode/string '{:enter #(str "1_" %), :leave #(str % "_2")}}]
+               [:string {:decode/string '{:enter #(str "3_" %), :leave #(str % "_4")}}]]
+              "kerran" mt/string-transformer)))
+      (is (= "1_kerran_2"
+             (m/decode
+              [:or
+               [:string {:decode/string '{:enter #(str "1_" %), :leave #(str % "_2")}}]
+               [:string {:decode/string '{:enter #(str "3_" %), :leave #(str % "_4")}}]]
+              "kerran" mt/string-transformer)))
+      (is (= "3_kerran_4"
+             (m/decode
+              [:or
+               :map
+               [:string {:decode/string '{:enter #(str "3_" %), :leave #(str % "_4")}}]]
+              "kerran" mt/string-transformer)))
 
       (doseq [schema [schema schema*]]
         (is (true? (m/validate (over-the-wire schema) 1))))
@@ -518,10 +536,36 @@
       #_(is (= 1 (m/decode schema "1" mt/string-transformer)))
       #_(is (= "1" (m/decode schema "1" mt/json-transformer)))
 
-      (testing "map enums require nil properties"
-        (let [schema [:enum nil {:a 1} {:b 2}]]
-          (is (= nil (m/properties schema)))
-          (is (= [{:a 1} {:b 2}] (m/children schema)))))
+      (testing "nil enums without properties require empty properties"
+        (let [schema [:enum nil nil]]
+          (testing (pr-str schema)
+            (is (= nil (m/properties schema)))
+            (is (= [nil] (m/children schema)))
+            (is (= schema (m/form schema)))
+            (is (= schema (-> schema m/form m/schema m/form))))))
+
+      (testing "nil nums support properties"
+        (let [schema [:enum {:foo :bar} nil]]
+          (is (= {:foo :bar} (m/properties schema)))
+          (is (= [nil] (m/children schema)))
+          (is (= schema (m/form schema)))
+          (is (= schema (-> schema m/form m/schema m/form)))))
+
+      (testing "map enums without properties require empty properties"
+        (doseq [schema [[:enum nil {:a 1} {:b 2}]
+                        [:enum {} {:a 1} {:b 2}]]]
+          (testing (pr-str schema)
+            (is (= nil (m/properties schema)))
+            (is (= [{:a 1} {:b 2}] (m/children schema)))
+            (is (= [:enum nil {:a 1} {:b 2}] (m/form schema)))
+            (is (= [:enum nil {:a 1} {:b 2}] (-> schema m/form m/schema m/form))))))
+
+      (testing "map enums support properties"
+        (let [schema [:enum {:foo :bar} {:a 1} {:b 2}]]
+          (is (= {:foo :bar} (m/properties schema)))
+          (is (= [{:a 1} {:b 2}] (m/children schema)))
+          (is (= schema (m/form schema)))
+          (is (= schema (-> schema m/form m/schema m/form)))))
 
       (is (true? (m/validate (over-the-wire schema) 1)))
 
@@ -2071,6 +2115,24 @@
                             [1 3 mt/string-transformer [:int {:encode/string {:enter inc, :leave inc}}]]]
                    :ast {:type :int, :properties {:min 1, :max 4}}
                    :form [:int {:min 1, :max 4}]}
+             :float {:schema [:float {:min 1.0, :max 4.0}]
+                     :validate {:success [1.0 2.2 4.0]
+                                :failure [nil "invalid" 0.5]}
+                     :explain [[1.0]
+                               [false {:schema [:float {:min 1.0, :max 4.0}]
+                                       :value false
+                                       :errors [{:path []
+                                                 :in []
+                                                 :schema [:float {:min 1.0, :max 4.0}]
+                                                 :value false}]}]]
+                     :decode [["1.1" (float 1.1) mt/string-transformer]
+                              ["1.1" "1.1" mt/json-transformer]
+                              [(float 1.2) (float 3.2) mt/string-transformer [:float {:decode/string {:enter inc, :leave inc}}]]]
+                     :encode [[(float 1.1) "1.1" mt/string-transformer]
+                              [(float 1.1) (float 1.1) mt/json-transformer]
+                              [(float 1.2) (float 3.2) mt/string-transformer [:float {:encode/string {:enter inc, :leave inc}}]]]
+                     :ast {:type :float, :properties {:min 1.0, :max 4.0}}
+                     :form [:float {:min 1.0, :max 4.0}]}
              :double {:schema [:double {:min 1.0, :max 4.0}]
                       :validate {:success [1.0 2.2 4.0]
                                  :failure [nil "invalid" 0.5]}
@@ -2393,13 +2455,28 @@
   "Number of times to test a successful generative test involving :=>."
   1000)
 
+(defn fn-schema-info [?schema]
+  (some-> (m/schema ?schema)
+          (m/-function-info)
+          (update :input m/form)
+          (update :output m/form)
+          (update :guard #(some-> % m/form))))
+
+;; js allows invalid arity
 (deftest function-schema-test
-  ;; js allows invalid arity
+
+  (is (= {:min 2
+          :max 2
+          :arity 2
+          :input [:cat :int :int]
+          :output :int
+          :guard nil}
+         (fn-schema-info [:=> [:cat :int :int] :int])
+         (fn-schema-info [:-> :int :int :int])))
 
   (testing ":=>"
-    (let [valid-f (fn [x y]
-                    (unchecked-subtract x y))
-          ?schema [:=> [:cat int? int?] int?]
+    (let [?schema [:=> [:cat int? int?] int?]
+          valid-f (fn [x y] (unchecked-subtract x y))
           schema1 (m/schema ?schema)
           schema2 (m/schema ?schema {::m/function-checker mg/function-checker})]
 
@@ -2414,10 +2491,10 @@
         (is (true? (validate-times function-schema-validation-times schema2 valid-f)))
         (is (false? (m/validate schema2 (fn [x y] (str x y)))))
 
-        (is (nil? (explain-times function-schema-validation-times schema2 (fn [x y] (unchecked-add x y)))))
+        (is (nil? (explain-times function-schema-validation-times schema2 valid-f)))
 
         (testing "exception in execution causes single error to root schema path"
-          (is (results= {:schema [:=> [:cat int? int?] int?]
+          (is (results= {:schema ?schema
                          :value single-arity
                          :errors [{:path []
                                    :in []
@@ -2427,7 +2504,7 @@
 
         (testing "error in output adds error to child in path 1"
           (let [f (fn [x y] (str x y))]
-            (is (results= {:schema [:=> [:cat int? int?] int?]
+            (is (results= {:schema ?schema
                            :value f
                            :errors [{:path []
                                      :in []
@@ -2449,14 +2526,69 @@
                 :output {:type 'int?}}
                (m/ast schema1))))))
 
-  (testing ":function"
+  (testing ":->"
+    (let [?schema [:-> int? int? int?]
+          valid-f (fn [x y] (unchecked-subtract x y))
+          schema1 (m/schema ?schema)
+          schema2 (m/schema ?schema {::m/function-checker mg/function-checker})]
 
-    (is (thrown-with-msg?
-         #?(:clj Exception, :cljs js/Error)
-         #":malli.core/non-function-childs"
-         (m/schema
-          [:function
-           :cat])))
+      (testing "by default, all ifn? are valid"
+        (is (true? (m/validate schema1 identity)))
+        (is (true? (m/validate schema1 #{}))))
+
+      (testing "using generative testing"
+        (is (false? (m/validate schema2 single-arity)))
+        #?(:clj (is (false? (m/validate schema2 (fn [x] x)))))
+        #?(:clj (is (false? (m/validate schema2 #{}))))
+        (is (true? (validate-times function-schema-validation-times schema2 valid-f)))
+        (is (false? (m/validate schema2 (fn [x y] (str x y)))))
+
+        (is (nil? (explain-times function-schema-validation-times schema2 valid-f)))
+
+        (testing "exception in execution causes single error to root schema path"
+          (is (results= {:schema ?schema
+                         :value single-arity
+                         :errors [{:path [::m/in]
+                                   :in []
+                                   :schema [:=> [:cat int? int?] int?]
+                                   :value single-arity}]}
+                        (m/explain schema2 single-arity))))
+
+        (testing "error in output adds error to child in path 1"
+          (let [f (fn [x y] (str x y))]
+            (is (results= {:schema ?schema
+                           :value f
+                           :errors [{:path [::m/in]
+                                     :in []
+                                     :schema [:=> [:cat int? int?] int?]
+                                     :value f}
+                                    {:path [::m/in 1]
+                                     :in []
+                                     :schema int?
+                                     :value "00"}]}
+                          (m/explain schema2 f)))))
+
+        (is (= single-arity (m/decode schema2 single-arity mt/string-transformer)))
+
+        (is (true? (validate-times function-schema-validation-times (over-the-wire schema1) valid-f)))
+
+        (is (= {:type :->
+                :children [{:type 'int?} {:type 'int?} {:type 'int?}]}
+               (m/ast schema1))))))
+
+  (testing ":function"
+    (is (= nil
+           (fn-schema-info (m/schema [:function [:-> :int :int :int]]))))
+    (is (= [[:-> :int :int :int]
+            [:=> [:cat :int] :int]]
+           (map m/form (m/-function-schema-arities (m/schema [:function
+                                                              [:-> :int :int :int]
+                                                              [:=> [:cat :int] :int]])))))
+    (doseq [s [[:function :cat]]]
+      (is (thrown-with-msg?
+           #?(:clj Exception, :cljs js/Error)
+           #":malli.core/non-function-childs"
+           (m/schema s))))
 
     (testing "varargs with identical min arity get +1 arity"
       (is (m/schema
@@ -2466,110 +2598,137 @@
 
     (testing "invalid arities"
 
-      (is (thrown-with-msg?
-           #?(:clj Exception, :cljs js/Error)
-           #":malli.core/duplicate-arities"
-           (m/schema
-            [:function
-             [:=> :cat nil?]
-             [:=> :cat nil?]])))
+      (doseq [s [[:function
+                  [:=> :cat nil?]
+                  [:=> :cat nil?]]
+                 [:function
+                  [:-> nil?]
+                  [:=> :cat nil?]]]]
+        (is (thrown-with-msg?
+             #?(:clj Exception, :cljs js/Error)
+             #":malli.core/duplicate-arities"
+             (m/schema s))))
 
-      (is (thrown-with-msg?
-           #?(:clj Exception, :cljs js/Error)
-           #":malli.core/multiple-varargs"
-           (m/schema
-            [:function
-             [:=> :cat nil?]
-             [:=> [:cat [:? nil?]] nil?]
-             [:=> [:cat [:? nil?] [:? nil?]] nil?]]))))
+      (doseq [s [[:function
+                  [:=> :cat nil?]
+                  [:=> [:cat [:? nil?]] nil?]
+                  [:=> [:cat [:? nil?] [:? nil?]] nil?]]]]
+        (is (thrown-with-msg?
+             #?(:clj Exception, :cljs js/Error)
+             #":malli.core/multiple-varargs"
+             (m/schema s)))))
 
-    (let [valid-f (fn ([x] x) ([x y] (unchecked-subtract x y)))
-          invalid-f (fn ([x] x) ([x y] (str x y)))
-          ?schema [:function
-                   [:=> [:cat int?] int?]
-                   [:=> [:cat int? int?] int?]]
-          schema1 (m/schema ?schema)
-          schema2 (m/schema ?schema {::m/function-checker mg/function-checker})]
+    (doseq [?schema [[:function
+                      [:=> [:cat int?] int?]
+                      [:=> [:cat int? int?] int?]]]]
+      (let [valid-f (fn ([x] x) ([x y] (unchecked-subtract x y)))
+            invalid-f (fn ([x] x) ([x y] (str x y)))
 
-      (testing "by default, all ifn? are valid"
-        (is (true? (m/validate schema1 identity)))
-        (is (true? (m/validate schema1 #{}))))
+            schema1 (m/schema ?schema)
+            schema2 (m/schema ?schema {::m/function-checker mg/function-checker})]
 
-      (testing "using generative testing"
-        #?(:clj (is (false? (m/validate schema2 identity))))
-        (is (false? (m/validate schema2 #{})))
+        (testing "by default, all ifn? are valid"
+          (is (true? (m/validate schema1 identity)))
+          (is (true? (m/validate schema1 #{}))))
 
-        (is (false? (m/validate schema2 single-arity)))
-        #?(:clj (is (false? (m/validate schema2 (fn [x] x)))))
-        #?(:clj (is (false? (m/validate schema2 #{}))))
-        (is (true? (validate-times function-schema-validation-times schema2 valid-f)))
-        (is (false? (m/validate schema2 (fn [x y] (str x y)))))
+        (testing "using generative testing"
+          #?(:clj (is (false? (m/validate schema2 identity))))
+          (is (false? (m/validate schema2 #{})))
 
-        (is (nil? (explain-times function-schema-validation-times schema2 valid-f)))
+          (is (false? (m/validate schema2 single-arity)))
+          #?(:clj (is (false? (m/validate schema2 (fn [x] x)))))
+          #?(:clj (is (false? (m/validate schema2 #{}))))
+          (is (true? (validate-times function-schema-validation-times schema2 valid-f)))
+          (is (false? (m/validate schema2 (fn [x y] (str x y)))))
 
-        (is (results= {:schema schema2
-                       :value invalid-f
-                       :errors [{:path []
-                                 :in []
-                                 :schema schema2
-                                 :value invalid-f}]}
-                      (m/explain schema2 invalid-f))))
+          (is (nil? (explain-times function-schema-validation-times schema2 valid-f)))
 
-      (testing "guards"
-        (let [guard (fn [[[x y] z]] (= (str x y) z))
-              schema (m/schema
-                      [:=> [:cat :int :int] :string [:fn guard]]
-                      {::m/function-checker mg/function-checker})
-              valid (fn [x y] (str x y))
-              invalid (fn [x y] (str x "-" y))]
+          (is (results= {:schema schema2
+                         :value invalid-f
+                         :errors [{:path []
+                                   :in []
+                                   :schema [:function
+                                            [:=> [:cat int?] int?]
+                                            [:=> [:cat int? int?] int?]]
+                                   :value invalid-f}]}
+                        (m/explain schema2 invalid-f))))
 
-          (is (= {:type :=>,
-                  :input {:type :cat
-                          :children [{:type :int} {:type :int}]},
-                  :output {:type :string},
-                  :guard {:type :fn
-                          :value guard}}
-                 (m/ast schema)))
+        (testing "guards"
+          (let [guard (fn [[[x y] z]] (= (str x y) z))
+                schema1 (m/schema
+                         [:=> [:cat :int :int] :string [:fn guard]]
+                         {::m/function-checker mg/function-checker})
+                schema2 (m/schema
+                         [:-> {:guard guard} :int :int :string]
+                         {::m/function-checker mg/function-checker})
+                valid (fn [x y] (str x y))
+                invalid (fn [x y] (str x "-" y))]
 
-          (is (= nil (m/explain schema valid)))
+            (is (= {:type :=>,
+                    :input {:type :cat
+                            :children [{:type :int} {:type :int}]},
+                    :output {:type :string},
+                    :guard {:type :fn
+                            :value guard}}
+                   (m/ast schema1)))
 
-          (testing "error in guard adds error on path 2"
+            (is (= {:type :->
+                    :children [{:type :int} {:type :int} {:type :string}]
+                    :properties {:guard guard}}
+                   (m/ast schema2)))
+
+            (is (= nil (m/explain schema1 valid)))
+            (is (= nil (m/explain schema2 valid)))
+
+            (testing "error in guard adds error on path 2"
+              (is (results= {:schema schema1,
+                             :value invalid
+                             :errors [{:path [],
+                                       :in [],
+                                       :schema schema1
+                                       :value invalid}
+                                      {:path [2]
+                                       :in []
+                                       :schema [:fn guard]
+                                       :value ['(0 0) "0-0"]}]}
+                            (m/explain schema1 invalid)))
+              (is (results= {:schema schema2,
+                             :value invalid
+                             :errors [{:path [::m/in],
+                                       :in [],
+                                       :schema schema1
+                                       :value invalid}
+                                      {:path [::m/in 2]
+                                       :in []
+                                       :schema [:fn guard]
+                                       :value ['(0 0) "0-0"]}]}
+                            (m/explain schema2 invalid))))
+
+            (testing "instrument"
+              (doseq [schema [[:=> [:cat :any] :any [:fn (fn [[[arg] ret]] (not= arg ret))]]
+                              [:-> {:guard (fn [[[arg] ret]] (not= arg ret))} :any :any]]]
+                (let [fn (m/-instrument {:schema schema} str)]
+
+                  (is (= "2" (fn 2)))
+
+                  (is (thrown-with-msg?
+                       #?(:clj Exception, :cljs js/Error)
+                       #":malli.core/invalid-guard"
+                       (fn "0"))))))))
+
+        (testing "non-accumulating errors"
+          (let [schema (m/schema
+                        [:tuple :int [:function [:=> [:cat :int] :int]]]
+                        {::m/function-checker malli.generator/function-checker})
+                f (fn [_] 1)]
             (is (results= {:schema schema,
-                           :value invalid
-                           :errors [{:path [],
-                                     :in [],
-                                     :schema schema
-                                     :value invalid}
-                                    {:path [2]
-                                     :in []
-                                     :schema [:fn guard]
-                                     :value ['(0 0) "0-0"]}]}
-                          (m/explain schema invalid))))
+                           :value ["1" f],
+                           :errors [{:path [0], :in [0], :schema :int, :value "1"}]}
+                          (m/explain schema ["1" f])))))
 
-          (testing "instrument"
-            (let [schema [:=> [:cat :any] :any [:fn (fn [[[arg] ret]] (not= arg ret))]]
-                  fn (m/-instrument {:schema schema} str)]
+        (is (= valid-f (m/decode schema1 valid-f mt/string-transformer)))
 
-              (is (= "2" (fn 2)))
-
-              (is (thrown-with-msg?
-                   #?(:clj Exception, :cljs js/Error)
-                   #":malli.core/invalid-guard"
-                   (fn "0")))))))
-
-      (testing "non-accumulating errors"
-        (let [schema (m/schema
-                      [:tuple :int [:function [:=> [:cat :int] :int]]]
-                      {::m/function-checker malli.generator/function-checker})
-              f (fn [_] 1)]
-          (is (results= {:schema schema,
-                         :value ["1" f],
-                         :errors [{:path [0], :in [0], :schema :int, :value "1"}]}
-                        (m/explain schema ["1" f])))))
-
-      (is (= valid-f (m/decode schema1 valid-f mt/string-transformer)))
-
-      (is (true? (m/validate (over-the-wire schema1) valid-f))))))
+        (is (true? (m/validate (over-the-wire schema1) valid-f)))))))
 
 (deftest test-415
   (testing "multi default is not transformed"
@@ -3215,3 +3374,123 @@
                                              ::xymap [:merge ::xmap ::ymap]}}
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
+
+(deftest seqable-schema-test
+  (is (m/validate [:seqable :int] nil))
+  (is (m/validate [:seqable :int] #{1 2 3}))
+  (is (m/validate [:seqable :int] [1 2 3]))
+  (is (m/validate [:seqable :int] (sorted-set 1 2 3)))
+  (is (m/validate [:seqable :int] #{1 2 3}))
+  (is (m/validate [:seqable :int] (range 1000)))
+  (is (not (m/validate [:seqable :int] (conj (vec (range 1000)) nil))))
+  (is (not (m/validate [:seqable :int] (concat (range 1000) [nil]))))
+  (is (not (m/validate [:seqable :int] (eduction (concat (range 1000) [nil])))))
+  (is (not (m/validate [:seqable {:min 1000} :int] (eduction (concat (range 1000) [nil])))))
+  (is (not (m/validate [:seqable {:min 1000} :int] (concat (range 1000) [nil]))))
+  (is (nil? (m/explain [:seqable :int] #{1 2 3})))
+  (is (not (m/validate [:seqable :int] #{1 nil 3})))
+  (is (= #{["should be an integer"]}
+         (me/humanize (m/explain [:seqable :int] #{1 nil 3}))))
+  (let [original (interleave (range 10) (cycle [true false]))
+        parsed (m/parse [:seqable [:orn [:l :int] [:r :boolean]]] original)
+        unparsed (m/unparse [:seqable [:orn [:l :int] [:r :boolean]]] parsed)]
+    (is (= original unparsed))
+    (is (= [[:l 0] [:r true] [:l 1] [:r false] [:l 2] [:r true] [:l 3] [:r false] [:l 4] [:r true] [:l 5]
+            [:r false] [:l 6] [:r true] [:l 7] [:r false] [:l 8] [:r true] [:l 9] [:r false]]
+           parsed)))
+  (let [original (sorted-set 1 2 3)
+        parsed (m/parse [:seqable [:orn [:a :int]]] original)
+        unparsed (m/unparse [:seqable [:orn [:a :int]]] parsed)]
+    (is (= unparsed [1 2 3]))
+    (is (= parsed [[:a 1] [:a 2] [:a 3]]))))
+
+(deftest every-schema-test
+  (is (m/validate [:every :int] nil))
+  (is (m/validate [:every :int] #{1 2 3}))
+  (is (m/validate [:every :int] [1 2 3]))
+  (is (m/validate [:every :int] (sorted-set 1 2 3)))
+  (is (not (m/validate [:every :int] (conj (vec (range 1000)) nil))))
+  (is (nil? (m/explain [:every :int] #{1 2 3})))
+  (is (not (m/validate [:every :int] #{1 nil 3})))
+  (is (m/validate [:every :int] (concat (range 1000) [nil])))
+  (is (m/validate [:every :int] (eduction (concat (range 1000) [nil]))))
+  ;; counted/indexed colls have everything validated
+  (is (not (m/validate [:every :int] (vec (concat (range 1000) [nil])))))
+  (is (m/validate [:every :int] (concat (range 1000) [nil])))
+  (is (m/validate [:every :int] (eduction (concat (range 1000) [nil]))))
+  (is (m/validate [:every {:min 1000} :int] (concat (range 1000) [nil])))
+  (is (m/validate [:every :int] (concat (range 1000) [nil]) {::m/coll-check-limit 1000}))
+  (is (m/validate [:every {:min 1000} :int] (eduction (concat (range 1000) [nil]))))
+  ;; counted/indexed colls have everything validated
+  (is (not (m/validate [:every {:min 1000} :int] (vec (concat (range 1000) [nil])))))
+  (is (not (m/validate [:every {:min 1001} :int] (concat (range 1000) [nil]))))
+  (is (not (m/validate [:every {:min 1001} :int] (eduction (concat (range 1000) [nil])))))
+  (is (m/validate [:every {:max 1000} :int] (range 1000)))
+  (is (not (m/validate [:every {:max 1000} :int] (range 1001))))
+  (is (not (m/validate [:every {:max 1001} :int] (concat (range 1000) [nil]))))
+  (is (not (m/validate [:every {:max 1001} :int] (eduction (concat (range 1000) [nil])))))
+  (is (= #{["should be an integer"]}
+         (me/humanize (m/explain [:every :int] #{1 nil 3}))))
+  (is (nil? (m/explain [:every :int] (concat (range 1000) [nil]))))
+  (is (nil? (m/explain [:every :int] (eduction (concat (range 1000) [nil])))))
+  (is (= (concat (repeat 1000 nil) [["should be an integer"]])
+         (me/humanize (m/explain [:every {:min 1001} :int] (concat (range 1000) [nil])))))
+  (is (= (concat (repeat 1000 nil) [["should be an integer"]])
+         (me/humanize (m/explain [:every {:min 1001} :int] (eduction (concat (range 1000) [nil]))))))
+  (is (= (concat (repeat 1000 nil) [["should be an integer"]])
+         (me/humanize (m/explain [:every {:max 1001} :int] (concat (range 1000) [nil])))))
+  (is (= (concat (repeat 1000 nil) [["should be an integer"]])
+         (me/humanize (m/explain [:every {:max 1001} :int] (eduction (concat (range 1000) [nil]))))))
+  (doseq [parse [#'m/parse #'m/unparse]]
+    (testing parse
+      (let [good-sequence (interleave (range 10) (cycle [true false]))]
+        (is (identical? good-sequence
+                        (parse [:every [:orn [:l :int] [:r :boolean]]]
+                               good-sequence))))
+      (is (= ::m/invalid
+             (parse [:every [:orn [:l :int] [:r :boolean]]]
+                    (interleave (range 10) (cycle [true false nil])))))
+      (doseq [coerce [#'identity #?(:clj #'eduction
+                                    ;;TODO :cljs ?
+                                    )]]
+        (testing coerce
+          (let [bad-but-too-big (coerce
+                                 (concat (interleave (range 1000) (cycle [true false]))
+                                         [nil]))
+                bad-indexed-seq (vec bad-but-too-big)]
+            (is (identical? bad-but-too-big
+                            (parse [:every [:orn [:l :int] [:r :boolean]]]
+                                   bad-but-too-big)))
+            (is (= ::m/invalid
+                   (parse [:every [:orn [:l :int] [:r :boolean]]]
+                          bad-indexed-seq)))))))))
+
+(deftest proxy-schema-explain-path
+  (let [y-schema [:int {:doc "int"}]
+        schema (m/schema [(mu/-select-keys)
+                          [:map
+                           [:x :int]
+                           [:y y-schema]
+                           [:z :int]]
+                          [:x :y]])
+        explain (m/explain schema {:x 1, :y "2"})]
+    (is (results= {:schema schema
+                   :value {:x 1, :y "2"}
+                   :errors [{:path [::m/in :y], :in [:y], :schema y-schema, :value "2"}]}
+                  explain))
+    (is (form= y-schema (mu/get-in schema (-> explain :errors first :path))))))
+
+(deftest catch-infinitely-expanding-schema
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #?(:clj #":malli\.core/infinitely-expanding-schema"
+           :cljs #":malli\.core/invalid-schema")
+        (m/schema [(m/schema :any)]))))
+
+(deftest eduction-test
+  (is (m/validate [:sequential {:min 0} :int] (eduction identity (range 10))))
+  (is (m/validate [:sequential {:max 0} :int] (eduction)))
+  (is (not (m/validate [:sequential {:max 0} :int] (eduction [1]))))
+  (is (not (m/validate [:sequential {:min 11} :int] (eduction identity (range 10)))))
+  (is (not (m/validate [:seqable {:min 11} :int] (eduction identity (range 10)))))
+  (is (nil? (m/explain [:sequential {:min 9} :int] (eduction identity (range 10))))))

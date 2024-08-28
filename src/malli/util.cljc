@@ -71,6 +71,8 @@
          s2 (when ?schema2 (m/deref-all (m/schema ?schema2 options)))
          t1 (when s1 (m/type s1))
          t2 (when s2 (m/type s2))
+         can-distribute? (and (not (contains? options :merge-default))
+                              (not (contains? options :merge-required)))
          {:keys [merge-default merge-required]
           :or {merge-default (fn [_ s2 _] s2)
                merge-required (fn [_ r2] r2)}} options
@@ -88,6 +90,10 @@
      (cond
        (nil? s1) s2
        (nil? s2) s1
+       ;; right-distributive: [:merge [:multi M1 M2 ...] M3] => [:multi [:merge M1 M3] [:merge M2 M3] ...]
+       (and can-distribute? (m/-distributive-schema? s1)) (m/-distribute-to-children s1 (fn [s _options] (merge s s2 options)) options)
+       ;; left-distributive:  [:merge M1 [:multi M2 M3 ...]] => [:multi [:merge M1 M2] [:merge M1 M3] ...]
+       (and can-distribute? (m/-distributive-schema? s2)) (m/-distribute-to-children s2 (fn [s _options] (merge s1 s options)) options)
        (not (and (-> t1 #{:map :and}) (-> t2 #{:map :and}))) (merge-default s1 s2 options)
        (not (and (-> t1 (= :map)) (-> t2 (= :map)))) (join (tear t1 s1) (tear t2 s2))
        :else (let [p (bear (m/-properties s1) (m/-properties s2))
@@ -346,11 +352,12 @@
    (get-in ?schema ks nil nil))
   ([?schema ks default]
    (get-in ?schema ks default nil))
-  ([?schema [k & ks] default options]
+  ([?schema ks default options]
    (let [schema (m/schema (or ?schema :map) options)]
-     (if-not k
+     (if-not (seq ks)
        schema
-       (let [sentinel #?(:clj (Object.), :cljs (js-obj))
+       (let [[k & ks] ks
+             sentinel #?(:clj (Object.), :cljs (js-obj))
              schema (get schema k sentinel)]
          (cond
            (identical? schema sentinel) default
@@ -380,53 +387,15 @@
 (defn -reducing [f]
   (fn [_ [first & rest :as children] options]
     (let [children (mapv #(m/schema % options) children)]
-      [children (mapv m/form children) (reduce #(f %1 %2 options) first rest)])))
+      [children (mapv m/form children) (delay (reduce #(f %1 %2 options) first rest))])))
 
 (defn -applying [f]
   (fn [_ children options]
     [(clojure.core/update children 0 #(m/schema % options))
      (clojure.core/update children 0 #(m/form % options))
-     (apply f (conj children options))]))
+     (delay (apply f (conj children options)))]))
 
-(defn -util-schema [{:keys [type min max childs type-properties fn]}]
-  ^{:type ::m/into-schema}
-  (reify m/IntoSchema
-    (-type [_] type)
-    (-type-properties [_] type-properties)
-    (-properties-schema [_ _])
-    (-children-schema [_ _])
-    (-into-schema [parent properties children options]
-      (m/-check-children! type properties children min max)
-      (let [[children forms schema] (fn properties (vec children) options)
-            form (delay (m/-create-form type properties forms options))
-            cache (m/-create-cache options)]
-        ^{:type ::m/schema}
-        (reify
-          m/Schema
-          (-validator [_] (m/-validator schema))
-          (-explainer [_ path] (m/-explainer schema path))
-          (-parser [_] (m/-parser schema))
-          (-unparser [_] (m/-unparser schema))
-          (-transformer [this transformer method options]
-            (m/-parent-children-transformer this [schema] transformer method options))
-          (-walk [this walker path options]
-            (let [children (if childs (subvec children 0 childs) children)]
-              (when (m/-accept walker this path options)
-                (m/-outer walker this path (m/-inner-indexed walker path children options) options))))
-          (-properties [_] properties)
-          (-options [_] options)
-          (-children [_] children)
-          (-parent [_] parent)
-          (-form [_] @form)
-          m/Cached
-          (-cache [_] cache)
-          m/LensSchema
-          (-keep [_])
-          (-get [_ key default] (clojure.core/get children key default))
-          (-set [_ key value] (m/into-schema type properties (clojure.core/assoc children key value)))
-          m/RefSchema
-          (-ref [_])
-          (-deref [_] schema))))))
+(defn -util-schema [m] (m/-proxy-schema m))
 
 (defn -merge [] (-util-schema {:type :merge, :fn (-reducing merge)}))
 (defn -union [] (-util-schema {:type :union, :fn (-reducing union)}))

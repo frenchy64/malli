@@ -2,6 +2,8 @@
   (:require [clojure.test :refer [deftest is testing]]
             [malli.clj-kondo :as clj-kondo]
             [malli.core :as m]
+            #?@(:clj [[clojure.java.io :as io]
+                      [clojure.edn :as edn]])
             [malli.util :as mu]))
 
 (def Schema
@@ -35,6 +37,14 @@
 (m/=> kikka [:function
              [:=> [:cat :int] [:int {:min 0}]]
              [:=> [:cat :int :int [:* :int]] :int]])
+
+(defn kikka2
+  ([x] (* x x))
+  ([x y & z] (apply + (* x y) z)))
+
+(m/=> kikka2 [:function
+              [:-> :int [:int {:min 0}]]
+              [:-> :int :int [:* :int] :int]])
 
 (defn siren [f coll]
   (into {} (map (juxt f identity) coll)))
@@ -99,6 +109,12 @@
                      :varargs {:args [:int :int {:op :rest :spec :int}],
                                :ret :int,
                                :min-arity 2}}}
+          'kikka2
+          {:arities {1 {:args [:int],
+                        :ret :int},
+                     :varargs {:args [:int :int {:op :rest :spec :int}],
+                               :ret :int,
+                               :min-arity 2}}}
           'siren
           {:arities {2 {:args [:ifn :coll], :ret :map}}}
 
@@ -141,3 +157,10 @@
   (testing "regular expressions"
     (is (= :string (clj-kondo/transform [:re "kikka"]))
         "the :re schema models a string, clj-kondo's :regex a Pattern object")))
+
+#?(:clj
+   (deftest fix-1083
+     (clj-kondo/emit! {:key "value"})
+     (let [data (edn/read-string (slurp (io/file ".clj-kondo/metosin/malli-types-clj/config.edn")))]
+       (is (map? data))
+       (is (= [:linters] (keys data))))))

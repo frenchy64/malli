@@ -14,6 +14,46 @@ We use [Break Versioning][breakver]. The version numbers follow a `<major>.<mino
 
 Malli is in well matured [alpha](README.md#alpha).
 
+## NEXT
+
+* Fix ClojureScript [arithmetic warning](https://github.com/metosin/malli/issues/1093)
+* Distribute `:merge` over `:multi` [#1086](https://github.com/metosin/malli/pull/1086), see [documentation](README.md#distributive-schemas)
+* allow `m/-proxy-schema` child to be a `delay`
+
+## 0.16.3 (2024-08-05)
+
+* `:->` added to default registry, see [documentation](https://github.com/metosin/malli/blob/master/docs/function-schemas.md#flat-arrow-function-schemas).
+* New `:seqable` and `:every` schemas [#1041](https://github.com/metosin/malli/pull/1041), see [docs](https://github.com/metosin/malli#seqable-schemas)
+* Fix OOM error with infinitely expanding schema [#1069](https://github.com/metosin/malli/pull/1069)
+* Correctly form prop-less schemas that have map/nil as first child [#1071](https://github.com/metosin/malli/pull/1071)
+* Support min/max on uncountables like eductions [#1075](https://github.com/metosin/malli/pull/1075)
+* Fix clj-kondo can't parse config.edn written by `(malli.dev/start!)` [#1083](https://github.com/metosin/malli/issues/1083)
+* unstrument before instrumenting [#1081](https://github.com/metosin/malli/pull/1081)
+* Replace `.entryAt` with `.valAt` during validation [#1079](https://github.com/metosin/malli/pull/1079)
+* Corrected DEPRECATED warning for `m/-simple-schema` [#1077](https://github.com/metosin/malli/pull/1077)
+
+## 0.16.2 (2024-06-30)
+
+* Experimental `:->` for simpler function defintions (not available on default schema registry) [#1027](https://github.com/metosin/malli/pull/1027)
+
+```clojure
+[:-> :any] ; [:=> :cat :any]
+[:-> :int :any] ; [:=> [:cat :int] :any]
+[:-> [:cat :int] :any]  ; [:=> [:cat [:cat :int]] :any]
+[:-> a b c d :any] ; [:=> [:cat a b c d] :any]
+
+;; guard property
+[:-> {:guard (fn [[[arg] ret]] ...)} :string :boolean]
+; [:=> [:cat :string] :boolean [:fn (fn [[[arg] ret]] ...)]]
+```
+
+* Fix `mu/get-in` for false-y keys [#1065](https://github.com/metosin/malli/pull/1065)
+* Add `:float` [#1055](https://github.com/metosin/malli/pull/1055)
+* Make clj-kondo dir configurable [#1062](https://github.com/metosin/malli/pull/1062)
+* Improve doc for transformers [#1058](https://github.com/metosin/malli/pull/1058)
+* `:double` generates Long if `:`min is Long [#1034](https://github.com/metosin/malli/issues/1034)
+* Fix Swagger definitions collecting [#1002](https://github.com/metosin/malli/issues/1002)
+
 ## 0.16.1 (2024-04-30)
 
 * Enabled Java8 tests back, no need to limit the version.

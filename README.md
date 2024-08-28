@@ -20,7 +20,7 @@ Data-driven Schemas for Clojure/Script and [babashka](#babashka).
 - [Inferring Schemas](#inferring-schemas) from sample values and [Destructuring](#destructuring).
 - Tools for [Programming with Schemas](#programming-with-schemas)
 - [Parsing](#parsing-values) and [Unparsing](#unparsing-values) values
-- [Sequence](#sequence-schemas), [Vector](#vector-schemas), and [Set](#set-schemas) Schemas
+- [Enumeration](#enumeration-schemas), [Sequence](#sequence-schemas), [Vector](#vector-schemas), and [Set](#set-schemas) Schemas
 - [Persisting schemas](#persisting-schemas), even [function schemas](#serializable-functions)
 - Immutable, Mutable, Dynamic, Lazy and Local [Schema Registries](#schema-registry)
 - [Schema Transformations](#schema-Transformation) to [JSON Schema](#json-schema), [Swagger2](#swagger2), and [descriptions in english](#description)
@@ -130,6 +130,7 @@ Examples:
 
 ;; a function schema of :int -> :int
 [:=> [:cat :int] :int]
+[:-> :int :int]
 ```
 
 Usage:
@@ -177,6 +178,8 @@ Alternative map-syntax, similar to [cljfx](https://github.com/cljfx/cljfx):
 {:type :=>
  :input {:type :cat, :children [{:type :int}]}
  :output :int}
+{:type :->
+ :children [{:type :int} {:type :int}]}
 ```
 
 Usage:
@@ -325,6 +328,32 @@ Most core-predicates are mapped to Schemas:
 ```
 
 See [the full list of default schemas](#schema-registry).
+
+## Enumeration schemas
+
+`:enum` schemas `[:enum V1 V2 ...]` represent an enumerated set of values `V1 V2 ...`.
+
+This mostly works as you'd expect, with values passing the schema if it is contained in the set and generators returning one of the values,
+shrinking to the left-most value.
+
+There are some special cases to keep in mind around syntax. Since schema properties can be specified with a map or nil, enumerations starting with
+a map or nil must use slightly different syntax.
+
+If your `:enum` does not have properties, you must provide `nil` as the properties.
+
+```clojure
+[:enum nil {}]  ;; singleton schema of {}
+[:enum nil nil] ;; singleton schema of nil
+```
+
+If your `:enum` has properties, the leading map with be interpreted as properties, not an enumerated value.
+
+```clojure
+[:enum {:foo :bar} {}]  ;; singleton schema of {}, with properties {:foo :bar}
+[:enum {:foo :bar} nil] ;; singleton schema of nil, with properties {:foo :bar}
+```
+
+In fact, these syntax rules apply to all schemas, but `:enum` is the most common schema where this is relevant so it deserves a special mention.
 
 ## Qualified keys in a map
 
@@ -681,6 +710,51 @@ to a `[:contains K]` constraint, and `[:and K [:not K]]` is unsatisfiable.
    [:a :int]])
 ; Exception: :malli.generator/unsatisfiable-keys
 ```
+
+## Seqable schemas
+
+The `:seqable` and `:every` schemas describe `seqable?` collections. They
+differ in their handling of collections that are neither `counted?` nor `indexed?`, and their
+[parsers](#parsing-values):
+1. `:seqable` parses its elements but `:every` does not and returns the identical input, and
+2. valid unparsed `:seqable` values lose the original collection type while `:every`
+   returns the identical input.
+
+`:seqable` validates the entire collection, while `:every` checks only the
+largest of `:min`, `(inc :max)`, and `(::m/coll-check-limit options 101)`, or
+the entire collection if the input is `counted?` or `indexed?`.
+
+```clojure
+;; :seqable and :every validate identically with small, counted, or indexed collections.
+(m/validate [:seqable :int] #{1 2 3})
+;=> true
+(m/validate [:seqable :int] [1 2 3])
+;=> true
+(m/validate [:seqable :int] (sorted-set 1 2 3))
+;=> true
+(m/validate [:seqable :int] (range 1000))
+;=> true
+(m/validate [:seqable :int] (conj (vec (range 1000)) nil))
+;=> false
+
+(m/validate [:every :int] #{1 2 3})
+;=> true
+(m/validate [:every :int] [1 2 3])
+;=> true
+(m/validate [:every :int] (sorted-set 1 2 3))
+;=> true
+(m/validate [:every :int] (vec (range 1000)))
+;=> true
+(m/validate [:every :int] (conj (vec (range 1000)) nil))
+;=> false
+
+;; for large uncounted and unindexed collections, :every only checks a certain length
+(m/validate [:seqable :int] (concat (range 1000) [nil]))
+;=> false
+(m/validate [:every :int] (concat (range 1000) [nil]))
+;=> true
+```
+
 
 ## Sequence schemas
 
@@ -1484,6 +1558,49 @@ Going crazy:
 ; => {:x 24}
 ```
 
+`:and` accumulates the transformed value left-to-right.
+
+```clojure
+(m/decode
+  [:and
+   [:string {:decode/string '{:enter #(str "1_" %), :leave #(str % "_2")}}]
+   [:string {:decode/string '{:enter #(str "3_" %), :leave #(str % "_4")}}]]
+  "kerran" mt/string-transformer)
+;; => "3_1_kerran_2_4"
+```
+
+`:or` transforms using the first successful schema, left-to-right.
+
+```clojure
+(m/decode
+  [:or
+   [:string {:decode/string '{:enter #(str "1_" %), :leave #(str % "_2")}}]
+   [:string {:decode/string '{:enter #(str "3_" %), :leave #(str % "_4")}}]]
+  "kerran" mt/string-transformer)
+;; => "1_kerran_2"
+
+(m/decode
+  [:or
+   :map
+   [:string {:decode/string '{:enter #(str "3_" %), :leave #(str % "_4")}}]]
+  "kerran" mt/string-transformer)
+;; => "3_kerran_4"
+```
+
+Proxy schemas like `:merge` and `:union` transform as if `m/deref`ed.
+
+```clojure
+(m/decode
+  [:merge
+   [:map [:name [:string {:default "kikka"}]] ]
+   [:map [:description {:optional true} [:string {:default "kikka"}]]]]
+  {}
+  {:registry (merge (mu/schemas) (m/default-schemas))}
+  (mt/default-value-transformer {::mt/add-optional-keys true}))
+;; => {:name "kikka"
+;;     :description "kikka"}
+```
+
 ## To and from JSON
 
 The `m/encode` and `m/decode` functions work on clojure data. To go
@@ -1996,6 +2113,71 @@ is equivalent to `[:map [:x [:or :string :int]]]`.
 ; => true
 ```
 
+### Distributive schemas
+
+`:merge` also distributes over `:multi` in a [similar way](https://en.wikipedia.org/wiki/Distributive_property) to how multiplication
+distributes over addition in arithmetic. There are two transformation rules, applied in the following order:
+
+```clojure
+;; right-distributive
+[:merge [:multi M1 M2 ...] M3]
+=>
+[:multi [:merge M1 M3] [:merge M2 M3] ...]
+
+;; left-distributive
+[:merge M1 [:multi M2 M3 ...]]
+=>
+[:multi [:merge M1 M2] [:merge M1 M3] ...]
+```
+
+For `:merge` with more than two arguments, the rules are applied iteratively left-to-right
+as if the following transformation was applied:
+
+```clojure
+[:merge M1 M2 M3 M4 ...]
+=>
+[:merge
+ [:merge
+  [:merge M1 M2]
+  M3]
+ M4]
+...
+```
+
+The distributive property of `:multi` is useful combined with `:merge`
+if you want all clauses of a `:multi` to share extra entries.
+
+Here are concrete examples of applying the rules:
+
+```clojure
+;; left-distributive
+(m/deref
+ [:merge
+  [:map [:x :int]]
+  [:multi {:dispatch :y}
+   [1 [:map [:y [:= 1]]]]
+   [2 [:map [:y [:= 2]]]]]]
+ {:registry registry})
+; => [:multi {:dispatch :y}
+;     [1 [:map [:x :int] [:y [:= 1]]]]
+;     [2 [:map [:x :int] [:y [:= 2]]]]]
+
+;; right-distributive
+(m/deref
+ [:merge
+  [:multi {:dispatch :y}
+   [1 [:map [:y [:= 1]]]]
+   [2 [:map [:y [:= 2]]]]]
+  [:map [:x :int]]]
+ {:registry registry})
+; => [:multi {:dispatch :y}
+;     [1 [:map [:y [:= 1]] [:x :int]]]
+;     [2 [:map [:y [:= 2]] [:x :int]]]]
+```
+
+It is not recommended to use local registries in schemas that are transformed.
+Also be aware that merging non-maps via the distributive property inherits
+the same semantics as `:merge`, which is based on [meta-merge](https://github.com/weavejester/meta-merge).
 
 ## Persisting schemas
 
@@ -3599,7 +3781,7 @@ Sequence/regex-schemas: `:+`, `:*`, `:?`, `:repeat`, `:cat`, `:alt`, `:catn`, `:
 
 ### `malli.core/base-schemas`
 
-Contains `:and`, `:or`, `:orn`, `:not`, `:map`, `:map-of`, `:vector`, `:sequential`, `:set`, `:enum`, `:maybe`, `:tuple`, `:multi`, `:re`, `:fn`, `:ref`, `:=>`, `:function` and `:schema`.
+Contains `:and`, `:or`, `:orn`, `:not`, `:map`, `:map-of`, `:vector`, `:sequential`, `:set`, `:enum`, `:maybe`, `:tuple`, `:multi`, `:re`, `:fn`, `:ref`, `:=>`, `:->`, `:function` and `:schema`.
 
 ### `malli.util/schemas`
 

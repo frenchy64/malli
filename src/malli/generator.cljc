@@ -365,6 +365,19 @@
     (first gs)
     (gen/one-of gs)))
 
+(defn- -seqable-gen [schema options]
+  (let [el (-> schema m/children first)]
+    (gen-one-of
+     (-> [nil-gen]
+         (into (map #(-coll-gen schema % options))
+               [identity vec eduction #(into-array #?(:clj Object) %)])
+         (conj (-coll-distinct-gen schema set options))
+         (cond->
+           (and (= :tuple (m/type el))
+                (= 2 (count (m/children el))))
+           (conj (let [[k v] (m/children el)]
+                   (generator [:map-of (or (m/properties schema) {}) k v] options))))))))
+
 (defn -or-gen [schema options]
   (if-some [gs (not-empty
                 (into [] (keep #(-not-unreachable (generator % options)))
@@ -583,7 +596,7 @@
     (gen/return (m/-instrument {:schema schema} (fn [& _] (generate output-generator options))))))
 
 (defn -function-gen [schema options]
-  (gen/return (m/-instrument {:schema schema, :gen #(generate % options)} options)))
+  (gen/return (m/-instrument {:schema schema, :gen #(generate % options)} nil options)))
 
 (defn -regex-generator [schema options]
   (if (m/-regex-op? schema)
@@ -688,6 +701,8 @@
 (defmethod -schema-generator :sequential [schema options] (-coll-gen schema identity options))
 (defmethod -schema-generator :set [schema options] (-coll-distinct-gen schema set options))
 (defmethod -schema-generator :enum [schema options] (gen-elements (m/children schema options)))
+(defmethod -schema-generator :seqable [schema options] (-seqable-gen schema options))
+(defmethod -schema-generator :every [schema options] (-seqable-gen schema options)) ;;infinite seqs?
 
 (defmethod -schema-generator :maybe [schema options]
   (let [g (-> schema (m/children options) first (generator options) -not-unreachable)]
@@ -784,9 +799,25 @@
                     props (m/properties schema options)]
                 (gen/double* {:infinite? (get props :gen/infinite? false)
                               :NaN? (get props :gen/NaN? false)
-                              :min min
-                              :max max})))
+                              :min (some-> min double)
+                              :max (some-> max double)})))
             solutions))))
+;;TODO constraints
+(defmethod -schema-generator :float [schema options]
+  (let [max-float #?(:clj Float/MAX_VALUE :cljs (.-MAX_VALUE js/Number))
+        min-float (- max-float)
+        props (m/properties schema options)
+        min-max-props (-min-max schema options)
+        infinite? #?(:clj false :cljs (get props :gen/infinite? false))]
+    (->> (merge {:infinite? infinite?
+                 :NaN? (get props :gen/NaN? false)}
+                (-> min-max-props
+                    (update :min #(or (some-> % float)
+                                      #?(:clj min-float :cljs nil)))
+                    (update :max #(or (some-> % float)
+                                      #?(:clj max-float :cljs nil)))))
+         (gen/double*)
+         (gen/fmap float))))
 (defmethod -schema-generator :boolean [_ _] gen/boolean)
 (defmethod -schema-generator :keyword [_ _] gen/keyword)
 (defmethod -schema-generator :symbol [_ _] gen/symbol)
@@ -795,6 +826,7 @@
 (defmethod -schema-generator :uuid [_ _] gen/uuid)
 
 (defmethod -schema-generator :=> [schema options] (-=>-gen schema options))
+(defmethod -schema-generator :-> [schema options] (-=>-gen schema options))
 (defmethod -schema-generator :function [schema options] (-function-gen schema options))
 (defmethod -schema-generator 'ifn? [_ _] gen/keyword)
 (defmethod -schema-generator :ref [schema options] (-ref-gen schema options))
@@ -919,11 +951,12 @@
                              explain-output (assoc ::m/explain-output explain-output)
                              explain-guard (assoc ::m/explain-guard explain-guard)
                              (ex-message result) (-> (update :result ex-message) (dissoc :result-data)))))))))]
-     (condp = (m/type schema)
-       :=> (check schema)
-       :function (let [checkers (map #(function-checker % options) (m/-children schema))]
-                   (fn [x] (->> checkers (keep #(% x)) (seq))))
-       (m/-fail! ::invalid-function-schema {:type (m/-type schema)})))))
+     (if (m/-function-info schema)
+       (check schema)
+       (if (m/-function-schema? schema)
+         (let [checkers (map #(function-checker % options) (m/-function-schema-arities schema))]
+           (fn [x] (->> checkers (keep #(% x)) (seq))))
+         (m/-fail! ::invalid-function-schema {:type (m/-type schema)}))))))
 
 (defn check
   ([?schema f] (check ?schema f nil))
