@@ -49,7 +49,7 @@
                     :symbol
                     :qualified-keyword
                     :qualified-symbol]]
-      (is (every? (partial m/validate schema) (mg/sample schema {:size 1000})))))
+      (is (every? (m/validator schema) (mg/sample schema {:size 1000})))))
 
   (testing "double properties"
     (let [infinity? #(or (= % ##Inf)
@@ -165,16 +165,16 @@
     (testing "recursion"
       (let [schema [:schema {:registry {::cons [:maybe [:tuple int? [:ref ::cons]]]}}
                     ::cons]]
-        (is (every? (partial m/validate schema) (mg/sample schema {:size 100})))))
+        (is (every? (m/validator schema) (mg/sample schema {:size 100})))))
     (testing "mutual recursion"
       (let [schema [:schema
                     {:registry {::ping [:maybe [:tuple [:= "ping"] [:ref ::pong]]]
                                 ::pong [:maybe [:tuple [:= "pong"] [:ref ::ping]]]}}
                     ::ping]]
-        (is (every? (partial m/validate schema) (mg/sample schema {:size 100})))))
+        (is (every? (m/validator schema) (mg/sample schema {:size 100})))))
     (testing "recursion limiting"
       (are [schema]
-        (every? (partial m/validate schema) (mg/sample schema {:size 100}))
+        (every? (m/validator schema) (mg/sample schema {:size 100}))
 
         [:schema {:registry {::rec [:maybe [:ref ::rec]]}} ::rec]
         [:schema {:registry {::rec [:map [:rec {:optional true} [:ref ::rec]]]}} ::rec]
@@ -369,7 +369,7 @@
                      [:map [:x int?] [:y int?]]
                      [:x]]]
             :let [schema (m/schema schema {:registry registry})]]
-      (is (every? (partial m/validate schema) (mg/sample schema {:size 1000}))))))
+      (is (every? (m/validator schema) (mg/sample schema {:size 1000}))))))
 
 #?(:clj
    (deftest function-schema-test
@@ -1226,13 +1226,16 @@
 (deftest map-of-min-max-test
   (is (empty? (remove #(<= 2 (count %))
                       (mg/sample [:map-of {:min 2} [:enum 1 2 3] :any]
-                                 {:size 100}))))
+                                 {:size 100
+                                  :seed 3}))))
   (is (empty? (remove #(<= (count %) 2)
                       (mg/sample [:map-of {:max 2} [:enum 1 2 3] :any]
-                                 {:size 100}))))
+                                 {:size 100
+                                  :seed 3}))))
   (is (empty? (remove #(<= 2 (count %) 3)
                       (mg/sample [:map-of {:min 2 :max 3} [:enum 1 2 3] :any]
-                                 {:size 100})))))
+                                 {:size 100
+                                  :seed 3})))))
 
 (deftest such-that-generator-failure-test
   (is (thrown-with-msg?
@@ -1276,3 +1279,32 @@
 (deftest double-with-long-min-test
   (is (m/validate :double (shrink [:double {:min 3}])))
   (is (= 3.0 (shrink [:double {:min 3}]))))
+
+(deftest multi-keyword-dispatch-test
+  (testing "keyword dispatch value accumulates to generated value"
+    (let [schema [:multi {:dispatch :type}
+                  ["duck" :map]
+                  ["boss" :map]]]
+      (is (every? #{{:type "duck"} {:type "boss"}} (mg/sample schema)))
+      (is (every? (m/validator schema) (mg/sample schema)))))
+
+  (testing "non keyword doesn't accumulate data"
+    (let [schema [:multi {:dispatch (fn [x] (:type x))}
+                  ["duck" :map]
+                  ["boss" :map]]]
+      (is (every? #{{}} (mg/sample schema)))
+      (is (not (every? (m/validator schema) (mg/sample schema))))))
+
+  (testing "::m/default works too"
+    (let [schema [:multi {:dispatch :type}
+                  ["duck" :map]
+                  [::m/default [:= "boss"]]]]
+      (is (every? #{{:type "duck"} "boss"} (mg/sample schema)))
+      (is (every? (m/validator schema) (mg/sample schema)))))
+
+  (testing "works with nil & {} too"
+    (let [schema [:multi {:dispatch :type}
+                  [nil :map]
+                  [{} :map]]]
+      (is (every? #{{:type nil} {:type {}}} (mg/sample schema)))
+      (is (every? (m/validator schema) (mg/sample schema))))))
