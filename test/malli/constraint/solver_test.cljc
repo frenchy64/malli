@@ -27,21 +27,21 @@
            {:order [:a :b], :present {:a true, :b true}}
            {:order [:a :b :c], :present {:a true, :b true, :c true}})))
   (is (= (mcs/-constraint-solutions
-               [:xor :a :b]
-               :map nil)
-             '({:order [:a :b], :present {:a true, :b false}}
-               {:order [:a :b], :present {:a false, :b true}})))
+           [:xor :a :b]
+           :map nil)
+         '({:order [:a :b], :present {:a true, :b false}}
+           {:order [:a :b], :present {:a false, :b true}})))
   (is (= (mcs/-constraint-solutions
-               [:disjoint [:a] [:b]]
-               :map nil)
-             '({:order [:a :b], :present {:a false, :b false}}
-               {:order [:a :b], :present {:a true, :b false}}
-               {:order [:a :b], :present {:a false, :b true}})))
+           [:disjoint [:a] [:b]]
+           :map nil)
+         '({:order [:a :b], :present {:a false, :b false}}
+           {:order [:a :b], :present {:a true, :b false}}
+           {:order [:a :b], :present {:a false, :b true}})))
   (is (= (mcs/-constraint-solutions
-               [:iff :a :b]
-               :map nil)
-             '({:order [:a :b], :present {:a false, :b false}}
-               {:order [:a :b], :present {:a true, :b true}})))
+           [:iff :a :b]
+           :map nil)
+         '({:order [:a :b], :present {:a false, :b false}}
+           {:order [:a :b], :present {:a true, :b true}})))
   (is (= (mcs/-constraint-solutions
            [:implies :a :b]
            :map
