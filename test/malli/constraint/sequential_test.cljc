@@ -33,9 +33,9 @@
   (is (= ["should be distinct: 2 provided 2 times"]
          (me/humanize (m/explain [:sequential {:sorted true :distinct true} :int] [1 2 2 3]))))
 
-  (is (= [:and
-          "should be distinct: 3 provided 2 times"
-          "should have sorted elements"]
+  (is (= [[:and
+           "should be distinct: 3 provided 2 times"
+           "should have sorted elements"]]
          (me/humanize (m/explain
                         [:sequential {:sorted true
                                       :distinct true} :int]

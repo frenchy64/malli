@@ -1363,8 +1363,10 @@
                         (not (fpred x)) (conj acc (miu/-error path in this x ::invalid-type))
                         ;;TODO accumulate all errors from here?
                         (not (validate-limits x)) (conj acc (miu/-error path in this x ::limits))
-                        (and constraint-validator (not (constraint-validator x))) (conj (miu/-error path in this x ::constraint-violation))
-                        :else (let [size (when (and bounded (not (miu/-safely-countable? x)))
+                        :else (let [acc (cond-> acc
+                                          (and constraint-validator (not (constraint-validator x)))
+                                          (conj (miu/-error path in this x ::constraint-violation)))
+                                    size (when (and bounded (not (miu/-safely-countable? x)))
                                            bounded)]
                                 (loop [acc acc, i 0, [x & xs :as ne] (seq x)]
                                   (if (and ne (or (not size) (< i #?(:cljs    ^number size
