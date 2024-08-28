@@ -120,7 +120,7 @@
                (me/humanize)))))
 
   (testing "set"
-    (is (= '#{#{(42 :-> "should be a keyword")}}
+    (is (= #{#{["should be a keyword"]}}
            (-> [:set [:set keyword?]]
                (m/explain #{#{42 :a {}}})
                (me/humanize)))))
