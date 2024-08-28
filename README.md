@@ -610,7 +610,7 @@ For multiple sets of disjoint keys, nest `:disjoint` in `:and`.
 ; => ["should not combine key :left with key: :right"]
 ```
 
-The `:dispatch` constraint works similarly to the `:dispatch` schema, except
+The `:dispatch` constraint works similarly to the `:multi` schema, except
 it maps dispatch values to constraints instead of schemas.
 
 ```clojure
