@@ -3503,3 +3503,19 @@
   (is (not (m/validate [:sequential {:min 11} :int] (eduction identity (range 10)))))
   (is (not (m/validate [:seqable {:min 11} :int] (eduction identity (range 10)))))
   (is (nil? (m/explain [:sequential {:min 9} :int] (eduction identity (range 10))))))
+
+(deftest reference-test
+  (is (= ::a (m/form (m/deref [:schema {:registry {::a :int}} ::a]))))
+  (is (= :reference (m/type (m/deref [:schema {:registry {::a :int}} ::a]))))
+  (is (= [:reference {:foo 1} ::a]
+         (m/form
+           (mu/update-properties (m/deref [:schema {:registry {::a :int}} ::a])
+                                 assoc :foo 1))))
+  (is (= [:schema {:registry {::a :boolean}} ::a]
+         (m/form (m/-update-properties (m/schema [:schema {:registry {::a :int}} ::a])
+                                       assoc-in [:registry ::a] :boolean))))
+  (is (= :boolean
+         (-> (m/-update-properties (m/schema [:schema {:registry {::a :int}} ::a])
+                                   assoc-in [:registry ::a] :boolean)
+             m/deref
+             m/deref))))

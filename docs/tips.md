@@ -291,21 +291,20 @@ Stripping all swagger-keys:
 
 ## Allowing invalid values on optional keys
 
-e.g. don't fail if the optional keys hava invalid values.
+e.g. don't fail if the optional keys have invalid values.
 
 1. create a helper function that transforms the schema swapping the actual schema with `:any`
 2. done.
 
 ```clojure
 (defn allow-invalid-optional-values [schema]
-  (m/walk
+  (m/walk-schema
     schema
-    (m/schema-walker
-      (fn [s]
-        (cond-> s
-                (m/entries s)
-                (mu/transform-entries
-                  (partial map (fn [[k {:keys [optional] :as p} s]] [k p (if optional :any s)]))))))))
+    (fn [s _ _]
+      (cond-> s
+        (m/entries s)
+        (mu/transform-entries
+          (partial map (fn [[k {:keys [optional] :as p} s]] [k p (if optional :any s)])))))))
 
 (allow-invalid-optional-values
   [:map
