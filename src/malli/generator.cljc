@@ -1,16 +1,20 @@
 ;; See also `malli.generator-ast` for viewing generators as data
 (ns malli.generator
-  (:require [clojure.spec.gen.alpha :as ga]
+  (:require [clojure.core :as cc]
+            [clojure.math.combinatorics :as comb]
+            [clojure.spec.gen.alpha :as ga]
             [clojure.string :as str]
             [clojure.test.check :as check]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojure.test.check.random :as random]
             [clojure.test.check.rose-tree :as rose]
+            [malli.constraint :as mc]
+            [malli.constraint.solver :as solver]
             [malli.core :as m]
             [malli.registry :as mr]
             [malli.util :as mu]
-            [malli.impl.util :refer [-last -merge]]
+            [malli.impl.util :as miu :refer [-last -merge]]
             #?(:clj [borkdude.dynaload :as dynaload])))
 
 (declare generator generate -create)
@@ -95,14 +99,64 @@
                                           :generator gen
                                           :min min})))
 
-(defn- -string-gen [schema options]
-  (let [{:keys [min max]} (-min-max schema options)]
-    (cond
-      (and min (= min max)) (gen/fmap str/join (gen/vector gen/char-alphanumeric min))
-      (and min max) (gen/fmap str/join (gen/vector gen/char-alphanumeric min max))
-      min (gen/fmap str/join (gen-vector-min gen/char-alphanumeric min options))
-      max (gen/fmap str/join (gen/vector gen/char-alphanumeric 0 max))
-      :else gen/string-alphanumeric)))
+(declare gen-one-of)
+
+(defn- -constraint-solutions [constraint constraint-opts options]
+  (solver/-constraint-solutions
+    constraint constraint-opts (m/-options-with-malli-core-fns options)))
+
+(defn- -string-gen [schema solutions options]
+  ;(prn "solutions" solutions)
+  ;; preserve error message when :max < :gen/max. unclear if it's still a good idea
+  ;; to enforce with constraints, since multiple maxes are allowed and :max-count is the min of all of them.
+  (do ;; side effect
+      (-min-max schema options))
+  (gen-one-of
+    (mapv (fn [solution]
+            (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                          :min-count :max-count
+                                                          :string-class))]
+              (m/-fail! ::unsupported-string-constraint-solution {:schema schema :solution solution}))
+            (let [{min :min-count
+                   max :max-count
+                   :keys [string-class]} solution
+                  string-gen (fn [min max char-gen]
+                               (cond
+                                 (and min (= min max)) (gen/fmap str/join (gen/vector char-gen min))
+                                 (and min max) (gen/fmap str/join (gen/vector char-gen min max))
+                                 min (gen/fmap str/join (gen-vector-min char-gen min options))
+                                 max (gen/fmap str/join (gen/vector char-gen 0 max))
+                                 :else (gen/fmap str/join (gen/vector char-gen))))]
+              (if (empty? string-class)
+                (string-gen min max gen/char-alphanumeric)
+                (let [_ (when (< 1 (count string-class))
+                          ;;WIP
+                          (m/-fail! ::unsupported-string-class-combination
+                                    {:schema schema
+                                     :string-class string-class}))
+                      [the-string-class argset] (first string-class)]
+                  (case the-string-class
+                    (:non-numeric :alpha) (string-gen min max gen/char-alpha)
+                    :alphanumeric (string-gen min max gen/char-alphanumeric)
+                    (:not-alpha :non-alpha :numeric) (string-gen min max (gen/fmap char (gen/choose 48 57)))
+                    :includes (let [s (apply str argset)
+                                    scount (count s)
+                                    min-s-times 1
+                                    max-s-times (some-> max (quot scount))]
+                                (when (some->> max-s-times (> min-s-times))
+                                  (m/-fail! ::cannot-fit-includes-string
+                                            {:schema schema
+                                             :max max
+                                             :max-s-times max-s-times}))
+                                (gen/bind
+                                  (gen/large-integer* {:min min-s-times :max max-s-times})
+                                  (fn [times]
+                                    (let [max (some-> max (- (* times scount)))
+                                          _ (when max (assert (nat-int? max)))
+                                          min (some-> min (- (* times scount)) (cc/max 0))]
+                                      (gen/fmap #(apply str % (repeat times s))
+                                                (string-gen min max gen/char-alphanumeric)))))))))))
+          solutions)))
 
 (defn- -coll-gen [schema f options]
   (let [{:keys [min max]} (-min-max schema options)
@@ -474,7 +528,17 @@
 (defmethod -schema-generator :any [_ _] (ga/gen-for-pred any?))
 (defmethod -schema-generator :some [_ _] gen/any-printable)
 (defmethod -schema-generator :nil [_ _] nil-gen)
-(defmethod -schema-generator :string [schema options] (-string-gen schema options))
+(defmethod -schema-generator :string [schema options]
+  (let [constraint (mc/-constraint-from-properties (m/properties schema) (m/type schema) options)
+        solutions (if constraint
+                    (-constraint-solutions constraint (m/type schema) options)
+                    [{}])]
+    (prn "solutions" solutions)
+    (when (empty? solutions)
+      (m/-fail! ::unsatisfiable-string-constraint {:schema schema
+                                                   :constraint constraint}))
+    (-string-gen schema solutions options)))
+
 (defmethod -schema-generator :int [schema options] (gen/large-integer* (-min-max schema options)))
 (defmethod -schema-generator :double [schema options]
   (gen/double* (merge (let [props (m/properties schema options)]

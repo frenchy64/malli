@@ -72,3 +72,38 @@
 (def ^{:arglists '([[& preds]])} -some-pred
   #?(:clj  (-pred-composer or 16)
      :cljs (fn [preds] (fn [x] (boolean (some #(% x) preds))))))
+
+(defn -exception [type data] (ex-info (str type) {:type type, :message type, :data data}))
+
+(defn -fail!
+  ([type] (-fail! type nil))
+  ([type data] (throw (-exception type data))))
+
+(defn -distinct-by
+  "Returns a sequence of distinct (f x) values)"
+  [f coll]
+  (let [seen (atom #{})]
+    (filter (fn [x] (let [v (f x)] (when-not (@seen v) (swap! seen conj v)))) coll)))
+
+;; also doubles as a predicate for the :every schema to bound the number
+;; of elements to check, so don't add potentially-infinite countable things like seq's.
+(defn -safely-countable? [x]
+  (or (nil? x)
+      (counted? x)
+      (indexed? x)
+      ;; note: js/Object not ISeqable
+      #?(:clj (instance? java.util.Map x))
+      ;; many Seq's are List's, so just pick some popular classes
+      #?@(:bb  []
+          :clj [(instance? java.util.AbstractList x)
+                (instance? java.util.Vector x)])
+      #?(:clj  (instance? CharSequence x)
+         :cljs (string? x))
+      #?(:clj  (.isArray (class x))
+         :cljs (identical? js/Array (c/type x)))))
+
+
+(defn -safe-count [x]
+  (if (-safely-countable? x)
+    (count x)
+    (reduce (fn [cnt _] (inc cnt)) 0 x)))

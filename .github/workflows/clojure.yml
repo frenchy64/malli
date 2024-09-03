@@ -9,6 +9,8 @@ on:
 
 jobs:
   build-clj:
+    timeout-minutes: 5
+
     strategy:
       matrix:
         # Supported Java versions: LTS releases and latest
@@ -43,6 +45,7 @@ jobs:
         run: CLOJURE_ALIAS=clojure-${{ matrix.clojure }} bin/kaocha
 
   build-cljs:
+    timeout-minutes: 5
     name: ClojureScript
     strategy:
       matrix:
@@ -78,6 +81,7 @@ jobs:
         run: bin/node ${{ matrix.mode }}
 
   build-bb:
+    timeout-minutes: 5
     name: Babashka
 
     runs-on: ubuntu-latest

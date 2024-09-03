@@ -1,18 +1,64 @@
 (ns malli.error
   (:require [clojure.string :as str]
+            [malli.constraint :as mc]
+            [malli.constraint.compound.humanize :as mch-compound]
+            [malli.constraint.countable.humanize :as mch-cnt]
             [malli.core :as m]
+            [malli.error.utils :refer [-flatten-errors]]
             [malli.util :as mu]))
 
 (defn -pr-str [v] #?(:clj (pr-str v), :cljs (str v)))
 
+(declare humanize)
+
 (defn -pred-min-max-error-fn [{:keys [pred message]}]
   (fn [{:keys [schema value]} _]
-    (let [{:keys [min max]} (m/properties schema)]
-      (cond
-        (not (pred value)) message
-        (and min (= min max)) (str "should be " min)
-        (and min (< value min)) (str "should be at least " min)
-        max (str "should be at most " max)))))
+    (if-not (pred value)
+      message
+      ;;if constraints are enabled these problems are reported via ::m/constraint-violation
+      ;; FIXME 
+      (let [{:keys [min max]} (m/properties schema)]
+        (cond
+          (and min (= min max)) (str "should be " min)
+          (and min (< value min)) (str "should be at least " min)
+          max (str "should be at most " max))))))
+
+;;TODO add to options
+(defn default-constraint-humanizers []
+  (merge (mch-compound/humanizers)
+         (mch-cnt/humanizers)))
+
+(defn -humanize-constraint-violation [{:keys [constraint value schema] :as args}
+                                      options]
+  (let [{:keys [validator-constraint-types] :as constraint-opts} (mc/->constraint-opts (m/type schema))]
+    (letfn [(has? [k] (contains? value k))
+            (->flat-ks [constraint] (let [ks (map #(mc/-contains-constraint-key
+                                                     % validator-constraint-types options)
+                                                  (next constraint))]
+                                      (when (every? identity ks)
+                                        (map first ks))))
+            (-humanize-constraint-violation [constraint]
+              (let [constraint (mc/-resolve-constraint-sugar constraint constraint-opts options)
+                    op (mc/-resolve-op constraint validator-constraint-types options)
+                    flat-ks (delay (->flat-ks constraint))
+                    type (m/type schema)
+                    validator (let [v (delay (mc/-constraint-validator constraint type options))]
+                                (fn [x] (@v x)))
+                    valid? (delay (validator value))]
+                (if-some [humanizer (get (default-constraint-humanizers) op)]
+                  (humanizer (-> args
+                                 (assoc :constraint constraint
+                                        :validator validator
+                                        :humanize humanize
+                                        ;;TODO expose more arities
+                                        :humanize-constraint-violation -humanize-constraint-violation
+                                        ;;TODO expose more arities
+                                        :constraint-validator #(mc/-constraint-validator % type options)))
+                             options)
+                  (cond
+                    (= :any op) []
+                    :else (str "should satisfy constraint: " (pr-str constraint))))))]
+      (-humanize-constraint-violation constraint))))
 
 (def default-errors
   {::unknown {:error/message {:en "unknown error"}}
@@ -28,6 +74,14 @@
                                       (str "invalid tuple size " (count value) ", expected " size)))}}
    ::m/invalid-type {:error/message {:en "invalid type"}}
    ::m/extra-key {:error/message {:en "disallowed key"}}
+   ::m/constraint-violation {:error/fn {:en (fn [{:keys [schema] :as args} options]
+                                              (-humanize-constraint-violation
+                                                (assoc args :constraint (-> schema
+                                                                            m/properties
+                                                                            (mc/-constraint-from-properties
+                                                                              (m/type schema)
+                                                                              options)))
+                                                (m/-options-with-malli-core-fns options)))}}
    :malli.core/invalid-dispatch-value {:error/message {:en "invalid dispatch value"}}
    ::misspelled-key {:error/fn {:en (fn [{::keys [likely-misspelling-of]} _]
                                       (str "should be spelled "
@@ -96,13 +150,15 @@
    :any {:error/message {:en "should be any"}}
    :nil {:error/message {:en "should be nil"}}
    :string {:error/fn {:en (fn [{:keys [schema value]} _]
-                             (let [{:keys [min max]} (m/properties schema)]
-                               (cond
-                                 (not (string? value)) "should be a string"
-                                 (and min (= min max)) (str "should be " min " character" (when (not= 1 min) "s"))
-                                 (and min (< (count value) min)) (str "should be at least " min " character"
-                                                                      (when (not= 1 min) "s"))
-                                 max (str "should be at most " max " character" (when (not= 1 max) "s")))))}}
+                             (if-not (string? value)
+                               "should be a string"
+                               ;;if constraints are enabled these problems are reported via ::m/constraint-violation
+                               (let [{:keys [min max]} (m/properties schema)]
+                                 (cond
+                                   (and min (= min max)) (str "should be " min " character" (when (not= 1 min) "s"))
+                                   (and min (< (count value) min)) (str "should be at least " min " character"
+                                                                        (when (not= 1 min) "s"))
+                                   max (str "should be at most " max " character" (when (not= 1 max) "s"))))))}}
    :int {:error/fn {:en (-pred-min-max-error-fn {:pred int?, :message "should be an integer"})}}
    :double {:error/fn {:en (-pred-min-max-error-fn {:pred double?, :message "should be a double"})}}
    :boolean {:error/message {:en "should be a boolean"}}

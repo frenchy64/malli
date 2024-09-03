@@ -42,6 +42,7 @@
     (doseq [schema [:any
                     :some
                     [:string {:min 1, :max 4}]
+                    [:string {:and [[:min 1] [:max 4]]}]
                     [:int {:min 1, :max 4}]
                     [:double {:min 0.0, :max 1.0}]
                     :boolean

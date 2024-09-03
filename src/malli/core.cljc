@@ -3,6 +3,8 @@
   #?(:cljs (:require-macros malli.core))
   (:require #?(:clj [clojure.walk :as walk])
             [clojure.core :as c]
+            [clojure.set :as set]
+            [malli.constraint :as mc]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
@@ -14,7 +16,7 @@
 
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
-         parser unparser ast from-ast -instrument ^:private -safely-countable?)
+         parser unparser ast from-ast -instrument ^:private -safely-countable? validator validate explain)
 
 ;;
 ;; protocols and records
@@ -154,11 +156,11 @@
 
 (defn -deprecated! [x] (println "DEPRECATED:" x))
 
-(defn -exception [type data] (ex-info (str type) {:type type, :message type, :data data}))
+(defn -exception [type data] (miu/-exception type data))
 
 (defn -fail!
-  ([type] (-fail! type nil))
-  ([type data] (throw (-exception type data))))
+  ([type] (miu/-fail! type))
+  ([type data] (miu/-fail! type data)))
 
 (defn -safe-pred [f] #(try (boolean (f %)) (catch #?(:clj Exception, :cljs js/Error) _ false)))
 
@@ -659,12 +661,7 @@
       (and max f) (fn [x] (<= (f x) max))
       max (fn [x] (<= x max)))))
 
-(defn- -safe-count [x]
-  (if (-safely-countable? x)
-    (count x)
-    (reduce (fn [cnt _] (inc cnt)) 0 x)))
-
-(defn -validate-limits [min max] (or ((-min-max-pred -safe-count) {:min min :max max}) (constantly true)))
+(defn -validate-limits [min max] (or ((-min-max-pred miu/-safe-count) {:min min :max max}) (constantly true)))
 
 (defn -needed-bounded-checks [min max options]
   (c/max (or (some-> max inc) 0)
@@ -677,6 +674,17 @@
 (defn -qualified-keyword-pred [properties]
   (when-let [ns-name (some-> properties :namespace name)]
     (fn [x] (= (namespace x) ns-name))))
+
+(defn -options-with-malli-core-fns [options]
+  (assoc options
+         ::schema schema
+         ::validator validator
+         ::validate validate
+         ::-regex-op? -regex-op?
+         ::explain explain))
+
+(defn- -constraint-validator [properties type options]
+  (mc/-constraint-validator properties type (-options-with-malli-core-fns options)))
 
 ;;
 ;; Schemas
@@ -702,6 +710,7 @@
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [form (delay (-simple-form parent properties children identity options))
+                  constraint (delay (mc/-constraint-from-properties properties type options))
                   cache (-create-cache options)]
               (-check-children! type properties children min max)
               ^{:type ::schema}
@@ -710,12 +719,26 @@
                 (-to-ast [this _] (to-ast this))
                 Schema
                 (-validator [_]
-                  (if-let [pvalidator (when property-pred (property-pred properties))]
-                    (fn [x] (and (pred x) (pvalidator x))) pred))
+                  (let [cvalidator (some-> @constraint (-constraint-validator type options))
+                        pvalidator (when property-pred (property-pred properties))]
+                    (-> [pred]
+                        (cond->
+                          pvalidator (conj pvalidator)
+                          cvalidator (conj cvalidator))
+                        miu/-every-pred)))
                 (-explainer [this path]
-                  (let [validator (-validator this)]
-                    (fn explain [x in acc]
-                      (if-not (validator x) (conj acc (miu/-error path in this x)) acc))))
+                  (let [cvalidator (some-> @constraint (-constraint-validator type options))
+                        pvalidator (when property-pred (property-pred properties))
+                        validator (-validator this)]
+                    (fn [x in acc]
+                      (if-not (pred x)
+                        (conj acc (miu/-error path in this x))
+                        (cond-> acc
+                          (and pvalidator (not (pvalidator x)))
+                          (conj (miu/-error path in this x))
+
+                          (and cvalidator (not (cvalidator x)))
+                          (conj (miu/-error path in this x ::constraint-violation)))))))
                 (-parser [this]
                   (let [validator (-validator this)]
                     (fn [x] (if (validator x) x ::invalid))))
@@ -738,7 +761,7 @@
 (defn -nil-schema [] (-simple-schema {:type :nil, :pred nil?}))
 (defn -any-schema [] (-simple-schema {:type :any, :pred any?}))
 (defn -some-schema [] (-simple-schema {:type :some, :pred some?}))
-(defn -string-schema [] (-simple-schema {:type :string, :pred string?, :property-pred (-min-max-pred count)}))
+(defn -string-schema [] (-simple-schema {:type :string, :pred string?}))
 (defn -int-schema [] (-simple-schema {:type :int, :pred int?, :property-pred (-min-max-pred nil)}))
 (defn -float-schema [] (-simple-schema {:type :float, :pred float?, :property-pred (-min-max-pred nil)}))
 (defn -double-schema [] (-simple-schema {:type :double, :pred double?, :property-pred (-min-max-pred nil)}))
