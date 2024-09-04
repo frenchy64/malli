@@ -95,8 +95,7 @@ collected."
               ([constraint] (-constraint-solutions constraint options))
               ([constraint options]
                (lazy-seq
-                 (let [constraint (mc/-resolve-constraint-sugar constraint constraint-opts options)
-                       op (mc/-resolve-op constraint generator-constraint-types options)]
+                 (let [op (mc/-resolve-op constraint generator-constraint-types options)]
                    (if-some [solver (solvers op)]
                      (solver {:constraint (if (= :any op) [:any] constraint)
                               :constraint-opts constraint-opts}

@@ -38,8 +38,7 @@
                                       (when (every? identity ks)
                                         (map first ks))))
             (-humanize-constraint-violation [constraint]
-              (let [constraint (mc/-resolve-constraint-sugar constraint constraint-opts options)
-                    op (mc/-resolve-op constraint validator-constraint-types options)
+              (let [op (mc/-resolve-op constraint validator-constraint-types options)
                     flat-ks (delay (->flat-ks constraint))
                     type (m/type schema)
                     validator (let [v (delay (mc/-constraint-validator constraint type options))]
