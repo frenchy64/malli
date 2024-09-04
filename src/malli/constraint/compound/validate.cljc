@@ -4,6 +4,6 @@
 (defn validators []
   {:and (fn [{:keys [constraint constraint-validator]} _]
           (let [ps (mapv constraint-validator (next constraint))]
-            (when-not (seq ps)
+            (when (empty? ps)
               (miu/-fail! ::empty-and))
             #(every? (fn [p] (p %)) ps)))})

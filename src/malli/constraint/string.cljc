@@ -2,6 +2,7 @@
 
 (defn schema-constraints []
   {:string {:flat-property-keys #{:max :gen/max :min :gen/min}
+            :conjunction-constraint-key :and
             :nested-property-keys #{:and}
             :generator-constraint-types {:max :max-count
                                          :min :min-count

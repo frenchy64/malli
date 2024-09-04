@@ -5,6 +5,7 @@
             [clojure.core :as c]
             [clojure.set :as set]
             [malli.constraint :as mc]
+            [malli.constraint.protocols :as mcp]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
@@ -30,9 +31,9 @@
   (-into-schema [this properties children options] "creates a new schema instance"))
 
 (defprotocol Schema
-  (-validator [this] "returns a predicate function that checks if the schema is valid")
+  (-validator [this] "returns a predicate function that checks if a value satisfies schema")
   (-explainer [this path] "returns a function of `x in acc -> maybe errors` to explain the errors for invalid values")
-  (-parser [this] "return a function of `x -> parsed-x | ::m/invalid` to explain how schema is valid.")
+  (-parser [this] "return a function of `x -> parsed-x | ::m/invalid` to explain how x is does not satisfy schema.")
   (-unparser [this] "return the inverse (partial) function wrt. `-parser`; `parsed-x -> x | ::m/invalid`")
   (-transformer [this transformer method options]
     "returns a function to transform the value for the given schema and method.
@@ -354,6 +355,28 @@
 (defn -walk-leaf [schema walker path options]
   (when (-accept walker schema path options)
     (-outer walker schema path (-children schema) options)))
+
+(defn -walk-leaf+constraints [schema walker path constraint constraint-opts options]
+  (when (-accept walker schema path options)
+    (let [constraint' (when constraint
+                        (let [constraint-walker (or (::constraint-walker options)
+                                                    (reify Walker
+                                                      (-accept [_ constraint _ _] constraint)
+                                                      (-inner [this constraint path options] (-walk constraint this path options))
+                                                      (-outer [_ constraint _ children _] (-set-children constraint children))))]
+                          (mcp/-walk constraint constraint-walker (conj path ::constraint)
+                                     (assoc options ::constraint-walker constraint-walker))))
+          schema (cond-> schema
+                   (and (some? constraint')
+                        (not (identical? constraint constraint')))
+                   (-update-properties (fn [properties]
+                                         (let [{:keys [flat-property-keys nested-property-keys]} constraint-opts]
+                                           (mc/-constraint-into-properties
+                                             constraint'
+                                             constraint-opts
+                                             (apply dissoc properties (concat flat-property-keys nested-property-keys))
+                                             options)))))]
+      (-outer walker schema path (-children schema) options))))
 
 ;;
 ;; lenses
@@ -687,6 +710,70 @@
   (mc/-constraint-validator properties type (-options-with-malli-core-fns options)))
 
 ;;
+;; Constraints
+;;
+
+(defprotocol Constraint
+  (-constraint? [this]))
+
+(extend-protocol Constraint
+  Object
+  (-constraint? [_] false))
+
+(defn -count-constraint []
+  (let [type ::count-constraint]
+    ^{:type ::into-schema}
+    (reify
+      AST
+      (-from-ast [parent ast options] (mc/constraint-from-ast parent ast options))
+      IntoSchema
+      (-type [_] ::count-constraint)
+      (-type-properties [_])
+      (-properties-schema [_ _])
+      (-children-schema [_ _])
+      (-into-schema [parent properties children options]
+        (-check-children! type properties children 2 2)
+        (let [[min-count max-count] children
+              _ (when-not (or (nil? min-count)
+                              (nat-int? min-count))
+                  (-fail! ::count-constraint-min {:min min-count}))
+              _ (when-not (or (nil? max-count)
+                              (nat-int? max-count))
+                  (-fail! ::count-constraint-max {:max max-count}))
+              form (delay (-simple-form parent properties children identity options))
+              cache (-create-cache options)]
+          ^{:type ::schema}
+          (reify
+            Constraint
+            (-constraint? [_] true)
+            AST
+            (-to-ast [this _] (throw (ex-info "TODO" {})))
+            Schema
+            (-validator [_]
+              )
+            (-explainer [this path]
+              )
+            (-parser [this] (-fail! ::constraints-cannot-be-parsed this))
+            (-unparser [this] (-fail! ::constraints-cannot-be-unparsed this))
+            (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
+            (-walk [this walker path options]
+              (throw (ex-info "TODO" {}))
+              (if-some [co @constraint-opts]
+                (-walk-leaf+constraints this walker path co options)
+                (-walk-leaf this walker path options)))
+            (-properties [_] properties)
+            (-options [_] options)
+            (-children [_] children)
+            (-parent [_] parent)
+            (-form [_] @form)
+            Cached
+            (-cache [_] cache)
+            LensSchema
+            (-keep [_] (throw (ex-info "TODO" {})))
+            (-get [_ _ default] (throw (ex-info "TODO" {})))
+            (-set [this key _] (throw (ex-info "TODO" {})))))))))
+
+;;
 ;; Schemas
 ;;
 
@@ -710,7 +797,8 @@
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [form (delay (-simple-form parent properties children identity options))
-                  constraint (delay (mc/-constraint-from-properties properties type options))
+                  constraint-opts (delay (mc/->constraint-opts type))
+                  constraint (delay (mc/-constraint-from-properties properties @constraint-opts options))
                   cache (-create-cache options)]
               (-check-children! type properties children min max)
               ^{:type ::schema}
@@ -745,7 +833,10 @@
                 (-unparser [this] (-parser this))
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
-                (-walk [this walker path options] (-walk-leaf this walker path options))
+                (-walk [this walker path options]
+                  (if-some [co @constraint-opts]
+                    (-walk-leaf+constraints this walker path co options)
+                    (-walk-leaf this walker path options)))
                 (-properties [_] properties)
                 (-options [_] options)
                 (-children [_] children)
