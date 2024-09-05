@@ -356,6 +356,9 @@
   (when (-accept walker schema path options)
     (-outer walker schema path (-children schema) options)))
 
+(defn -constraint-into-properties [constraint constraint-opts properties options]
+  (throw (ex-info "TODO" {})))
+
 (defn -walk-leaf+constraints [schema walker path constraint constraint-opts options]
   (when (-accept walker schema path options)
     (let [constraint' (when constraint
@@ -371,7 +374,7 @@
                         (not (identical? constraint constraint')))
                    (-update-properties (fn [properties]
                                          (let [{:keys [flat-property-keys nested-property-keys]} constraint-opts]
-                                           (mc/-constraint-into-properties
+                                           (-constraint-into-properties
                                              constraint'
                                              constraint-opts
                                              (apply dissoc properties (concat flat-property-keys nested-property-keys))
@@ -714,7 +717,8 @@
 ;;
 
 (defprotocol Constraint
-  (-constraint? [this]))
+  (-constraint? [this])
+  (-intersect-constraint [this that]))
 
 (extend-protocol Constraint
   Object
@@ -723,18 +727,73 @@
 (defn constraint [?constraint options]
   (if (-constraint? ?constraint)
     ?constraint
-    (let [{:keys [flat-property-keys nested-property-keys]} (::constraint-options options)]
-      ;; hmmm stuck
-      )
-    )
-  )
+    (if (vector? ?constraint)
+      (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
+            n #?(:bb (count v) :clj (.count v), :cljs (count v))
+            ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
+            prs (-> options ::constraint-options :parse-constraint)
+            f (prs (first ?constraint))]
+        (schema (if (or (nil? ?p) (map? ?p))
+                  (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
+                  (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))
+                options))
+      (-fail! ::invalid constraint))))
+
+(declare constraint-extensions)
+
+(def constraint-extensions
+  {:string {:parse-constraint {:max (fn [{:keys [properties children]} opts]
+                                      (-check-children! :max properties children 1 1)
+                                      [::count-constraint 0 (first children)])
+                               :min (fn [{:keys [properties children]} opts]
+                                      (-check-children! :min properties children 1 1)
+                                      [::count-constraint (first children) nil])
+                               :gen/max (fn [{:keys [properties children]} opts]
+                                          (-check-children! :gen/max properties children 1 1)
+                                          [::count-constraint {::gen true} 0 (first children)])
+                               :gen/min (fn [{:keys [properties children]} opts]
+                                          (-check-children! :gen/min properties children 1 1)
+                                          [::count-constraint {::gen true} (first children) nil])
+                               :and (fn [{:keys [properties children]} opts]
+                                      (into [::and nil] children))}
+            :constraint-form {::count-constraint (fn [c opts]
+                                                   (let [[min max] (-children c)]
+                                                     (cond
+                                                       (and min max) [:and [:min min] [:max max]]
+                                                       min [:min min]
+                                                       :else [:max max])))
+                              ::and-constraint (fn [c opts]
+                                                 ;; TODO flatten :and?
+                                                 (into [:and] (-children c)))}
+            :parse-properties {:max (fn [v opts]
+                                      [::count-constraint 0 v])
+                               :min (fn [v opts]
+                                      [::count-constraint v nil])
+                               :gen/max (fn [v opts]
+                                          [::count-constraint {::gen true} 0 v])
+                               :gen/min (fn [v opts]
+                                          [::count-constraint {::gen true} v nil])
+                               :and (fn [vs opts]
+                                      (into [::and nil] vs))}
+            :unparse-properties {::count-constraint
+                                 (fn [c c-properties [cmin cmax :as c-children] into-properties opts]
+                                   (cond-> into-properties
+                                     cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
+                                     (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin))))
+                                 ::and-constraint
+                                 (fn [c c-properties [cmin cmax :as c-children] into-properties opts]
+                                   (reduce (fn [into-properties]
+                                             (or (::unparse-properties c into-properties opts)
+                                                 ))
+                                           into-properties))
+                                 }}})
 
 (defn -count-constraint []
   (let [type ::count-constraint]
     ^{:type ::into-schema}
     (reify
       AST
-      (-from-ast [parent ast options] (mc/constraint-from-ast parent ast options))
+      (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
       IntoSchema
       (-type [_] ::count-constraint)
       (-type-properties [_])
@@ -776,6 +835,7 @@
             (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
             (-walk [this walker path options]
               (throw (ex-info "TODO" {}))
+              #_
               (if-some [co @constraint-opts]
                 (-walk-leaf+constraints this walker path co options)
                 (-walk-leaf this walker path options)))

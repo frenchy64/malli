@@ -67,9 +67,6 @@
         (first cs)
         (into [:and] cs)))))
 
-(defn -constraint-into-properties [constraint constraint-opts properties options]
-  (throw (ex-info "TODO" {})))
-
 (defn constraint-from-ast
   []
   (throw (ex-info "TODO" {})))
