@@ -739,6 +739,15 @@
                 options))
       (-fail! ::invalid constraint))))
 
+(comment
+  (constraint [:max 1] {::constraint-options (:string constraint-extensions)
+                        :registry (merge (base-constraints)
+                                         (base-schemas))})
+  (constraint [:min 1] {::constraint-options (:string constraint-extensions)
+                        :registry (merge (base-constraints)
+                                         (base-schemas))})
+  )
+
 (declare constraint-extensions)
 
 (def constraint-extensions
@@ -2890,6 +2899,10 @@
                                   :re-unparser (fn [_ children] (apply re/altn-unparser children))
                                   :re-transformer (fn [_ children] (apply re/alt-transformer children))
                                   :re-min-max (fn [_ children] (reduce -re-alt-min-max {:max 0} (-vmap last children)))})})
+
+(defn base-constraints []
+  {::count-constraint (-count-constraint)
+   ::and-constraint (-and-constraint)})
 
 (defn base-schemas []
   {:and (-and-schema)
