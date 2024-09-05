@@ -720,6 +720,15 @@
   Object
   (-constraint? [_] false))
 
+(defn constraint [?constraint options]
+  (if (-constraint? ?constraint)
+    ?constraint
+    (let [{:keys [flat-property-keys nested-property-keys]} (::constraint-options options)]
+      ;; hmmm stuck
+      )
+    )
+  )
+
 (defn -count-constraint []
   (let [type ::count-constraint]
     ^{:type ::into-schema}
@@ -734,6 +743,8 @@
       (-into-schema [parent properties children options]
         (-check-children! type properties children 2 2)
         (let [[min-count max-count] children
+              ;; unclear if we want to enforce (<= min-count max-count)
+              ;; it's a perfectly well formed constraint that happens to satisfy no values
               _ (when-not (or (nil? min-count)
                               (nat-int? min-count))
                   (-fail! ::count-constraint-min {:min min-count}))
@@ -750,9 +761,16 @@
             (-to-ast [this _] (throw (ex-info "TODO" {})))
             Schema
             (-validator [_]
-              )
-            (-explainer [this path]
-              )
+              ;;TODO bounded counts
+              (cond
+                (and min-count max-count)
+                (if (= min-count max-count)
+                  #(= min-count (miu/-safe-count %))
+                  #(<= min-count (miu/-safe-count %) max-count))
+                min-count #(<= min-count (miu/-safe-count %))
+                max-count #(<= (miu/-safe-count %) max-count)
+                :else (fn [_] true)))
+            (-explainer [this path] (-fail! ::constraints-cannot-have-explainers this))
             (-parser [this] (-fail! ::constraints-cannot-be-parsed this))
             (-unparser [this] (-fail! ::constraints-cannot-be-unparsed this))
             (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
@@ -863,44 +881,51 @@
 (defn -qualified-symbol-schema [] (-simple-schema {:type :qualified-symbol, :pred qualified-symbol?}))
 (defn -uuid-schema [] (-simple-schema {:type :uuid, :pred uuid?}))
 
-(defn -and-schema []
-  ^{:type ::into-schema}
-  (reify IntoSchema
-    (-type [_] :and)
-    (-type-properties [_])
-    (-properties-schema [_ _])
-    (-children-schema [_ _])
-    (-into-schema [parent properties children options]
-      (-check-children! :and properties children 1 nil)
-      (let [children (-vmap #(schema % options) children)
-            form (delay (-simple-form parent properties children -form options))
-            cache (-create-cache options)
-            ->parser (fn [f m] (let [parsers (m (-vmap f children))]
-                                 #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
-        ^{:type ::schema}
-        (reify
-          Schema
-          (-validator [_]
-            (let [validators (-vmap -validator children)] (miu/-every-pred validators)))
-          (-explainer [_ path]
-            (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
-              (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
-          (-parser [_] (->parser -parser seq))
-          (-unparser [_] (->parser -unparser rseq))
-          (-transformer [this transformer method options]
-            (-parent-children-transformer this children transformer method options))
-          (-walk [this walker path options] (-walk-indexed this walker path options))
-          (-properties [_] properties)
-          (-options [_] options)
-          (-children [_] children)
-          (-parent [_] parent)
-          (-form [_] @form)
-          Cached
-          (-cache [_] cache)
-          LensSchema
-          (-keep [_])
-          (-get [_ key default] (get children key default))
-          (-set [this key value] (-set-assoc-children this key value)))))))
+(defn -and-schema
+  ([] (-and-schema {}))
+  ([{is-constraint :constraint}]
+   ^{:type ::into-schema}
+   (let [type (if is-constraint ::and-constraint :and)]
+     (reify IntoSchema
+       (-type [_] type)
+       (-type-properties [_])
+       (-properties-schema [_ _])
+       (-children-schema [_ _])
+       (-into-schema [parent properties children options]
+         (-check-children! type properties children 1 nil)
+         (let [children (-vmap #(schema % options) children)
+               form (delay (-simple-form parent properties children -form options))
+               cache (-create-cache options)
+               ->parser (fn [f m] (let [parsers (m (-vmap f children))]
+                                    #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
+           ^{:type ::schema}
+           (reify
+             Constraint
+             (-constraint? [_] is-constraint)
+             Schema
+             (-validator [_]
+               (let [validators (-vmap -validator children)] (miu/-every-pred validators)))
+             (-explainer [_ path]
+               (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
+                 (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
+             (-parser [_] (->parser -parser seq))
+             (-unparser [_] (->parser -unparser rseq))
+             (-transformer [this transformer method options]
+               (-parent-children-transformer this children transformer method options))
+             (-walk [this walker path options] (-walk-indexed this walker path options))
+             (-properties [_] properties)
+             (-options [_] options)
+             (-children [_] children)
+             (-parent [_] parent)
+             (-form [_] @form)
+             Cached
+             (-cache [_] cache)
+             LensSchema
+             (-keep [_])
+             (-get [_ key default] (get children key default))
+             (-set [this key value] (-set-assoc-children this key value)))))))))
+
+(defn -and-constraint [] (-and-schema {:constraint true}))
 
 (defn -or-schema []
   ^{:type ::into-schema}
