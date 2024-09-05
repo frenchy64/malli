@@ -864,8 +864,17 @@
 ;; Schemas
 ;;
 
+(defprotocol ConstrainedSchema
+  (-register-constraints [this extensions])
+  (-constraint-extensions [this]))
+
+(defn register-constraint-extension!
+  ([extensions] (register-constraint-extension! extensions default-registry))
+  ([extensions registry]
+   (reduce-kv (fn [_ k v] (-register-constraints (mr/-schema registry k) v)) nil extensions)))
+
 (defn -simple-schema [props]
-  (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile]
+  (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile constraint-extensions]
          :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props]
     (if (fn? props)
       (do
@@ -873,6 +882,13 @@
         (-simple-schema {:compile (fn [c p _] (props c p))}))
       ^{:type ::into-schema}
       (reify
+        ConstrainedSchema
+        (-register-constraints [this extensions] (if constraint-extensions
+                                                   (swap! constraint-extensions #(merge-with into % extensions))
+                                                   (-fail! ::constraints-not-supported {:type type})))
+        (-constraint-extensions [this] (if constraint-extensions
+                                         @constraint-extensions
+                                         (-fail! ::constraints-not-supported {:type type})))
         AST
         (-from-ast [parent ast options] (from-ast parent ast options))
         IntoSchema
@@ -884,7 +900,7 @@
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [form (delay (-simple-form parent properties children identity options))
-                  constraint-opts (delay (mc/->constraint-opts type))
+                  constraint-opts (delay (when constraint-extensions @constraint-extensions))
                   constraint (delay (mc/-constraint-from-properties properties @constraint-opts options))
                   cache (-create-cache options)]
               (-check-children! type properties children min max)
@@ -939,7 +955,7 @@
 (defn -nil-schema [] (-simple-schema {:type :nil, :pred nil?}))
 (defn -any-schema [] (-simple-schema {:type :any, :pred any?}))
 (defn -some-schema [] (-simple-schema {:type :some, :pred some?}))
-(defn -string-schema [] (-simple-schema {:type :string, :pred string?}))
+(defn -string-schema [] (-simple-schema {:type :string, :pred string? :constraint-extensions (atom (:string constraint-extensions))}))
 (defn -int-schema [] (-simple-schema {:type :int, :pred int?, :property-pred (-min-max-pred nil)}))
 (defn -float-schema [] (-simple-schema {:type :float, :pred float?, :property-pred (-min-max-pred nil)}))
 (defn -double-schema [] (-simple-schema {:type :double, :pred double?, :property-pred (-min-max-pred nil)}))
@@ -2831,7 +2847,7 @@
   {:any (-any-schema)
    :some (-some-schema)
    :nil (-nil-schema)
-   :string (-string-schema)
+   :string (-string-schema) ;; FIXME implicitly requires (base-constraints) causing a breaking change
    :int (-int-schema)
    :float (-float-schema)
    :double (-double-schema)
@@ -2930,7 +2946,7 @@
    ::schema (-schema-schema {:raw true})})
 
 (defn default-schemas []
-  (merge (predicate-schemas) (class-schemas) (comparator-schemas) (type-schemas) (sequence-schemas) (base-schemas)))
+  (merge (predicate-schemas) (class-schemas) (comparator-schemas) (type-schemas) (sequence-schemas) (base-schemas) (base-constraints)))
 
 (def default-registry
   (let [strict (identical? mr/mode "strict")
