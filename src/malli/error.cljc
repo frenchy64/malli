@@ -24,8 +24,7 @@
 
 ;;TODO add to options
 (defn default-constraint-humanizers []
-  (merge (mch-compound/humanizers)
-         (mch-cnt/humanizers)))
+  (merge (mch-cnt/humanizers)))
 
 (defn -humanize-constraint-violation [{:keys [constraint value schema] :as args}
                                       options]

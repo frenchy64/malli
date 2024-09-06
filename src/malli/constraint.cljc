@@ -6,18 +6,6 @@
             [malli.registry :as mr])
   #?(:clj (:import (clojure.lang IPersistentVector))))
 
-(defn -constraint-from-properties [properties options]
-  (let [{:keys [parse-properties]} (::m/constraint-options options)
-        ks (-> parse-properties keys sort)]
-    (when-some [cs (-> []
-                       (into (keep #(when-some [[_ v] (find properties %)]
-                                      (constraint ((get parse-properties %) v options) options)))
-                             ks)
-                       not-empty)]
-      (if (= 1 (count cs))
-        (first cs)
-        (constraint (into [::m/and-constraint] cs) options)))))
-
 (defn constraint [?constraint options]
   (if (mcp/-constraint? ?constraint)
     ?constraint
@@ -35,6 +23,18 @@
                     (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))
                   options))
       (-fail! ::invalid-constraint {:constraint ?constraint}))))
+
+(defn -constraint-from-properties [properties options]
+  (let [{:keys [parse-properties]} (::m/constraint-options options)
+        ks (-> parse-properties keys sort)]
+    (when-some [cs (-> []
+                       (into (keep #(when-some [[_ v] (find properties %)]
+                                      (constraint ((get parse-properties %) v options) options)))
+                             ks)
+                       not-empty)]
+      (if (= 1 (count cs))
+        (first cs)
+        (constraint (into [::m/and-constraint] cs) options)))))
 
 (comment
   (-constraint-from-properties
