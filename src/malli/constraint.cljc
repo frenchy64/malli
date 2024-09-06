@@ -43,12 +43,13 @@
         ks (-> parse-properties keys sort)]
     (when-some [cs (-> []
                        (into (keep #(when-some [[_ v] (find properties %)]
-                                      (m/schema ((get parse-properties %) v options) options)))
+                                      (prn "v" v ((get parse-properties %) v options))
+                                      (constraint ((get parse-properties %) v options) options)))
                              ks)
                        not-empty)]
       (if (= 1 (count cs))
         (first cs)
-        (m/schema (into [::m/and-constraint] cs) options)))))
+        (constraint (into [::m/and-constraint] cs) options)))))
 
 (defn constraint [?constraint options]
   (if (mcp/-constraint? ?constraint)
@@ -71,15 +72,33 @@
 (comment
   (-constraint-from-properties
     {:max 1 :min 0}
-    {::m/constraint-options (:string constraint-extensions)})
+    {::m/constraint-options (:string (base-constraint-extensions))})
   )
 
-(defn constraint-from-ast
-  []
-  (throw (ex-info "TODO" {})))
+(defn -walk-leaf+constraints [schema walker path constraint {::m/keys [constraint-opts] :as options}]
+  (when (m/-accept walker schema path options)
+    (let [constraint' (when constraint
+                        (let [constraint-walker (or (::constraint-walker options)
+                                                    (reify m/Walker
+                                                      (-accept [_ constraint _ _] constraint)
+                                                      (-inner [this constraint path options] (m/-walk constraint this path options))
+                                                      (-outer [_ constraint _ children _] (m/-set-children constraint children))))]
+                          (m/-walk constraint constraint-walker (conj path ::constraint)
+                                   (assoc options ::constraint-walker constraint-walker))))
+          schema (cond-> schema
+                   (and (some? constraint')
+                        (not (identical? constraint constraint')))
+                   (m/-update-properties (fn [properties]
+                                           (let [{:keys [unparse-properties]} constraint-opts
+                                                 f (or (get unparse-properties (m/type constraint'))
+                                                       (-fail! ::cannot-unparse-constraint-into-properties
+                                                               {:constraint constraint'}))]
+                                             (f constraint' properties options)))))]
+      (m/-outer walker schema path (m/-children schema) options))))
 
-(defn constraint-extensions []
-  {:string {:constraint-from-properties -constraint-from-properties
+(defn base-constraint-extensions []
+  {:string {:-walk -walk-leaf+constraints
+            :constraint-from-properties -constraint-from-properties
             :parse-constraint {:max (fn [{:keys [properties children]} opts]
                                       (m/-check-children! :max properties children 1 1)
                                       [::count-constraint 0 (first children)])
@@ -114,12 +133,14 @@
                                :and (fn [vs opts]
                                       (into [::and nil] vs))}
             :unparse-properties {::count-constraint
-                                 (fn [c c-properties [cmin cmax :as c-children] into-properties opts]
-                                   (cond-> into-properties
-                                     cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
-                                     (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin))))
+                                 (fn [c into-properties opts]
+                                   (let [[cmin cmax] (m/children c)
+                                         c-properties (m/properties c)]
+                                     (cond-> into-properties
+                                       cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
+                                       (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))
                                  ::m/and-constraint
-                                 (fn [c c-properties [cmin cmax :as c-children] into-properties opts]
+                                 (fn [c into-properties opts]
                                    (reduce (fn [into-properties]
                                              (throw (ex-info "TODO" {}))
                                              (or (::unparse-properties c into-properties opts)
@@ -198,9 +219,10 @@
 
 (defn register-constraint-extensions! [extensions] (swap! m/constraint-extensions #(merge-with into % extensions)))
 
-(let [base-ext! (delay (register-constraint-extensions! (constraint-extensions)))]
+(let [base-ext! (delay (register-constraint-extensions! (base-constraint-extensions)))
+      bc (delay (base-constraints))]
   (defn activate-base-constraints!
     ([] (mr/swap-default-registry! activate-base-constraints!))
     ([?registry]
      @base-ext! ;; hmm this will break the default registry if it doesn't also include (base-constraints)
-     (mr/composite-registry (base-constraints) ?registry))))
+     (mr/composite-registry @bc ?registry))))

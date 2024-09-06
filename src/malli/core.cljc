@@ -355,31 +355,6 @@
   (when (-accept walker schema path options)
     (-outer walker schema path (-children schema) options)))
 
-(defn -constraint-into-properties [constraint constraint-opts properties options]
-  (throw (ex-info "TODO" {})))
-
-(defn -walk-leaf+constraints [schema walker path constraint constraint-opts options]
-  (when (-accept walker schema path options)
-    (let [constraint' (when constraint
-                        (let [constraint-walker (or (::constraint-walker options)
-                                                    (reify Walker
-                                                      (-accept [_ constraint _ _] constraint)
-                                                      (-inner [this constraint path options] (-walk constraint this path options))
-                                                      (-outer [_ constraint _ children _] (-set-children constraint children))))]
-                          (mcp/-walk constraint constraint-walker (conj path ::constraint)
-                                     (assoc options ::constraint-walker constraint-walker))))
-          schema (cond-> schema
-                   (and (some? constraint')
-                        (not (identical? constraint constraint')))
-                   (-update-properties (fn [properties]
-                                         (let [{:keys [flat-property-keys nested-property-keys]} constraint-opts]
-                                           (-constraint-into-properties
-                                             constraint'
-                                             constraint-opts
-                                             (apply dissoc properties (concat flat-property-keys nested-property-keys))
-                                             options)))))]
-      (-outer walker schema path (-children schema) options))))
-
 ;;
 ;; lenses
 ;;
@@ -700,17 +675,7 @@
   (when-let [ns-name (some-> properties :namespace name)]
     (fn [x] (= (namespace x) ns-name))))
 
-;;
-;; Constraints
-;;
-
-
-(comment
-  (constraint [:max 1] {::constraint-options (:string constraint-extensions)})
-  (constraint [:min 1] {::constraint-options (:string constraint-extensions)})
-  )
-
-(def constraint-extensions (atom {}))
+(defonce constraint-extensions (atom {}))
 
 ;;
 ;; Schemas
@@ -774,8 +739,8 @@
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
                 (-walk [this walker path options]
-                  (if-some [co constraint-opts]
-                    (-walk-leaf+constraints this walker path co options)
+                  (if-some [-walk (:-walk @constraint-opts)]
+                    (-walk this walker path options)
                     (-walk-leaf this walker path options)))
                 (-properties [_] properties)
                 (-options [_] options)
