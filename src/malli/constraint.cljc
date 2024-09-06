@@ -1,42 +1,10 @@
 (ns malli.constraint
   (:require [clojure.set :as set]
-            [malli.constraint.atomic.validate :as mcv-atomic]
-            [malli.constraint.compound.validate :as mcv-comp]
-            [malli.constraint.countable.validate :as mcv-cnt]
-            [malli.constraint.string :as mc-str]
             [malli.constraint.protocols :as mcp]
+            [malli.core :as m]
             [malli.impl.util :as miu :refer [-fail!]]
-            [malli.registry :as mr]
-            [malli.core :as m])
+            [malli.registry :as mr])
   #?(:clj (:import (clojure.lang IPersistentVector))))
-
-;; TODO :qualified-keyword + :namespace
-;; TODO add to options
-(defn default-schema-constraints []
-  (mc-str/schema-constraints))
-
-;; TODO add to options
-(defn default-validators []
-  (merge (mcv-atomic/validators)
-         (mcv-cnt/validators)
-         (mcv-comp/validators)))
-
-(defn -resolve-op [constraint constraint-types options]
-  (let [op (when (vector? constraint)
-             (first constraint))
-        op (or (get constraint-types op)
-               (-fail! ::disallowed-constraint {:type op :constraint constraint
-                                                :allowed (keys constraint-types)}))]
-    (loop [op op
-           seen #{}]
-      (when (seen op)
-        (-fail! ::infinite-constraint
-                {:constraint constraint :constraint-types constraint-types
-                 :seen seen
-                 :options options}))
-      (let [op' (get constraint-types op op)]
-        (cond-> op'
-          (not= op op') (recur (conj seen op)))))))
 
 (defn -constraint-from-properties [properties options]
   (let [{:keys [parse-properties]} (::m/constraint-options options)
