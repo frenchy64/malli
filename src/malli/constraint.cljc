@@ -4,7 +4,8 @@
             [malli.constraint.compound.validate :as mcv-comp]
             [malli.constraint.countable.validate :as mcv-cnt]
             [malli.constraint.string :as mc-str]
-            [malli.impl.util :as miu :refer [-fail!]]))
+            [malli.impl.util :as miu :refer [-fail!]]
+            [malli.core :as-alias m]))
 
 ;; TODO :qualified-keyword + :namespace
 ;; TODO add to options
@@ -53,19 +54,17 @@
                   (-fail! ::unknown-constraint {:constraint constraint}))))]
       (-constraint-validator constraint))))
 
-(defn -constraint-from-properties [properties constraint-opts options]
-  (let [{:keys [flat-property-keys nested-property-keys]} (->constraint-opts constraint-opts)]
+(defn -constraint-from-properties [properties options]
+  (let [{:keys [parse-properties]} (::m/constraint-options options)
+        ks (-> parse-properties keys sort)]
     (when-some [cs (-> []
                        (into (keep #(when-some [[_ v] (find properties %)]
-                                      (into [%] v)))
-                             nested-property-keys)
-                       (into (keep #(when-some [[_ v] (find properties %)]
-                                      (conj [%] v)))
-                             flat-property-keys)
+                                      (parse-properties v options)))
+                             ks)
                        not-empty)]
       (if (= 1 (count cs))
         (first cs)
-        (into [:and] cs)))))
+        (into [::m/and-constraint] cs)))))
 
 (defn constraint-from-ast
   []

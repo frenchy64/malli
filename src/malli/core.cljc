@@ -740,12 +740,8 @@
       (-fail! ::invalid constraint))))
 
 (comment
-  (constraint [:max 1] {::constraint-options (:string constraint-extensions)
-                        :registry (merge (base-constraints)
-                                         (base-schemas))})
-  (constraint [:min 1] {::constraint-options (:string constraint-extensions)
-                        :registry (merge (base-constraints)
-                                         (base-schemas))})
+  (constraint [:max 1] {::constraint-options (:string constraint-extensions)})
+  (constraint [:min 1] {::constraint-options (:string constraint-extensions)})
   )
 
 (declare constraint-extensions)
@@ -831,13 +827,13 @@
             (-validator [_]
               ;;TODO bounded counts
               (cond
-                (and min-count max-count)
-                (if (= min-count max-count)
-                  #(= min-count (miu/-safe-count %))
-                  #(<= min-count (miu/-safe-count %) max-count))
+                (::gen properties) any?
+                (and min-count max-count) (if (= min-count max-count)
+                                            #(= min-count (miu/-safe-count %))
+                                            #(<= min-count (miu/-safe-count %) max-count))
                 min-count #(<= min-count (miu/-safe-count %))
                 max-count #(<= (miu/-safe-count %) max-count)
-                :else (fn [_] true)))
+                :else any?))
             (-explainer [this path] (-fail! ::constraints-cannot-have-explainers this))
             (-parser [this] (-fail! ::constraints-cannot-be-parsed this))
             (-unparser [this] (-fail! ::constraints-cannot-be-unparsed this))
@@ -873,6 +869,24 @@
   ([extensions registry]
    (reduce-kv (fn [_ k v] (-register-constraints (mr/-schema registry k) v)) nil extensions)))
 
+(defn -constraint-from-properties [properties options]
+  (let [{:keys [parse-properties]} (::constraint-options options)
+        ks (-> parse-properties keys sort)]
+    (when-some [cs (-> []
+                       (into (keep #(when-some [[_ v] (find properties %)]
+                                      (schema ((get parse-properties %) v options) options)))
+                             ks)
+                       not-empty)]
+      (if (= 1 (count cs))
+        (first cs)
+        (schema (into [::and-constraint] cs) options)))))
+
+(comment
+  (-constraint-from-properties
+    {:max 1 :min 0}
+    {::constraint-options (:string constraint-extensions)})
+  )
+
 (defn -simple-schema [props]
   (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile constraint-extensions]
          :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props]
@@ -901,7 +915,7 @@
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [form (delay (-simple-form parent properties children identity options))
                   constraint-opts (delay (when constraint-extensions @constraint-extensions))
-                  constraint (delay (mc/-constraint-from-properties properties @constraint-opts options))
+                  constraint (delay (-constraint-from-properties properties (assoc options ::constraint-options @constraint-opts)))
                   cache (-create-cache options)]
               (-check-children! type properties children min max)
               ^{:type ::schema}
