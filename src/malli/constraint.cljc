@@ -11,7 +11,6 @@
         ks (-> parse-properties keys sort)]
     (when-some [cs (-> []
                        (into (keep #(when-some [[_ v] (find properties %)]
-                                      (prn "v" v ((get parse-properties %) v options))
                                       (constraint ((get parse-properties %) v options) options)))
                              ks)
                        not-empty)]
@@ -52,8 +51,13 @@
                                                       (-inner [this constraint path options] (m/-walk constraint this path options))
                                                       (-outer [_ constraint _ children _] (m/-set-children constraint children))))]
                           (m/-walk constraint constraint-walker (conj path ::constraint)
-                                   (assoc options ::constraint-walker constraint-walker))))
+                                   (assoc options
+                                          ::constraint-walker constraint-walker
+                                          ;; enables constraints that contain schemas, e.g., [:string {:edn :int}]
+                                          ::schema-walker walker))))
           schema (cond-> schema
+                   ;; don't try and guess the 'unparsed' properties we don't need to.
+                   ;; 
                    (and (some? constraint')
                         (not (identical? constraint constraint')))
                    (m/-update-properties (fn [properties]
@@ -163,12 +167,7 @@
             (-parser [this] (-fail! ::constraints-cannot-be-parsed this))
             (-unparser [this] (-fail! ::constraints-cannot-be-unparsed this))
             (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
-            (-walk [this walker path options]
-              (throw (ex-info "TODO" {}))
-              #_
-              (if-some [co @constraint-opts]
-                (-walk-leaf+constraints this walker path co options)
-                (-walk-leaf this walker path options)))
+            (-walk [this walker path options] (m/-walk-leaf this walker path options))
             (-properties [_] properties)
             (-options [_] options)
             (-children [_] children)
