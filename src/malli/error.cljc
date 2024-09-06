@@ -1,7 +1,6 @@
 (ns malli.error
   (:require [clojure.string :as str]
             [malli.constraint :as mc]
-            [malli.constraint.compound.humanize :as mch-compound]
             [malli.constraint.countable.humanize :as mch-cnt]
             [malli.core :as m]
             [malli.error.utils :refer [-flatten-errors]]
@@ -152,12 +151,13 @@
                              (if-not (string? value)
                                "should be a string"
                                ;;if constraints are enabled these problems are reported via ::m/constraint-violation
-                               (let [{:keys [min max]} (m/properties schema)]
-                                 (cond
-                                   (and min (= min max)) (str "should be " min " character" (when (not= 1 min) "s"))
-                                   (and min (< (count value) min)) (str "should be at least " min " character"
-                                                                        (when (not= 1 min) "s"))
-                                   max (str "should be at most " max " character" (when (not= 1 max) "s"))))))}}
+                               (when-not @m/constraint-extensions
+                                 (let [{:keys [min max]} (m/properties schema)]
+                                   (cond
+                                     (and min (= min max)) (str "should be " min " character" (when (not= 1 min) "s"))
+                                     (and min (< (count value) min)) (str "should be at least " min " character"
+                                                                          (when (not= 1 min) "s"))
+                                     max (str "should be at most " max " character" (when (not= 1 max) "s")))))))}}
    :int {:error/fn {:en (-pred-min-max-error-fn {:pred int?, :message "should be an integer"})}}
    :double {:error/fn {:en (-pred-min-max-error-fn {:pred double?, :message "should be a double"})}}
    :boolean {:error/message {:en "should be a boolean"}}

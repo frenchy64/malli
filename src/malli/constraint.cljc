@@ -163,6 +163,7 @@
                 min-count #(<= min-count (miu/-safe-count %))
                 max-count #(<= (miu/-safe-count %) max-count)
                 :else any?))
+            ;;TODO make explainer and hook it up to humanizer
             (-explainer [this path] (-fail! ::constraints-cannot-have-explainers this))
             (-parser [this] (-fail! ::constraints-cannot-be-parsed this))
             (-unparser [this] (-fail! ::constraints-cannot-be-unparsed this))
