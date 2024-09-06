@@ -3,7 +3,6 @@
   #?(:cljs (:require-macros malli.core))
   (:require #?(:clj [clojure.walk :as walk])
             [clojure.core :as c]
-            [clojure.set :as set]
             [malli.constraint.protocols :as mcp]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
@@ -2649,7 +2648,7 @@
   {:any (-any-schema)
    :some (-some-schema)
    :nil (-nil-schema)
-   :string (-string-schema) ;; FIXME implicitly requires (base-constraints) causing a breaking change
+   :string (-string-schema)
    :int (-int-schema)
    :float (-float-schema)
    :double (-double-schema)
@@ -2744,7 +2743,7 @@
    ::schema (-schema-schema {:raw true})})
 
 (defn default-schemas []
-  (merge (predicate-schemas) (class-schemas) (comparator-schemas) (type-schemas) (sequence-schemas) (base-schemas) (base-constraints)))
+  (merge (predicate-schemas) (class-schemas) (comparator-schemas) (type-schemas) (sequence-schemas) (base-schemas)))
 
 (def default-registry
   (let [strict (identical? mr/mode "strict")
