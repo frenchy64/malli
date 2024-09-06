@@ -769,9 +769,9 @@
 
 (defn -and-schema
   ([] (-and-schema {}))
-  ([{is-constraint :constraint}]
+  ([{:keys [constraint-type]}]
    ^{:type ::into-schema}
-   (let [type (if is-constraint ::and-constraint :and)]
+   (let [type (or constraint-type :and)]
      (reify IntoSchema
        (-type [_] type)
        (-type-properties [_])
@@ -787,7 +787,7 @@
            ^{:type ::schema}
            (reify
              mcp/Constraint
-             (-constraint? [_] is-constraint)
+             (-constraint? [_] constraint-type)
              Schema
              (-validator [_]
                (let [validators (-vmap -validator children)] (miu/-every-pred validators)))
@@ -810,8 +810,6 @@
              (-keep [_])
              (-get [_ key default] (get children key default))
              (-set [this key value] (-set-assoc-children this key value)))))))))
-
-(defn -and-constraint [] (-and-schema {:constraint true}))
 
 (defn -or-schema []
   ^{:type ::into-schema}

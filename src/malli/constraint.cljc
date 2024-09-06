@@ -96,6 +96,7 @@
                                              (f constraint' properties options)))))]
       (m/-outer walker schema path (m/-children schema) options))))
 
+
 (defn base-constraint-extensions []
   {:string {:-walk -walk-leaf+constraints
             :constraint-from-properties -constraint-from-properties
@@ -119,9 +120,9 @@
                                                        (and min max) [:and [:min min] [:max max]]
                                                        min [:min min]
                                                        :else [:max max])))
-                              ::m/and-constraint (fn [c opts]
-                                                   ;; TODO flatten :and?
-                                                   (into [:and] (m/children c)))}
+                              ::and-constraint (fn [c opts]
+                                                 ;; TODO flatten :and?
+                                                 (into [:and] (m/children c)))}
             :parse-properties {:max (fn [v opts]
                                       [::count-constraint 0 v])
                                :min (fn [v opts]
@@ -139,7 +140,7 @@
                                      (cond-> into-properties
                                        cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
                                        (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))
-                                 ::m/and-constraint
+                                 ::and-constraint
                                  (fn [c into-properties opts]
                                    (reduce (fn [into-properties]
                                              (throw (ex-info "TODO" {}))
@@ -212,10 +213,11 @@
             (-get [_ _ default] (throw (ex-info "TODO" {})))
             (-set [this key _] (throw (ex-info "TODO" {})))))))))
 
+(defn -and-constraint [] (m/-and-schema {:constraint-type ::and}))
 
 (defn base-constraints []
   {::count-constraint (-count-constraint)
-   ::m/and-constraint (m/-and-constraint)})
+   ::and-constraint (-and-constraint)})
 
 (defn register-constraint-extensions! [extensions] (swap! m/constraint-extensions #(merge-with into % extensions)))
 
