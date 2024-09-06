@@ -4,7 +4,6 @@
   (:require #?(:clj [clojure.walk :as walk])
             [clojure.core :as c]
             [clojure.set :as set]
-            [malli.constraint :as mc]
             [malli.constraint.protocols :as mcp]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
@@ -701,79 +700,24 @@
   (when-let [ns-name (some-> properties :namespace name)]
     (fn [x] (= (namespace x) ns-name))))
 
-(defn -options-with-malli-core-fns [options]
-  (assoc options
-         ::schema schema
-         ::validator validator
-         ::validate validate
-         ::-regex-op? -regex-op?
-         ::explain explain))
-
-(defn- -constraint-validator [properties type options]
-  (mc/-constraint-validator properties type (-options-with-malli-core-fns options)))
-
 ;;
 ;; Constraints
 ;;
 
-(defprotocol Constraint
-  (-constraint? [this])
-  (-intersect-constraint [this that]))
-
-(extend-protocol Constraint
-  Object
-  (-constraint? [_] false))
-
-(defn -constraint-from-properties [properties options]
-  (let [{:keys [parse-properties]} (::constraint-options options)
-        ks (-> parse-properties keys sort)]
-    (when-some [cs (-> []
-                       (into (keep #(when-some [[_ v] (find properties %)]
-                                      (schema ((get parse-properties %) v options) options)))
-                             ks)
-                       not-empty)]
-      (if (= 1 (count cs))
-        (first cs)
-        (schema (into [::and-constraint] cs) options)))))
-
-(defn constraint [?constraint options]
-  (if (-constraint? ?constraint)
-    ?constraint
-    (if (vector? ?constraint)
-      (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
-            n #?(:bb (count v) :clj (.count v), :cljs (count v))
-            ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
-            prs (-> options ::constraint-options :parse-constraint)
-            f (prs (first ?constraint))]
-        (when-not f
-          (-fail! ::missing-constraint-parser {:constraint ?constraint}))
-        (schema (if (or (nil? ?p) (map? ?p))
-                  (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
-                  (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))
-                options))
-      (-fail! ::invalid-constraint {:constraint ?constraint}))))
 
 (comment
   (constraint [:max 1] {::constraint-options (:string constraint-extensions)})
   (constraint [:min 1] {::constraint-options (:string constraint-extensions)})
   )
 
+(def constraint-extensions (atom {}))
 
 ;;
 ;; Schemas
 ;;
 
-(defprotocol ConstrainedSchema
-  (-register-constraints [this extensions])
-  (-constraint-extensions [this]))
-
-(defn register-constraint-extension!
-  ([extensions] (register-constraint-extension! extensions default-registry))
-  ([extensions registry]
-   (reduce-kv (fn [_ k v] (-register-constraints (mr/-schema registry k) v)) nil extensions)))
-
 (defn -simple-schema [props]
-  (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile constraint-extensions]
+  (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile]
          :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props]
     (if (fn? props)
       (do
@@ -781,13 +725,6 @@
         (-simple-schema {:compile (fn [c p _] (props c p))}))
       ^{:type ::into-schema}
       (reify
-        ConstrainedSchema
-        (-register-constraints [this extensions] (if constraint-extensions
-                                                   (swap! constraint-extensions #(merge-with into % extensions))
-                                                   (-fail! ::constraints-not-supported {:type type})))
-        (-constraint-extensions [this] (if constraint-extensions
-                                         @constraint-extensions
-                                         (-fail! ::constraints-not-supported {:type type})))
         AST
         (-from-ast [parent ast options] (from-ast parent ast options))
         IntoSchema
@@ -799,8 +736,9 @@
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [form (delay (-simple-form parent properties children identity options))
-                  constraint-opts (delay (when constraint-extensions @constraint-extensions))
-                  constraint (delay (-constraint-from-properties properties (assoc options ::constraint-options @constraint-opts)))
+                  constraint-opts (delay (get @constraint-extensions type))
+                  constraint (delay (when-some [{:keys [constraint-from-properties]} @constraint-opts]
+                                      (constraint-from-properties properties (assoc options ::constraint-options constraint-opts))))
                   cache (-create-cache options)]
               (-check-children! type properties children min max)
               ^{:type ::schema}
@@ -836,7 +774,7 @@
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
                 (-walk [this walker path options]
-                  (if-some [co @constraint-opts]
+                  (if-some [co constraint-opts]
                     (-walk-leaf+constraints this walker path co options)
                     (-walk-leaf this walker path options)))
                 (-properties [_] properties)
@@ -854,8 +792,7 @@
 (defn -nil-schema [] (-simple-schema {:type :nil, :pred nil?}))
 (defn -any-schema [] (-simple-schema {:type :any, :pred any?}))
 (defn -some-schema [] (-simple-schema {:type :some, :pred some?}))
-(defn -string-schema [] (-simple-schema {:type :string, :pred string?, :property-pred (-min-max-pred count)
-                                         :constraint-extensions (atom nil)}))
+(defn -string-schema [] (-simple-schema {:type :string, :pred string?, :property-pred (-min-max-pred count), :constraint-extensions (atom nil)}))
 (defn -int-schema [] (-simple-schema {:type :int, :pred int?, :property-pred (-min-max-pred nil)}))
 (defn -float-schema [] (-simple-schema {:type :float, :pred float?, :property-pred (-min-max-pred nil)}))
 (defn -double-schema [] (-simple-schema {:type :double, :pred double?, :property-pred (-min-max-pred nil)}))
@@ -885,7 +822,7 @@
                                     #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
            ^{:type ::schema}
            (reify
-             Constraint
+             mcp/Constraint
              (-constraint? [_] is-constraint)
              Schema
              (-validator [_]

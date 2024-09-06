@@ -4,9 +4,11 @@
             [malli.constraint.compound.validate :as mcv-comp]
             [malli.constraint.countable.validate :as mcv-cnt]
             [malli.constraint.string :as mc-str]
+            [malli.constraint.protocols :as mcp]
             [malli.impl.util :as miu :refer [-fail!]]
             [malli.registry :as mr]
-            [malli.core :as m]))
+            [malli.core :as m])
+  #?(:clj (:import (clojure.lang IPersistentVector))))
 
 ;; TODO :qualified-keyword + :namespace
 ;; TODO add to options
@@ -36,29 +38,35 @@
         (cond-> op'
           (not= op op') (recur (conj seen op)))))))
 
-(defn ->constraint-opts [type-or-map]
-  (if (map? type-or-map)
-    type-or-map
-    (get (default-schema-constraints) type-or-map)))
+(defn -constraint-from-properties [properties options]
+  (let [{:keys [parse-properties]} (::m/constraint-options options)
+        ks (-> parse-properties keys sort)]
+    (when-some [cs (-> []
+                       (into (keep #(when-some [[_ v] (find properties %)]
+                                      (m/schema ((get parse-properties %) v options) options)))
+                             ks)
+                       not-empty)]
+      (if (= 1 (count cs))
+        (first cs)
+        (m/schema (into [::m/and-constraint] cs) options)))))
 
-(defn -constraint-validator [constraint constraint-opts options]
-  (let [{:keys [validator-constraint-types] :as constraint-opts} (->constraint-opts constraint-opts)
-        validators (default-validators)]
-    (letfn [(-constraint-validator [constraint]
-              (let [op (-resolve-op constraint validator-constraint-types options)]
-                (if-some [custom-validator (validators op)]
-                  (custom-validator {:constraint (if (= :any op) [:any] constraint)
-                                     :constraint-opts constraint-opts
-                                     ;;TODO other arities
-                                     :constraint-validator (fn ([constraint] (-constraint-validator constraint)))}
-                                    options)
-                  (-fail! ::unknown-constraint {:constraint constraint}))))]
-      (-constraint-validator constraint))))
-
-(defn register-constraint-extension!
-  ([extensions] (register-constraint-extension! extensions default-registry))
-  ([extensions registry]
-   (reduce-kv (fn [_ k v] (-register-constraints (mr/-schema registry k) v)) nil extensions)))
+(defn constraint [?constraint options]
+  (if (mcp/-constraint? ?constraint)
+    ?constraint
+    (if (vector? ?constraint)
+      (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
+            n #?(:bb (count v) :clj (.count v), :cljs (count v))
+            op #?(:clj (.nth v 0), :cljs (nth v 0))
+            ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
+            prs (or (-> options ::m/constraint-options :parse-constraint)
+                    (-fail! ::missing-parse-constraint-options {:constraint ?constraint}))
+            f (or (prs op)
+                  (-fail! ::missing-constraint-parser {:constraint ?constraint}))]
+        (m/schema (if (or (nil? ?p) (map? ?p))
+                    (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
+                    (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))
+                  options))
+      (-fail! ::invalid-constraint {:constraint ?constraint}))))
 
 (comment
   (-constraint-from-properties
@@ -70,32 +78,31 @@
   []
   (throw (ex-info "TODO" {})))
 
-(declare constraint-extensions)
-
-(def constraint-extensions
-  {:string {:parse-constraint {:max (fn [{:keys [properties children]} opts]
-                                      (-check-children! :max properties children 1 1)
+(defn constraint-extensions []
+  {:string {:constraint-from-properties -constraint-from-properties
+            :parse-constraint {:max (fn [{:keys [properties children]} opts]
+                                      (m/-check-children! :max properties children 1 1)
                                       [::count-constraint 0 (first children)])
                                :min (fn [{:keys [properties children]} opts]
-                                      (-check-children! :min properties children 1 1)
+                                      (m/-check-children! :min properties children 1 1)
                                       [::count-constraint (first children) nil])
                                :gen/max (fn [{:keys [properties children]} opts]
-                                          (-check-children! :gen/max properties children 1 1)
+                                          (m/-check-children! :gen/max properties children 1 1)
                                           [::count-constraint {::gen true} 0 (first children)])
                                :gen/min (fn [{:keys [properties children]} opts]
-                                          (-check-children! :gen/min properties children 1 1)
+                                          (m/-check-children! :gen/min properties children 1 1)
                                           [::count-constraint {::gen true} (first children) nil])
                                :and (fn [{:keys [properties children]} opts]
                                       (into [::and nil] children))}
             :constraint-form {::count-constraint (fn [c opts]
-                                                   (let [[min max] (-children c)]
+                                                   (let [[min max] (m/children c)]
                                                      (cond
                                                        (and min max) [:and [:min min] [:max max]]
                                                        min [:min min]
                                                        :else [:max max])))
                               ::m/and-constraint (fn [c opts]
                                                    ;; TODO flatten :and?
-                                                   (into [:and] (-children c)))}
+                                                   (into [:and] (m/children c)))}
             :parse-properties {:max (fn [v opts]
                                       [::count-constraint 0 v])
                                :min (fn [v opts]
@@ -122,17 +129,17 @@
 
 (defn -count-constraint []
   (let [type ::count-constraint]
-    ^{:type ::into-schema}
+    ^{:type ::m/into-schema}
     (reify
-      AST
+      m/AST
       (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
-      IntoSchema
+      m/IntoSchema
       (-type [_] ::count-constraint)
       (-type-properties [_])
       (-properties-schema [_ _])
       (-children-schema [_ _])
       (-into-schema [parent properties children options]
-        (-check-children! type properties children 2 2)
+        (m/-check-children! type properties children 2 2)
         (let [[min-count max-count] children
               ;; unclear if we want to enforce (<= min-count max-count)
               ;; it's a perfectly well formed constraint that happens to satisfy no values
@@ -142,15 +149,16 @@
               _ (when-not (or (nil? max-count)
                               (nat-int? max-count))
                   (-fail! ::count-constraint-max {:max max-count}))
-              form (delay (-simple-form parent properties children identity options))
-              cache (-create-cache options)]
-          ^{:type ::schema}
+              ;;TODO use :constraint-form
+              form (delay (m/-simple-form parent properties children identity options))
+              cache (m/-create-cache options)]
+          ^{:type ::m/schema}
           (reify
-            Constraint
+            mcp/Constraint
             (-constraint? [_] true)
-            AST
+            m/AST
             (-to-ast [this _] (throw (ex-info "TODO" {})))
-            Schema
+            m/Schema
             (-validator [_]
               ;;TODO bounded counts
               (cond
@@ -176,9 +184,9 @@
             (-children [_] children)
             (-parent [_] parent)
             (-form [_] @form)
-            Cached
+            m/Cached
             (-cache [_] cache)
-            LensSchema
+            m/LensSchema
             (-keep [_] (throw (ex-info "TODO" {})))
             (-get [_ _ default] (throw (ex-info "TODO" {})))
             (-set [this key _] (throw (ex-info "TODO" {})))))))))
@@ -188,6 +196,11 @@
   {::count-constraint (-count-constraint)
    ::m/and-constraint (m/-and-constraint)})
 
-(defn activate-base-constraints!
-  ([] (mr/swap-default-registry! activate-base-constraints!))
-  ([?registry] (->> ?registry (mr/composite-registry (base-constraints)) (register-constraint-extension! constraint-extensions))))
+(defn register-constraint-extensions! [extensions] (swap! m/constraint-extensions #(merge-with into % extensions)))
+
+(let [base-ext! (delay (register-constraint-extensions! (constraint-extensions)))]
+  (defn activate-base-constraints!
+    ([] (mr/swap-default-registry! activate-base-constraints!))
+    ([?registry]
+     @base-ext! ;; hmm this will break the default registry if it doesn't also include (base-constraints)
+     (mr/composite-registry (base-constraints) ?registry))))
