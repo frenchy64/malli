@@ -106,20 +106,17 @@
                                :and (fn [vs opts]
                                       (into [::and nil] vs))}
             :unparse-properties {::count-constraint
-                                 (fn [c into-properties opts]
+                                 (fn [c into-properties constraint-opts]
                                    (let [[cmin cmax] (m/children c)
                                          c-properties (m/properties c)]
                                      (cond-> into-properties
                                        cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
                                        (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))
                                  ::and-constraint
-                                 (fn [c into-properties opts]
-                                   (reduce (fn [into-properties]
-                                             (throw (ex-info "TODO" {}))
-                                             (or (::unparse-properties c into-properties opts)
-                                                 ))
-                                           into-properties))
-                                 }}})
+                                 (fn [c into-properties {:keys [unparse-properties] :as constraint-opts}]
+                                   (reduce (fn [into-properties c]
+                                             (unparse-properties c into-properties opts))
+                                           into-properties (m/children c)))}}})
 
 (defn -count-constraint []
   (let [type ::count-constraint]

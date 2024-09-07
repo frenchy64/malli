@@ -104,6 +104,8 @@
 (defn -ast? [x] (#?(:clj instance?, :cljs implements?) malli.core.AST x))
 (defn -transformer? [x] (#?(:clj instance?, :cljs implements?) malli.core.Transformer x))
 
+(defonce constraint-extensions (atom {}))
+
 (extend-type #?(:clj Object, :cljs default)
   FunctionSchema
   (-function-schema? [_] false)
@@ -368,6 +370,18 @@
 
 (defn -update-properties [schema f & args]
   (-set-properties schema (not-empty (apply f (-properties schema) args))))
+
+(defn -set-constraint
+  ([schema constraint] (-set-constraint schema constraint (get @constraint-extensions (-type schema))))
+  ([schema constraint {:keys [parse-properties unparse-properties] :as constraint-opts}]
+   (-update-properties schema
+                       (fn [properties]
+                         (let [f (or (get unparse-properties (-type constraint))
+                                     (-fail! ::unsupported-constraint {:schema schema :constraint constraint}))]
+                           (f constraint (apply dissoc properties (keys parse-properties)) constraint-opts))))))
+
+(defn -update-constraint [schema f]
+  (-set-constraint schema (mcp/-get-constraint schema)))
 
 (defn -update-options [schema f]
   (-into-schema (-parent schema) (-properties schema) (-children schema) (f (-options schema))))
@@ -674,8 +688,6 @@
   (when-let [ns-name (some-> properties :namespace name)]
     (fn [x] (= (namespace x) ns-name))))
 
-(defonce constraint-extensions (atom {}))
-
 ;;
 ;; Schemas
 ;;
@@ -707,6 +719,10 @@
               (-check-children! type properties children min max)
               ^{:type ::schema}
               (reify
+                mcp/ConstrainedSchema
+                (-constrained-schema? [this] (boolean @constraint-opts))
+                (-get-constraint [this] @constraint)
+                (-set-constraint [this c] (-set-constraint this c @constraint-opts))
                 AST
                 (-to-ast [this _] (to-ast this))
                 Schema
