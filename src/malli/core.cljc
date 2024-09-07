@@ -378,7 +378,7 @@
                        (fn [properties]
                          (let [f (or (get unparse-properties (-type constraint))
                                      (-fail! ::unsupported-constraint {:schema schema :constraint constraint}))]
-                           (f constraint (apply dissoc properties (keys parse-properties)) constraint-opts))))))
+                           (f constraint (apply dissoc properties (keys parse-properties)) {::constraint-options constraint-opts}))))))
 
 (defn -update-constraint [schema f]
   (-set-constraint schema (mcp/-get-constraint schema)))
@@ -712,9 +712,10 @@
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [form (delay (-simple-form parent properties children identity options))
-                  constraint-opts (delay (get @constraint-extensions type))
+                  constraint-opts (delay (or (get (::constraint-options options) type)
+                                             (get @constraint-extensions type)))
                   constraint (delay (when-some [{:keys [constraint-from-properties]} @constraint-opts]
-                                      (constraint-from-properties properties (assoc options ::constraint-options constraint-opts))))
+                                      (constraint-from-properties properties (assoc options ::constraint-options @constraint-opts))))
                   cache (-create-cache options)]
               (-check-children! type properties children min max)
               ^{:type ::schema}

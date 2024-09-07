@@ -32,6 +32,7 @@
                                       (constraint ((get parse-properties %) v options) options)))
                              ks)
                        not-empty)]
+      ;; TODO return ::true-constraint
       (if (= 1 (count cs))
         (first cs)
         (constraint (into [::m/and-constraint] cs) options)))))
@@ -106,14 +107,14 @@
                                :and (fn [vs opts]
                                       (into [::and nil] vs))}
             :unparse-properties {::count-constraint
-                                 (fn [c into-properties constraint-opts]
+                                 (fn [c into-properties _]
                                    (let [[cmin cmax] (m/children c)
                                          c-properties (m/properties c)]
                                      (cond-> into-properties
                                        cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
                                        (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))
                                  ::and-constraint
-                                 (fn [c into-properties {:keys [unparse-properties] :as constraint-opts}]
+                                 (fn [c into-properties {{:keys [unparse-properties]} ::m/constraint-options :as opts}]
                                    (reduce (fn [into-properties c]
                                              (unparse-properties c into-properties opts))
                                            into-properties (m/children c)))}}})
@@ -178,11 +179,53 @@
             (-get [_ _ default] (throw (ex-info "TODO" {})))
             (-set [this key _] (throw (ex-info "TODO" {})))))))))
 
+(defn -true-constraint []
+  (let [type ::true-constraint]
+    ^{:type ::m/into-schema}
+    (reify
+      m/AST
+      (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
+      m/IntoSchema
+      (-type [_] ::count-constraint)
+      (-type-properties [_])
+      (-properties-schema [_ _])
+      (-children-schema [_ _])
+      (-into-schema [parent properties children options]
+        (m/-check-children! type properties children 0 0)
+        (let [form (delay (m/-simple-form parent properties children identity options))
+              cache (m/-create-cache options)]
+          ^{:type ::m/schema}
+          (reify
+            mcp/Constraint
+            (-constraint? [_] true)
+            m/AST
+            (-to-ast [this _] (throw (ex-info "TODO" {})))
+            m/Schema
+            (-validator [_] any?)
+            ;;TODO make explainer and hook it up to humanizer
+            (-explainer [this path] (-fail! ::constraints-cannot-have-explainers this))
+            (-parser [this] (-fail! ::constraints-cannot-be-parsed this))
+            (-unparser [this] (-fail! ::constraints-cannot-be-unparsed this))
+            (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
+            (-walk [this walker path options] (m/-walk-leaf this walker path options))
+            (-properties [_] properties)
+            (-options [_] options)
+            (-children [_] children)
+            (-parent [_] parent)
+            (-form [_] @form)
+            m/Cached
+            (-cache [_] cache)
+            m/LensSchema
+            (-keep [_] (throw (ex-info "TODO" {})))
+            (-get [_ _ default] (throw (ex-info "TODO" {})))
+            (-set [this key _] (throw (ex-info "TODO" {})))))))))
+
 (defn -and-constraint [] (m/-and-schema {:constraint-type ::and}))
 
 (defn base-constraints []
   {::count-constraint (-count-constraint)
-   ::and-constraint (-and-constraint)})
+   ::and-constraint (-and-constraint)
+   ::true-constraint (-true-constraint)})
 
 (defn register-constraint-extensions! [extensions] (swap! m/constraint-extensions #(merge-with into % extensions)))
 
