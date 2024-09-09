@@ -114,8 +114,7 @@
   (gen-one-of
     (mapv (fn [solution]
             (when-some [unsupported-keys (not-empty (disj (set (keys solution))
-                                                          :min-count :max-count
-                                                          :string-class))]
+                                                          :min-count :max-count))]
               (m/-fail! ::unsupported-string-constraint-solution {:schema schema :solution solution}))
             (let [{min :min-count
                    max :max-count
@@ -127,35 +126,7 @@
                                  min (gen/fmap str/join (gen-vector-min char-gen min options))
                                  max (gen/fmap str/join (gen/vector char-gen 0 max))
                                  :else (gen/fmap str/join (gen/vector char-gen))))]
-              (if (empty? string-class)
-                (string-gen min max gen/char-alphanumeric)
-                (let [_ (when (< 1 (count string-class))
-                          ;;WIP
-                          (m/-fail! ::unsupported-string-class-combination
-                                    {:schema schema
-                                     :string-class string-class}))
-                      [the-string-class argset] (first string-class)]
-                  (case the-string-class
-                    (:non-numeric :alpha) (string-gen min max gen/char-alpha)
-                    :alphanumeric (string-gen min max gen/char-alphanumeric)
-                    (:not-alpha :non-alpha :numeric) (string-gen min max (gen/fmap char (gen/choose 48 57)))
-                    :includes (let [s (apply str argset)
-                                    scount (count s)
-                                    min-s-times 1
-                                    max-s-times (some-> max (quot scount))]
-                                (when (some->> max-s-times (> min-s-times))
-                                  (m/-fail! ::cannot-fit-includes-string
-                                            {:schema schema
-                                             :max max
-                                             :max-s-times max-s-times}))
-                                (gen/bind
-                                  (gen/large-integer* {:min min-s-times :max max-s-times})
-                                  (fn [times]
-                                    (let [max (some-> max (- (* times scount)))
-                                          _ (when max (assert (nat-int? max)))
-                                          min (some-> min (- (* times scount)) (cc/max 0))]
-                                      (gen/fmap #(apply str % (repeat times s))
-                                                (string-gen min max gen/char-alphanumeric)))))))))))
+              (empty? string-class)))
           solutions)))
 
 (defn- -coll-gen [schema f options]
