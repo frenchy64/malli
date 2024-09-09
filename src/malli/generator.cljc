@@ -106,9 +106,7 @@
   (solver/-constraint-solutions
     constraint constraint-opts (m/-options-with-malli-core-fns options)))
 
-(defn- -string-gen-min-max [min max char-gen])
-
-(defn- -string-gen [schema solutions options]
+(defn- -string-gen-constrained [schema solutions options]
   ;(prn "solutions" solutions)
   ;; preserve error message when :max < :gen/max. unclear if it's still a good idea
   ;; to enforce with constraints, since multiple maxes are allowed and :max-count is the min of all of them.
@@ -140,6 +138,17 @@
       min (gen/fmap str/join (gen-vector-min gen/char-alphanumeric min options))
       max (gen/fmap str/join (gen/vector gen/char-alphanumeric 0 max))
       :else gen/string-alphanumeric)))
+
+(defn- -string-gen [schema options]
+  (if-not (mcp/-constrained-schema? schema)
+    (-string-gen-legacy schema options)
+    (let [constraint (mcp/-get-constraint schema)
+          solutions (-constraint-solutions constraint (m/type schema) options)]
+      ;(prn "solutions" solutions)
+      (when (empty? solutions)
+        (m/-fail! ::unsatisfiable-string-constraint {:schema schema
+                                                     :constraint constraint}))
+      (-string-gen-constrained schema solutions options))))
 
 (defn- -coll-gen [schema f options]
   (let [{:keys [min max]} (-min-max schema options)
@@ -511,16 +520,7 @@
 (defmethod -schema-generator :any [_ _] (ga/gen-for-pred any?))
 (defmethod -schema-generator :some [_ _] gen/any-printable)
 (defmethod -schema-generator :nil [_ _] nil-gen)
-(defmethod -schema-generator :string [schema options]
-  (if-not (mcp/-constrained-schema? schema)
-    (-string-gen-legacy schema options)
-    (let [constraint (mcp/-get-constraint schema)
-          solutions (-constraint-solutions constraint (m/type schema) options)]
-      ;(prn "solutions" solutions)
-      (when (empty? solutions)
-        (m/-fail! ::unsatisfiable-string-constraint {:schema schema
-                                                     :constraint constraint}))
-      (-string-gen schema solutions options))))
+(defmethod -schema-generator :string [schema options] (-string-gen schema options))
 
 (defmethod -schema-generator :int [schema options] (gen/large-integer* (-min-max schema options)))
 (defmethod -schema-generator :double [schema options]
