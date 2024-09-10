@@ -1,5 +1,6 @@
 (ns malli.error
   (:require [clojure.string :as str]
+            [malli.constraint.protocols :as mcp]
             [malli.core :as m]
             [malli.util :as mu]))
 
@@ -99,7 +100,7 @@
                              (if-not (string? value)
                                "should be a string"
                                ;;if constraints are enabled these problems are reported via ::m/constraint-violation
-                               (when-not (cmp/-constrained-schema? schema)
+                               (when-not (mcp/-constrained-schema? schema)
                                  (let [{:keys [min max]} (m/properties schema)]
                                    (cond
                                      (and min (= min max)) (str "should be " min " character" (when (not= 1 min) "s"))

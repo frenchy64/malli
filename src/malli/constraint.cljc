@@ -6,23 +6,28 @@
             [malli.registry :as mr])
   #?(:clj (:import (clojure.lang IPersistentVector))))
 
-(defn constraint [?constraint options]
-  (if (mcp/-constraint? ?constraint)
-    ?constraint
-    (if (vector? ?constraint)
-      (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
-            n #?(:bb (count v) :clj (.count v), :cljs (count v))
-            op #?(:clj (.nth v 0), :cljs (nth v 0))
-            ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
-            prs (or (-> options ::m/constraint-options :parse-constraint)
-                    (-fail! ::missing-parse-constraint-options {:constraint ?constraint}))
-            f (or (prs op)
-                  (-fail! ::missing-constraint-parser {:constraint ?constraint}))]
-        (m/schema (if (or (nil? ?p) (map? ?p))
-                    (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
-                    (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))
-                  options))
-      (-fail! ::invalid-constraint {:constraint ?constraint}))))
+(defn constraint
+  ([?constraint] (constraint ?constraint nil))
+  ([?constraint options]
+   (cond
+     (mcp/-constraint? ?constraint) ?constraint
+     ;; reserving for now for "contains" constraints for :map
+     (keyword? ?constraint) (-fail! ::todo-keyword-constraints {:constraint ?constraint})
+     (vector? ?constraint) (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
+                                 n #?(:bb (count v) :clj (.count v), :cljs (count v))
+                                 op #?(:clj (.nth v 0), :cljs (nth v 0))
+                                 ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
+                                 prs (or (-> options ::m/constraint-options :parse-constraint)
+                                         (-fail! ::missing-parse-constraint-options {:constraint ?constraint}))
+                                 f (or (if prs
+                                         (prs op)
+                                         #_(fn [{:keys [properties children]} _] (into [op properties] children)))
+                                       (-fail! ::missing-constraint-parser {:constraint ?constraint}))]
+                             (m/schema (if (or (nil? ?p) (map? ?p))
+                                         (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
+                                         (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))
+                                       options))
+     :else (-fail! ::invalid-constraint {:constraint ?constraint}))))
 
 (defn -constraint-from-properties [properties options]
   (let [{:keys [parse-properties]} (::m/constraint-options options)
@@ -90,7 +95,9 @@
             :constraint-form {::count-constraint (fn [c opts]
                                                    (let [[min max] (m/children c)]
                                                      (cond
-                                                       (and min max) [:and [:min min] [:max max]]
+                                                       (and min max) (if (zero? min)
+                                                                       [:max max]
+                                                                       [:and [:min min] [:max max]])
                                                        min [:min min]
                                                        :else [:max max])))
                               ::and-constraint (fn [c opts]
@@ -119,6 +126,12 @@
                                              (unparse-properties c into-properties opts))
                                            into-properties (m/children c)))}}})
 
+(defn -constraint-form [constraint {{:keys [constraint-form]} ::m/constraint-options :as options}]
+  (let [t (m/type constraint)
+        f (or (get constraint-form t)
+              (-fail! ::no-constraint-form {:type t}))]
+    (f constraint options)))
+
 (defn -count-constraint []
   (let [type ::count-constraint]
     ^{:type ::m/into-schema}
@@ -126,7 +139,7 @@
       m/AST
       (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
       m/IntoSchema
-      (-type [_] ::count-constraint)
+      (-type [_] type)
       (-type-properties [_])
       (-properties-schema [_ _])
       (-children-schema [_ _])
@@ -142,7 +155,6 @@
                               (nat-int? max-count))
                   (-fail! ::count-constraint-max {:max max-count}))
               ;;TODO use :constraint-form
-              form (delay (m/-simple-form parent properties children identity options))
               cache (m/-create-cache options)]
           ^{:type ::m/schema}
           (reify
@@ -171,7 +183,7 @@
             (-options [_] options)
             (-children [_] children)
             (-parent [_] parent)
-            (-form [_] @form)
+            (-form [this] (-constraint-form this options))
             m/Cached
             (-cache [_] cache)
             m/LensSchema
@@ -186,7 +198,7 @@
       m/AST
       (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
       m/IntoSchema
-      (-type [_] ::count-constraint)
+      (-type [_] type)
       (-type-properties [_])
       (-properties-schema [_ _])
       (-children-schema [_ _])

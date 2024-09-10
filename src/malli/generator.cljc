@@ -104,7 +104,7 @@
 
 (defn- -constraint-solutions [constraint constraint-opts options]
   (solver/-constraint-solutions
-    constraint constraint-opts (m/-options-with-malli-core-fns options)))
+    constraint constraint-opts options))
 
 (defn- -string-gen-constrained [schema solutions options]
   ;(prn "solutions" solutions)

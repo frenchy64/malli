@@ -1,6 +1,7 @@
 (ns malli.constraint.solver
   (:require [clojure.math.combinatorics :as comb]
             [clojure.set :as set]
+            [malli.core :as m]
             [malli.constraint :as mc]
             [malli.impl.util :as miu]))
 
@@ -88,24 +89,16 @@ collected."
 
 (defn -constraint-solutions [constraint constraint-opts options]
   {:post [(every? map? %)]}
-  (let [{:keys [generator-constraint-types] :as constraint-opts} (mc/->constraint-opts constraint-opts)
-        ;;TODO parameterize
-        solvers (default-constraint-solvers)]
-    (letfn [(-constraint-solutions
-              ([constraint] (-constraint-solutions constraint options))
-              ([constraint options]
-               (lazy-seq
-                 (let [op (mc/-resolve-op constraint generator-constraint-types options)]
-                   (if-some [solver (solvers op)]
-                     (solver {:constraint (if (= :any op) [:any] constraint)
-                              :constraint-opts constraint-opts}
-                             options)
-                     (case op
-                       :max-count [{:max-count (second constraint)}]
-                       :min-count (let [n (nth constraint 1)]
-                                    (when-not (nat-int? n)
-                                      (miu/-fail! ::min-must-be-non-negative))
-                                    [{:min-count n}])
-                       :and (apply -conj-solutions (map -constraint-solutions (unchunk (next constraint))))
-                       (miu/-fail! ::unknown-constraint {:constraint constraint})))))))]
-     (-constraint-solutions constraint))))
+  (letfn [(-constraint-solutions
+            ([constraint] (-constraint-solutions constraint options))
+            ([constraint options]
+             (lazy-seq
+               (case (m/type constraint)
+                 :max-count [{:max-count (second constraint)}]
+                 :min-count (let [n (nth constraint 1)]
+                              (when-not (nat-int? n)
+                                (miu/-fail! ::min-must-be-non-negative))
+                              [{:min-count n}])
+                 :and (apply -conj-solutions (map -constraint-solutions (unchunk (next constraint))))
+                 (miu/-fail! ::unknown-constraint {:constraint constraint})))))]
+    (-constraint-solutions constraint)))
