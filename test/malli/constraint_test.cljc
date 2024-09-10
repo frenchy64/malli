@@ -72,11 +72,35 @@
   #_(is (= ::FIXME (m/ast (mc/constraint [:max 1] (string-context)))))
   (is (= [:and [:min 1] [:max 1]] (m/form (mc/constraint [:and [:min 1] [:max 1]] (string-context)))))
   (is (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-context)) "a"))
+  (is (m/validate (m/schema [:string {:min 1 :max 1}] (constraint-options)) "a"))
+  (is (m/validate (m/schema [:string {:and [[:min 1] [:max 1]]}] (constraint-options)) "a"))
   (is (not (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-context)) "")))
   (is (= '({:path [], :in [], :schema [:min 1], :value "" :type ::mc/count-limits})
          (errors (m/explain (mc/constraint [:min 1] (string-context)) ""))))
   (is (= '({:path [0], :in [], :schema [:min 1], :value "" :type ::mc/count-limits})
          (errors (m/explain (mc/constraint [:and [:min 1] [:max 1]] (string-context)) ""))))
+  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:min 5], :value "", :type :malli.constraint/count-limits}]
+         (errors
+           (m/explain (m/schema [:string {:min 5}]
+                                (constraint-options))
+                      ""))))
+  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:max 1], :value "20", :type :malli.constraint/count-limits}]
+         (errors
+           (m/explain (m/schema [:string {:max 1}]
+                                (constraint-options))
+                      "20"))))
+  ;; 1 path means the second child of [:and [:max 10] [:min 5]]. this is the canonical represent of the constraint yielded
+  ;; from {:min 5 :max 10} after mc/-constraint-from-properties sorts the constraint keys and pours them into an :and.
+  (is (= [{:path [:malli.constraint/constraint 1], :in [], :schema [:min 5], :value "", :type :malli.constraint/count-limits}]
+         (errors
+           (m/explain (m/schema [:string {:min 5 :max 10}]
+                                (constraint-options))
+                      ""))
+         ;;FIXME
+         (errors
+           (m/explain (m/schema [:string {:and [[:max 10] [:min 5]]}]
+                                (constraint-options))
+                      ""))))
   (is (= [{:path [:malli.constraint/constraint 1], :in [], :schema [:min 1], :value "", :type :malli.constraint/count-limits}]
          (errors
            (m/explain (m/schema [:string {:min 1 :max 1}]

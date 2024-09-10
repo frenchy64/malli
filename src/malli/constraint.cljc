@@ -83,8 +83,7 @@
            [::true-constraint])})
 
 (defn default-parse-properties []
-  {:and (fn [{:keys [properties children]} opts]
-          (into [:and] children))})
+  {:and (fn [{:keys [children]} _] (into [:and] children))})
 
 (defn default-unparse-properties []
   {::and
