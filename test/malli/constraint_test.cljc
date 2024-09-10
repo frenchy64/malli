@@ -69,4 +69,7 @@
   (is (= [:and [:min 1] [:max 1]] (m/form (mc/constraint [:and [:min 1] [:max 1]] (string-options)))))
   (is (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-options)) "a"))
   (is (not (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-options)) "")))
+  (is (m/explain (mc/constraint [:and [:min 1] [:max 1]] (string-options)) ""))
+  (is (m/explain (mc/constraint [:and [:min 1] [:max 1]] (string-options)) "123"))
+  (is (m/explain (m/schema [:string {:min 1 :max 1}]) ""))
   )

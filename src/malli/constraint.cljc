@@ -184,19 +184,24 @@
               m/AST
               (-to-ast [this _] (m/-to-value-ast this))
               m/Schema
+              ;;TODO bounded counts
               (-validator [_]
                 (cond
                   (and min-count max-count) (if (= min-count max-count)
                                               #(= min-count (miu/-safe-count %))
-                                              ;;TODO bounded counts
-                                              #(<= min-count (miu/-safe-count %) max-count))
-                  ;;TODO bounded counts
+                                              (if (<= min-count max-count)
+                                                #(<= min-count (miu/-safe-count %) max-count)
+                                                (fn [_] false)))
                   (pos? min-count) #(<= min-count (miu/-safe-count %))
-                  ;;TODO bounded counts
                   max-count #(<= (miu/-safe-count %) max-count)
                   :else any?))
               ;;TODO make explainer and hook it up to humanizer
-              (-explainer [this path] (-fail! ::constraints-cannot-have-explainers this))
+              (-explainer [this path]
+                (let [pred (m/-validator this)]
+                  (fn [x in acc]
+                    (cond-> acc
+                      (not (pred x))
+                      (conj (miu/-error (conj path ::count) in this x))))))
               (-parser [this] (-fail! ::constraints-cannot-be-parsed this))
               (-unparser [this] (-fail! ::constraints-cannot-be-unparsed this))
               (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
