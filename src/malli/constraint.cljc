@@ -31,6 +31,7 @@
 
 (defn -constraint-from-properties [properties options]
   (let [{:keys [parse-properties]} (::m/constraint-options options)
+        ;; important for deterministic m/explain ordering
         ks (-> parse-properties keys sort)]
     (when-some [cs (-> []
                        (into (keep #(when-some [[_ v] (find properties %)]
@@ -38,9 +39,10 @@
                              ks)
                        not-empty)]
       ;; TODO return ::true-constraint
-      (if (= 1 (count cs))
-        (first cs)
-        (constraint (into [::m/and-constraint] cs) options)))))
+      (case (count cs)
+        0 (constraint [::true] options)
+        1 (first cs)
+        (constraint (into [::and nil] cs) options)))))
 
 (comment
   (-constraint-from-properties
@@ -185,6 +187,8 @@
               (-to-ast [this _] (m/-to-value-ast this))
               m/Schema
               ;;TODO bounded counts
+              ;; idea: [:string {:or [[:min 0] [:min 5]]}] could just count once somehow
+              ;; as opposed to [:or [:string {:min 1}] [:string {:min 5}]] which would be more difficult?
               (-validator [_]
                 (cond
                   (and min-count max-count) (if (= min-count max-count)
@@ -255,10 +259,11 @@
             m/Schema
             (-validator [_] any?)
             ;;TODO make explainer and hook it up to humanizer
-            (-explainer [this path] (-fail! ::constraints-cannot-have-explainers this))
-            (-parser [this] (-fail! ::constraints-cannot-be-parsed this))
-            (-unparser [this] (-fail! ::constraints-cannot-be-unparsed this))
-            (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
+            (-explainer [this path] (fn [x in acc] acc))
+            (-parser [this] identity)
+            (-unparser [this] identity)
+            (-transformer [this transformer method options]
+              (m/-intercepting (m/-value-transformer transformer this method options)))
             (-walk [this walker path options] (m/-walk-leaf this walker path options))
             (-properties [_] properties)
             (-options [_] options)
@@ -268,9 +273,9 @@
             m/Cached
             (-cache [_] cache)
             m/LensSchema
-            (-keep [_] (throw (ex-info "TODO" {})))
-            (-get [_ _ default] (throw (ex-info "TODO" {})))
-            (-set [this key _] (throw (ex-info "TODO" {})))))))))
+            (-keep [_])
+            (-get [_ _ default] default)
+            (-set [this key _] (m/-fail! ::non-associative-constraint {:schema this, :key key}))))))))
 
 (defn- -flatten-and [cs]
   (eduction (mapcat #(if (= ::and (m/type %))
