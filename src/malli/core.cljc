@@ -712,18 +712,18 @@
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [form (delay (-simple-form parent properties children identity options))
-                  constraint-opts (delay (or (get (::constraint-options options) type)
-                                             (get @constraint-extensions type)))
-                  constraint (delay (when-some [{:keys [constraint-from-properties]} @constraint-opts]
-                                      (constraint-from-properties properties (assoc options ::constraint-options @constraint-opts))))
+                  constraint-context (delay (or (get (::constraint-options options) type)
+                                                (get @constraint-extensions type)))
+                  constraint (delay (when-some [{:keys [constraint-from-properties]} @constraint-context]
+                                      (constraint-from-properties properties (assoc options ::constraint-context @constraint-context))))
                   cache (-create-cache options)]
               (-check-children! type properties children min max)
               ^{:type ::schema}
               (reify
                 mcp/ConstrainedSchema
-                (-constrained-schema? [this] (boolean @constraint-opts))
+                (-constrained-schema? [this] (boolean @constraint-context))
                 (-get-constraint [this] @constraint)
-                (-set-constraint [this c] (-set-constraint this c @constraint-opts))
+                (-set-constraint [this c] (-set-constraint this c @constraint-context))
                 AST
                 (-to-ast [this _] (to-ast this))
                 Schema
@@ -736,18 +736,17 @@
                           cvalidator (conj cvalidator))
                         miu/-every-pred)))
                 (-explainer [this path]
-                  (let [cvalidator (some-> @constraint -validator)
-                        pvalidator (when-not cvalidator (when property-pred (property-pred properties)))
+                  (let [cexplainer (some-> @constraint (-explainer (conj path :malli.constraint/constraint)))
+                        pvalidator (when-not cexplainer (when property-pred (property-pred properties)))
                         validator (-validator this)]
                     (fn [x in acc]
                       (if-not (pred x)
                         (conj acc (miu/-error path in this x))
-                        (cond-> acc
-                          (and pvalidator (not (pvalidator x)))
-                          (conj (miu/-error path in this x))
-
-                          (and cvalidator (not (cvalidator x)))
-                          (conj (miu/-error path in this x ::constraint-violation)))))))
+                        (if cexplainer
+                          (cexplainer x in acc)
+                          (cond-> acc
+                            (and pvalidator (not (pvalidator x)))
+                            (conj (miu/-error path in this x))))))))
                 (-parser [this]
                   (let [validator (-validator this)]
                     (fn [x] (if (validator x) x ::invalid))))
@@ -755,7 +754,7 @@
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
                 (-walk [this walker path options]
-                  (if-some [-walk (:-walk @constraint-opts)]
+                  (if-some [-walk (:-walk @constraint-context)]
                     (-walk this walker path options)
                     (-walk-leaf this walker path options)))
                 (-properties [_] properties)

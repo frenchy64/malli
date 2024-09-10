@@ -17,7 +17,7 @@
                                  n #?(:bb (count v) :clj (.count v), :cljs (count v))
                                  op #?(:clj (.nth v 0), :cljs (nth v 0))
                                  ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
-                                 prs (or (-> options ::m/constraint-options :parse-constraint)
+                                 prs (or (-> options ::m/constraint-context :parse-constraint)
                                          (-fail! ::missing-parse-constraint-options {:constraint ?constraint}))
                                  f (or (if prs
                                          (prs op)
@@ -30,7 +30,7 @@
      :else (-fail! ::invalid-constraint {:constraint ?constraint}))))
 
 (defn -constraint-from-properties [properties options]
-  (let [{:keys [parse-properties]} (::m/constraint-options options)
+  (let [{:keys [parse-properties]} (::m/constraint-context options)
         ;; important for deterministic m/explain ordering
         ks (-> parse-properties keys sort)]
     (when-some [cs (-> []
@@ -38,16 +38,15 @@
                                       (constraint ((get parse-properties %) v options) options)))
                              ks)
                        not-empty)]
-      ;; TODO return ::true-constraint
       (case (count cs)
-        0 (constraint [::true] options)
+        0 (constraint [:true] options)
         1 (first cs)
-        (constraint (into [::and nil] cs) options)))))
+        (constraint (into [:and] cs) options)))))
 
 (comment
   (-constraint-from-properties
     {:max 1 :min 0}
-    {::m/constraint-options (:string (base-constraint-extensions))})
+    {::m/constraint-context (:string (base-constraint-extensions))})
   )
 
 (defn -walk-leaf+constraints [schema walker path constraint {::m/keys [constraint-opts] :as options}]
@@ -78,21 +77,26 @@
 
 (defn default-parse-constraints []
   {:and (fn [{:keys [properties children]} opts]
-          (into [::and nil] children))})
+          (into [::and nil] children))
+   :true (fn [{:keys [properties children]} opts]
+           (m/-check-children! :true properties children 0 0)
+           [::true-constraint])})
 
 (defn default-parse-properties []
   {:and (fn [{:keys [properties children]} opts]
-          (into [::and nil] children))})
+          (into [:and] children))})
 
 (defn default-unparse-properties []
   {::and
-   (fn [c into-properties {{:keys [unparse-properties]} ::m/constraint-options :as opts}]
+   (fn [c into-properties {{:keys [unparse-properties]} ::m/constraint-context :as opts}]
      (reduce (fn [into-properties c]
                (unparse-properties c into-properties opts))
-             into-properties (m/children c)))})
+             into-properties (m/children c)))
+   ::true (fn [_ into-properties _] into-properties)})
 
 (defn default-constraint-form []
-  {::and (fn [c options] (into [:and] (map m/form) (m/children c)))})
+  {::and (fn [c options] (into [:and] (map m/form) (m/children c)))
+   ::true-constraint (fn [c options] [:true])})
 
 (defn base-constraint-extensions []
   {:string {:-walk -walk-leaf+constraints
@@ -124,14 +128,10 @@
                                                              1 (first frms)
                                                              (into [:and] frms))))})
             :parse-properties (into (default-parse-properties)
-                                    {:max (fn [v opts]
-                                            [::count-constraint 0 v])
-                                     :min (fn [v opts]
-                                            [::count-constraint v nil])
-                                     :gen/max (fn [v opts]
-                                                [::count-constraint {:gen/max v} 0 nil])
-                                     :gen/min (fn [v opts]
-                                                [::count-constraint {:gen/min v} 0 nil])})
+                                    {:max (fn [v opts] [:max v])
+                                     :min (fn [v opts] [:min v])
+                                     :gen/max (fn [v opts] [:gen/max v])
+                                     :gen/min (fn [v opts] [:gen/min v])})
             :unparse-properties (into (default-unparse-properties)
                                       {::count-constraint
                                        (fn [c into-properties _]
@@ -141,7 +141,7 @@
                                              cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
                                              (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))})}})
 
-(defn -constraint-form [constraint {{:keys [constraint-form]} ::m/constraint-options :as options}]
+(defn -constraint-form [constraint {{:keys [constraint-form]} ::m/constraint-context :as options}]
   (let [t (m/type constraint)
         f (or (get constraint-form t)
               (-fail! ::no-constraint-form {:type t}))]
@@ -199,12 +199,12 @@
                   (pos? min-count) #(<= min-count (miu/-safe-count %))
                   max-count #(<= (miu/-safe-count %) max-count)
                   :else any?))
-              ;;TODO make explainer and hook it up to humanizer
               (-explainer [this path]
                 (let [pred (m/-validator this)]
                   (fn [x in acc]
                     (cond-> acc
                       (not (pred x))
+                      ;; TODO humanize ::count-limits
                       (conj (miu/-error path in this x ::count-limits))))))
               ;; potentially useful for :orn, :xorn, :impliesn constraints?
               ;; [:string {:orn [[:small [:max 5]] [:large [:min 6]]]}]

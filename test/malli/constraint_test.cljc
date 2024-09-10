@@ -17,14 +17,14 @@
      :cljs (:require-macros [malli.test-macros :refer [when-env]])))
 
 (def count-constraint-options
-  {::m/constraint-options {:parse-constraint {:min (fn [{:keys [properties children]} opts]
+  {::m/constraint-context {:parse-constraint {:min (fn [{:keys [properties children]} opts]
                                                      [::mc/count-constraint (first children) nil])
                                               :max (fn [{:keys [properties children]} opts]
                                                      [::mc/count-constraint 0 (first children)])}}
    :registry {::mc/count-constraint (mc/-count-constraint)}})
 
 (def true-constraint-options
-  {::m/constraint-options {::mc/true-constraint (fn [c opts] :true)}
+  {::m/constraint-context {::mc/true-constraint (fn [c opts] :true)}
    :registry {::mc/true-constraint (mc/-true-constraint)}})
 
 (deftest constraint-test
@@ -51,27 +51,34 @@
     (testing "properties unused in :max"
       (is (nil? (m/properties (mc/constraint [:max {:property true} 1] count-constraint-options)))))))
 
-(defn string-options []
-  {::m/constraint-options (:string (mc/base-constraint-extensions))
+(defn constraint-options []
+  {::m/constraint-options (mc/base-constraint-extensions)
    :registry (merge (mc/base-constraints)
-                    (m/base-schemas))})
+                    (m/default-schemas))})
+
+(defn string-context []
+  (assoc (constraint-options) ::m/constraint-context (:string (mc/base-constraint-extensions))))
 
 (defn errors [{:keys [errors]}]
   (mapv #(update % :schema m/form) errors))
 
 (deftest string-constraint-test
-  (is (= ::mc/count-constraint (m/type (mc/constraint [:min 1] (string-options)))))
-  (is (= [:min 1] (m/form (mc/constraint [:min 1] (string-options)))))
-  (is (= ::mc/count-constraint (m/type (mc/constraint [:max 1] (string-options)))))
-  (is (= [:max 1] (m/form (mc/constraint [:max 1] (string-options)))))
+  (is (= ::mc/count-constraint (m/type (mc/constraint [:min 1] (string-context)))))
+  (is (= [:min 1] (m/form (mc/constraint [:min 1] (string-context)))))
+  (is (= ::mc/count-constraint (m/type (mc/constraint [:max 1] (string-context)))))
+  (is (= [:max 1] (m/form (mc/constraint [:max 1] (string-context)))))
+  (is (= [:true] (m/form (mc/constraint [:true] (string-context)))))
   ;;TODO
-  #_(is (= ::FIXME (m/ast (mc/constraint [:max 1] (string-options)))))
-  (is (= [:and [:min 1] [:max 1]] (m/form (mc/constraint [:and [:min 1] [:max 1]] (string-options)))))
-  (is (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-options)) "a"))
-  (is (not (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-options)) "")))
+  #_(is (= ::FIXME (m/ast (mc/constraint [:max 1] (string-context)))))
+  (is (= [:and [:min 1] [:max 1]] (m/form (mc/constraint [:and [:min 1] [:max 1]] (string-context)))))
+  (is (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-context)) "a"))
+  (is (not (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-context)) "")))
   (is (= '({:path [], :in [], :schema [:min 1], :value "" :type ::mc/count-limits})
-         (errors (m/explain (mc/constraint [:min 1] (string-options)) ""))))
+         (errors (m/explain (mc/constraint [:min 1] (string-context)) ""))))
   (is (= '({:path [0], :in [], :schema [:min 1], :value "" :type ::mc/count-limits})
-         (errors (m/explain (mc/constraint [:and [:min 1] [:max 1]] (string-options)) ""))))
-  #_(is (m/explain (m/schema [:string {:min 1 :max 1}]) ""))
-  )
+         (errors (m/explain (mc/constraint [:and [:min 1] [:max 1]] (string-context)) ""))))
+  (is (= [{:path [:malli.constraint/constraint 1], :in [], :schema [:min 1], :value "", :type :malli.constraint/count-limits}]
+         (errors
+           (m/explain (m/schema [:string {:min 1 :max 1}]
+                                (constraint-options))
+                      "")))))
