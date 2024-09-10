@@ -202,8 +202,20 @@
                     (cond-> acc
                       (not (pred x))
                       (conj (miu/-error (conj path ::count) in this x))))))
-              (-parser [this] (-fail! ::constraints-cannot-be-parsed this))
-              (-unparser [this] (-fail! ::constraints-cannot-be-unparsed this))
+              ;; potentially useful for :orn, :xorn, :impliesn constraints?
+              ;; [:string {:orn [[:small [:max 5]] [:large [:min 6]]]}]
+              ;; => [:small "12345"]
+              ;; => [:large "123456"]
+              ;; [:string {:impliesn [[:at-least-5 [:max 5]] [:at-least-6 [:max 6]]]}]
+              ;; => [:at-least-5 "12345"]
+              ;; => [[:not :at-least-5] "123456"]
+              ;; [:string {:iffn [[:max-5-left [:max 5]] [:max-5-right [:max 5]]]}]
+              ;; => [:P "12345"]
+              ;; => [:not-P "123456"]
+              (-parser [this]
+                (let [validator (m/-validator this)]
+                  (fn [x] (if (validator x) x ::m/invalid))))
+              (-unparser [this] (m/-parser this))
               (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
               (-walk [this walker path options] (m/-walk-leaf this walker path options))
               (-properties [_] properties)
