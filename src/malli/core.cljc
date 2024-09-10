@@ -784,49 +784,44 @@
 (defn -qualified-symbol-schema [] (-simple-schema {:type :qualified-symbol, :pred qualified-symbol?}))
 (defn -uuid-schema [] (-simple-schema {:type :uuid, :pred uuid?}))
 
-(defn -and-schema
-  ([] (-and-schema {}))
-  ([{:keys [constraint-type]}]
-   ^{:type ::into-schema}
-   (let [type (or constraint-type :and)]
-     (reify IntoSchema
-       (-type [_] type)
-       (-type-properties [_])
-       (-properties-schema [_ _])
-       (-children-schema [_ _])
-       (-into-schema [parent properties children options]
-         (-check-children! type properties children 1 nil)
-         (let [children (-vmap #(schema % options) children)
-               form (delay (-simple-form parent properties children -form options))
-               cache (-create-cache options)
-               ->parser (fn [f m] (let [parsers (m (-vmap f children))]
-                                    #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
-           ^{:type ::schema}
-           (reify
-             mcp/Constraint
-             (-constraint? [_] constraint-type)
-             Schema
-             (-validator [_]
-               (let [validators (-vmap -validator children)] (miu/-every-pred validators)))
-             (-explainer [_ path]
-               (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
-                 (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
-             (-parser [_] (->parser -parser seq))
-             (-unparser [_] (->parser -unparser rseq))
-             (-transformer [this transformer method options]
-               (-parent-children-transformer this children transformer method options))
-             (-walk [this walker path options] (-walk-indexed this walker path options))
-             (-properties [_] properties)
-             (-options [_] options)
-             (-children [_] children)
-             (-parent [_] parent)
-             (-form [_] @form)
-             Cached
-             (-cache [_] cache)
-             LensSchema
-             (-keep [_])
-             (-get [_ key default] (get children key default))
-             (-set [this key value] (-set-assoc-children this key value)))))))))
+(defn -and-schema []
+  ^{:type ::into-schema}
+  (reify IntoSchema
+    (-type [_] :and)
+    (-type-properties [_])
+    (-properties-schema [_ _])
+    (-children-schema [_ _])
+    (-into-schema [parent properties children options]
+      (-check-children! :and properties children 1 nil)
+      (let [children (-vmap #(schema % options) children)
+            form (delay (-simple-form parent properties children -form options))
+            cache (-create-cache options)
+            ->parser (fn [f m] (let [parsers (m (-vmap f children))]
+                                 #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
+        ^{:type ::schema}
+        (reify
+          Schema
+          (-validator [_]
+            (let [validators (-vmap -validator children)] (miu/-every-pred validators)))
+          (-explainer [_ path]
+            (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
+              (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
+          (-parser [_] (->parser -parser seq))
+          (-unparser [_] (->parser -unparser rseq))
+          (-transformer [this transformer method options]
+            (-parent-children-transformer this children transformer method options))
+          (-walk [this walker path options] (-walk-indexed this walker path options))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] @form)
+          Cached
+          (-cache [_] cache)
+          LensSchema
+          (-keep [_])
+          (-get [_ key default] (get children key default))
+          (-set [this key value] (-set-assoc-children this key value)))))))
 
 (defn -or-schema []
   ^{:type ::into-schema}
