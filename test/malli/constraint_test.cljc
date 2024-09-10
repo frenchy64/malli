@@ -62,6 +62,7 @@
 (deftest string-constraint-test
   (is (= ::mc/count-constraint (m/type (mc/constraint [:min 1] (string-options)))))
   (is (= [:min 1] (m/form (mc/constraint [:min 1] (string-options)))))
+  (is (= ::mc/count-constraint (m/type (mc/constraint [:max 1] (string-options)))))
   (is (= [:max 1] (m/form (mc/constraint [:max 1] (string-options)))))
   (is (= [:min 1] (m/form (mc/constraint [:and [:min 1] [:max 1]] (string-options)))))
   )

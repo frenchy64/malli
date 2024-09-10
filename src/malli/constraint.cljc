@@ -82,6 +82,7 @@
                                       (m/-check-children! :max properties children 1 1)
                                       [::count-constraint 0 (first children)])
                                :min (fn [{:keys [properties children]} opts]
+                                      (prn "min" children)
                                       (m/-check-children! :min properties children 1 1)
                                       [::count-constraint (first children) nil])
                                :gen/max (fn [{:keys [properties children]} opts]
@@ -92,17 +93,17 @@
                                           [::count-constraint {::gen true} (first children) nil])
                                :and (fn [{:keys [properties children]} opts]
                                       (into [::and nil] children))}
-            :constraint-form {::count-constraint (fn [c opts]
-                                                   (let [[min max] (m/children c)]
+            :constraint-form {::count-constraint (fn [parent properties children options]
+                                                   (let [[min max] children]
                                                      (cond
                                                        (and min max) (if (zero? min)
                                                                        [:max max]
                                                                        [:and [:min min] [:max max]])
                                                        min [:min min]
                                                        :else [:max max])))
-                              ::and-constraint (fn [c opts]
+                              ::and-constraint (fn [parent properties children options]
                                                  ;; TODO flatten :and?
-                                                 (into [:and] (m/children c)))}
+                                                 (into [:and] (map m/form) children))}
             :parse-properties {:max (fn [v opts]
                                       [::count-constraint 0 v])
                                :min (fn [v opts]
@@ -126,11 +127,10 @@
                                              (unparse-properties c into-properties opts))
                                            into-properties (m/children c)))}}})
 
-(defn -constraint-form [constraint {{:keys [constraint-form]} ::m/constraint-options :as options}]
-  (let [t (m/type constraint)
-        f (or (get constraint-form t)
-              (-fail! ::no-constraint-form {:type t}))]
-    (f constraint options)))
+(defn -constraint-form [type parent properties children {{:keys [constraint-form]} ::m/constraint-options :as options}]
+  (let [f (or (get constraint-form type)
+              (-fail! ::no-constraint-form {:type type}))]
+    (f parent properties children options)))
 
 (defn -count-constraint []
   (let [type ::count-constraint]
@@ -154,7 +154,7 @@
               _ (when-not (or (nil? max-count)
                               (nat-int? max-count))
                   (-fail! ::count-constraint-max {:max max-count}))
-              ;;TODO use :constraint-form
+              form (delay (-constraint-form type parent properties children options))
               cache (m/-create-cache options)]
           ^{:type ::m/schema}
           (reify
@@ -183,7 +183,7 @@
             (-options [_] options)
             (-children [_] children)
             (-parent [_] parent)
-            (-form [this] (-constraint-form this options))
+            (-form [_] @form)
             m/Cached
             (-cache [_] cache)
             m/LensSchema
