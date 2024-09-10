@@ -104,7 +104,7 @@
 
 (defn- -constraint-solutions [constraint constraint-opts options]
   (solver/-constraint-solutions
-    constraint constraint-opts options))
+    constraint constraint-opts (assoc options ::solver/mode :gen)))
 
 (defn- -string-gen-constrained [schema solutions options]
   ;(prn "solutions" solutions)

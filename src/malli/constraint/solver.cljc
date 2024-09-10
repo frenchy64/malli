@@ -5,9 +5,6 @@
             [malli.constraint :as mc]
             [malli.impl.util :as miu]))
 
-(defn default-constraint-solvers []
-  {})
-
 (defn -conj-number-constraints [[sol1 & sols :as all-sols]]
   (if (empty? all-sols)
     [{}]
@@ -87,18 +84,30 @@ collected."
   [f coll]
   (join (map f coll)))
 
+(defn- -min-max-count [min max gen-min gen-max]
+  (cond
+    (and min gen-min (< gen-min min)) []
+    (and max gen-max (> gen-max max)) []
+    :else (let [min (or gen-min min)
+                max (or gen-max max)]
+            (cond-> {}
+              (some-> min pos?) (assoc :min-count min)
+              max (assoc :max-count max)))))
+
+(defmulti -constraint-solutions* (fn [constraint constraint-opts options] (m/type constraint)))
+
 (defn -constraint-solutions [constraint constraint-opts options]
   {:post [(every? map? %)]}
-  (letfn [(-constraint-solutions
-            ([constraint] (-constraint-solutions constraint options))
-            ([constraint options]
-             (lazy-seq
-               (case (m/type constraint)
-                 :max-count [{:max-count (second constraint)}]
-                 :min-count (let [n (nth constraint 1)]
-                              (when-not (nat-int? n)
-                                (miu/-fail! ::min-must-be-non-negative))
-                              [{:min-count n}])
-                 :and (apply -conj-solutions (map -constraint-solutions (unchunk (next constraint))))
-                 (miu/-fail! ::unknown-constraint {:constraint constraint})))))]
-    (-constraint-solutions constraint)))
+  (lazy-seq
+    (-constraint-solutions* constraint constraint-opts options)))
+
+(defmethod -constraint-solutions* ::mc/true-constraint [constraint constraint-opts options] [{}])
+(defmethod -constraint-solutions* ::mc/and
+  [constraint constraint-opts options]
+  (apply -conj-solutions (map #(-constraint-solutions % constraint-opts options) (unchunk (next constraint)))))
+(defmethod -constraint-solutions* ::mc/count-constraint
+  [constraint constraint-opts {::keys [mode] :as options}]
+  (let [[min max] (m/children constraint)
+        {gen-min :gen/min gen-max :gen/max} (when (= :gen mode) (m/properties constraint))]
+    (-min-max-count min max gen-min gen-max)))
+(defmethod -constraint-solutions* :default [constraint constraint-opts options] (miu/-fail! ::unknown-constraint {:constraint constraint}))
