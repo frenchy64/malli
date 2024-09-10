@@ -205,7 +205,7 @@
                   (fn [x in acc]
                     (cond-> acc
                       (not (pred x))
-                      (conj (miu/-error (conj path ::count) in this x))))))
+                      (conj (miu/-error path in this x ::count-limits))))))
               ;; potentially useful for :orn, :xorn, :impliesn constraints?
               ;; [:string {:orn [[:small [:max 5]] [:large [:min 6]]]}]
               ;; => [:small "12345"]
@@ -247,35 +247,38 @@
       (-children-schema [_ _])
       (-into-schema [parent properties children options]
         (m/-check-children! type properties children 0 0)
-        (let [form (delay (m/-simple-form parent properties children identity options))
+        (let [this (volatile! nil)
+              form (delay (-constraint-form @this options))
               cache (m/-create-cache options)]
-          ^{:type ::m/schema}
-          (reify
-            mcp/Constraint
-            (-constraint? [_] true)
-            (-intersect [this that options] (when (= type that) this))
-            m/AST
-            (-to-ast [this _] (throw (ex-info "TODO" {})))
-            m/Schema
-            (-validator [_] any?)
-            ;;TODO make explainer and hook it up to humanizer
-            (-explainer [this path] (fn [x in acc] acc))
-            (-parser [this] identity)
-            (-unparser [this] identity)
-            (-transformer [this transformer method options]
-              (m/-intercepting (m/-value-transformer transformer this method options)))
-            (-walk [this walker path options] (m/-walk-leaf this walker path options))
-            (-properties [_] properties)
-            (-options [_] options)
-            (-children [_] children)
-            (-parent [_] parent)
-            (-form [_] @form)
-            m/Cached
-            (-cache [_] cache)
-            m/LensSchema
-            (-keep [_])
-            (-get [_ _ default] default)
-            (-set [this key _] (m/-fail! ::non-associative-constraint {:schema this, :key key}))))))))
+          (vreset!
+            this
+            ^{:type ::m/schema}
+            (reify
+              mcp/Constraint
+              (-constraint? [_] true)
+              (-intersect [this that options] (when (= type that) this))
+              m/AST
+              (-to-ast [this _] (throw (ex-info "TODO" {})))
+              m/Schema
+              (-validator [_] any?)
+              ;;TODO make explainer and hook it up to humanizer
+              (-explainer [this path] (fn [x in acc] acc))
+              (-parser [this] identity)
+              (-unparser [this] identity)
+              (-transformer [this transformer method options]
+                (m/-intercepting (m/-value-transformer transformer this method options)))
+              (-walk [this walker path options] (m/-walk-leaf this walker path options))
+              (-properties [_] properties)
+              (-options [_] options)
+              (-children [_] children)
+              (-parent [_] parent)
+              (-form [_] @form)
+              m/Cached
+              (-cache [_] cache)
+              m/LensSchema
+              (-keep [_])
+              (-get [_ _ default] default)
+              (-set [this key _] (m/-fail! ::non-associative-constraint {:schema this, :key key})))))))))
 
 (defn- -flatten-and [cs]
   (eduction (mapcat #(if (= ::and (m/type %))

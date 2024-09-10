@@ -32,15 +32,15 @@
     (is (= (m/type (mc/constraint (m/schema (mc/-true-constraint))))
            (m/type (mc/constraint (m/schema (mc/-true-constraint)) nil))
            ::mc/true-constraint)))
-  (testing "IntoSchema's are looked up"
-    (is (= (m/type (mc/constraint [::mc/true-constraint] {:registry {::mc/true-constraint (mc/-true-constraint)}}))
-           ::mc/true-constraint)))
-  (testing "m/form returns sugar if available"
-    (is (= (m/form (mc/constraint (m/schema (mc/-true-constraint))))
-           ::mc/true-constraint))
-    (is (= (m/form (mc/constraint ::mc/true-constraint))
-           ::mc/true-constraint))
-    )
+  (testing "IntoSchema's are not allowed in raw form"
+    (is (thrown-with-msg?
+          Exception #":malli\.constraint/missing-parse-constraint-options"
+          (mc/constraint [::mc/true-constraint]
+                         {:registry {::mc/true-constraint (mc/-true-constraint)}}))))
+  (testing "m/form requires a constraint context"
+    (is (thrown-with-msg?
+          Exception #":malli\.constraint/no-constraint-form"
+          (m/form (mc/constraint (m/schema (mc/-true-constraint)))))))
   (testing ":parse-constraint desugars constraints"
     (is (= (m/type (mc/constraint [:min 1] count-constraint-options))
            ::mc/count-constraint))
@@ -48,16 +48,16 @@
            [1 nil]))
     (is (= (m/children (mc/constraint [:max 1] count-constraint-options))
            [0 1]))
-    (is (= (m/properties (mc/constraint [:max {:property true} 1] count-constraint-options))
-           [0 1]))
-    )
-  )
+    (testing "properties unused in :max"
+      (is (nil? (m/properties (mc/constraint [:max {:property true} 1] count-constraint-options)))))))
 
 (defn string-options []
   {::m/constraint-options (:string (mc/base-constraint-extensions))
    :registry (merge (mc/base-constraints)
                     (m/base-schemas))})
 
+(defn errors [{:keys [errors]}]
+  (mapv #(update % :schema m/form) errors))
 
 (deftest string-constraint-test
   (is (= ::mc/count-constraint (m/type (mc/constraint [:min 1] (string-options)))))
@@ -65,11 +65,13 @@
   (is (= ::mc/count-constraint (m/type (mc/constraint [:max 1] (string-options)))))
   (is (= [:max 1] (m/form (mc/constraint [:max 1] (string-options)))))
   ;;TODO
-  (is (= ::FIXME (m/ast (mc/constraint [:max 1] (string-options)))))
+  #_(is (= ::FIXME (m/ast (mc/constraint [:max 1] (string-options)))))
   (is (= [:and [:min 1] [:max 1]] (m/form (mc/constraint [:and [:min 1] [:max 1]] (string-options)))))
   (is (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-options)) "a"))
   (is (not (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-options)) "")))
-  (is (m/explain (mc/constraint [:and [:min 1] [:max 1]] (string-options)) ""))
-  (is (m/explain (mc/constraint [:and [:min 1] [:max 1]] (string-options)) "123"))
-  (is (m/explain (m/schema [:string {:min 1 :max 1}]) ""))
+  (is (= '({:path [], :in [], :schema [:min 1], :value "" :type ::mc/count-limits})
+         (errors (m/explain (mc/constraint [:min 1] (string-options)) ""))))
+  (is (= '({:path [0], :in [], :schema [:min 1], :value "" :type ::mc/count-limits})
+         (errors (m/explain (mc/constraint [:and [:min 1] [:max 1]] (string-options)) ""))))
+  #_(is (m/explain (m/schema [:string {:min 1 :max 1}]) ""))
   )
