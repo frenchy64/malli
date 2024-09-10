@@ -83,16 +83,14 @@
           (into [::and nil] children))})
 
 (defn default-unparse-properties []
-  {::and-constraint
+  {::and
    (fn [c into-properties {{:keys [unparse-properties]} ::m/constraint-options :as opts}]
      (reduce (fn [into-properties c]
                (unparse-properties c into-properties opts))
              into-properties (m/children c)))})
 
 (defn default-constraint-form []
-  {::and-constraint (fn [c options]
-                      ;; TODO flatten :and?
-                      (into [:and] (map m/form) (m/children c)))})
+  {::and (fn [c options] (into [:and] (map m/form) (m/children c)))})
 
 (defn base-constraint-extensions []
   {:string {:-walk -walk-leaf+constraints
@@ -112,13 +110,17 @@
                                                 [::count-constraint {:gen/min (first children)} 0 nil])})
             :constraint-form (into (default-constraint-form)
                                    {::count-constraint (fn [c options]
-                                                         (let [[min max] (m/children c)]
-                                                           (cond
-                                                             (and min max) (if (zero? min)
-                                                                             [:max max]
-                                                                             [:and [:min min] [:max max]])
-                                                             min [:min min]
-                                                             :else [:max max])))})
+                                                         (let [[min max] (m/children c)
+                                                               {gen-min :gen/min gen-max :gen/max} (m/properties c)
+                                                               frms (cond-> []
+                                                                      (pos? min) (conj [:min min])
+                                                                      max (conj [:max max])
+                                                                      (some-> gen-min pos?) (conj [:gen/min gen-min])
+                                                                      gen-max (conj [:gen/max max]))]
+                                                           (case (count frms)
+                                                             0 [:and]
+                                                             1 (first frms)
+                                                             (into [:and] frms))))})
             :parse-properties (into (default-parse-properties)
                                     {:max (fn [v opts]
                                             [::count-constraint 0 v])
@@ -230,6 +232,7 @@
           (reify
             mcp/Constraint
             (-constraint? [_] true)
+            (-intersect [this that options] (when (= type that) this))
             m/AST
             (-to-ast [this _] (throw (ex-info "TODO" {})))
             m/Schema
@@ -252,6 +255,24 @@
             (-get [_ _ default] (throw (ex-info "TODO" {})))
             (-set [this key _] (throw (ex-info "TODO" {})))))))))
 
+(defn- -flatten-and [cs]
+  (eduction (mapcat #(if (= ::and (m/type %))
+                       (m/children %)
+                       [%]))
+            cs))
+
+(defn- -intersect-common-constraints [cs]
+  (->> (group-by m/type cs)
+       (into [] (mapcat (fn [[_ v]]
+                          (case (count v)
+                            1 v
+                            (let [[l r & nxt] v]
+                              (if-some [in (mcp/-intersect l r nil)]
+                                (if nxt
+                                  (reduce #(mcp/-intersect %1 %2 nil) in nxt)
+                                  in)
+                                v))))))))
+
 (defn -and-constraint []
   ^{:type ::m/into-schema}
   (let [type ::and]
@@ -261,22 +282,26 @@
       (-properties-schema [_ _])
       (-children-schema [_ _])
       (-into-schema [parent properties children options]
-        (case (count children)
-          0 (constraint [::true-constraint] options)
-          1 (constraint (first children) options)
-          (let [children (m/-vmap #(constraint % options) children)
-                ;;FIXME use pretty constraint form
-                form (delay (m/-simple-form parent properties children m/-form options))
-                cache (m/-create-cache options)
-                ->parser (fn [f m] (let [parsers (m (m/-vmap f children))]
-                                     #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
+        (let [children (m/-vmap #(constraint % options) children)
+              this (volatile! nil)
+              ;;FIXME use pretty constraint form
+              form (delay (-constraint-form @this options))
+              cache (m/-create-cache options)
+              ichildren (delay (-> children -flatten-and -intersect-common-constraints))
+              ->parser (fn [f m] (let [parsers (m (m/-vmap f children))]
+                                   #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
+          (vreset!
+            this
             ^{:type ::m/schema}
             (reify
               mcp/Constraint
               (-constraint? [_] true)
+              (-intersect [_ that options]
+                (when (= type (m/type that))
+                  (m/-into-schema parent properties (into children (m/children that)) options)))
               m/Schema
               (-validator [_]
-                (let [validators (m/-vmap m/-validator children)] (miu/-every-pred validators)))
+                (let [validators (m/-vmap m/-validator @ichildren)] (miu/-every-pred validators)))
               (-explainer [_ path]
                 (let [explainers (m/-vmap (fn [[i c]] (m/-explainer c (conj path i))) (map-indexed vector children))]
                   (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
@@ -299,7 +324,7 @@
 
 (defn base-constraints []
   {::count-constraint (-count-constraint)
-   ::and-constraint (-and-constraint)
+   ::and (-and-constraint)
    ::true-constraint (-true-constraint)})
 
 (defn register-constraint-extensions! [extensions] (swap! m/constraint-extensions #(merge-with into % extensions)))
