@@ -143,7 +143,8 @@
   (if-not (mcp/-constrained-schema? schema)
     (-string-gen-legacy schema options)
     (let [constraint (or (mcp/-get-constraint schema)
-                         (m/-fail! ::missing-constraint {:schema schema}))
+                         (m/-fail! ::missing-constraint {:type (m/type schema)
+                                                         :schema schema}))
           solutions (-constraint-solutions constraint (m/type schema) options)]
       ;(prn "solutions" solutions)
       (when (empty? solutions)

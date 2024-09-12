@@ -34,16 +34,16 @@
 (defn -constraint-from-properties [properties options]
   (let [{:keys [parse-properties]} (::m/constraint-context options)
         ;; important for deterministic m/explain ordering
-        ks (-> parse-properties keys sort)]
-    (when-some [cs (-> []
-                       (into (keep #(when-some [[_ v] (find properties %)]
-                                      (constraint ((get parse-properties %) v options) options)))
-                             ks)
-                       not-empty)]
-      (case (count cs)
-        0 (constraint [:true] options)
-        1 (first cs)
-        (constraint (into [:and] cs) options)))))
+        ks (-> parse-properties keys sort)
+        cs (-> []
+               (into (keep #(when-some [[_ v] (find properties %)]
+                              (constraint ((get parse-properties %) v options) options)))
+                     ks)
+               not-empty)]
+    (case (count cs)
+      0 (constraint [:true] options)
+      1 (first cs)
+      (constraint (into [:and] cs) options))))
 
 (defn -walk-leaf+constraints [schema walker path constraint {::m/keys [constraint-opts] :as options}]
   (when (m/-accept walker schema path options)

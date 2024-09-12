@@ -106,7 +106,7 @@ collected."
 (defmethod -constraint-solutions* ::mc/true-constraint [constraint constraint-opts options] [{}])
 (defmethod -constraint-solutions* ::mc/and
   [constraint constraint-opts options]
-  (apply -conj-solutions (map #(-constraint-solutions % constraint-opts options) (unchunk (next constraint)))))
+  (apply -conj-solutions (map #(-constraint-solutions % constraint-opts options) (m/children constraint))))
 (defmethod -constraint-solutions* ::mc/count-constraint
   [constraint constraint-opts {::keys [mode] :as options}]
   (let [[min max] (m/children constraint)
