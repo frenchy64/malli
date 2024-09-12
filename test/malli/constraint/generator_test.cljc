@@ -1,27 +1,10 @@
 (ns malli.constraint.generator-test
-  (:require [clojure.test :refer [are deftest is testing]]
-            [clojure.test.check :refer [quick-check]]
-            [clojure.test.check.clojure-test :refer [defspec]]
-            [clojure.test.check.generators :as gen]
-            [com.gfredericks.test.chuck.properties :as prop' :refer [for-all]]
+  (:require [clojure.test :refer [deftest is testing]]
             [malli.core :as m]
             [malli.constraint :as mc]
             [malli.constraint.protocols :as mcp]
             [malli.generator :as mg]
-            [malli.json-schema-test :as json-schema-test]
-            [malli.util :as mu]
-            #?(:clj  [malli.test-macros :refer [when-env]]
-               :cljs ["@js-joda/timezone/dist/js-joda-timezone-10-year-range"]))
-  #?(:cljs (:require-macros [malli.test-macros :refer [when-env]])))
-
-(defn shrink
-  ([?schema] (shrink ?schema nil))
-  ([?schema {:keys [seed]}]
-  (-> (quick-check 1 (for-all [s (mg/generator ?schema)] false) {:seed (or seed 0)})
-      :shrunk
-      :smallest
-      first
-      (get 's))))
+            [malli.util :as mu]))
 
 (defn add-constraints [options]
   (-> options
@@ -55,7 +38,6 @@
            (vec (mg/sample [:string {:and [[:min 4] [:max 6]]}]
                            (add-constraints {:seed 0})))))
     (is (every? seq (mg/sample [:string {:min 1}] (add-constraints {}))))
-    ;;FIXME
     (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
           #":malli\.generator/unsatisfiable-string-constraint"

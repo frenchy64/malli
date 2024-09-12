@@ -91,9 +91,11 @@ collected."
     (and max gen-max (> gen-max max)) []
     :else (let [min (or gen-min min)
                 max (or gen-max max)]
-            [(cond-> {}
-               (some-> min pos?) (assoc :min-count min)
-               max (assoc :max-count max))])))
+            (if (and min max (> min max))
+              []
+              [(cond-> {}
+                 (some-> min pos?) (assoc :min-count min)
+                 max (assoc :max-count max))]))))
 
 (defmulti -constraint-solutions* (fn [constraint constraint-opts options] (m/type constraint)))
 
