@@ -1,5 +1,6 @@
 (ns malli.constraint
-  (:require [clojure.set :as set]
+  (:require [clojure.core :as cc]
+            [clojure.set :as set]
             [malli.constraint.protocols :as mcp]
             [malli.core :as m]
             [malli.impl.util :as miu :refer [-fail!]]
@@ -11,18 +12,18 @@
   ([?constraint options]
    (cond
      (mcp/-constraint? ?constraint) ?constraint
-     ;; reserving for now for "contains" constraints for :map
-     (keyword? ?constraint) (-fail! ::todo-keyword-constraints {:constraint ?constraint})
+     ;; reserving for now for "contains" constraints for :map. will be an extension per-schema.
+     (keyword? ?constraint) (-fail! ::constraints-must-be-vectors {:outer-schema (-> options ::m/constraint-context :type)
+                                                                   :constraint ?constraint})
      (vector? ?constraint) (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
                                  n #?(:bb (count v) :clj (.count v), :cljs (count v))
                                  op #?(:clj (.nth v 0), :cljs (nth v 0))
                                  ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
                                  prs (or (-> options ::m/constraint-context :parse-constraint)
                                          (-fail! ::missing-parse-constraint-options {:constraint ?constraint}))
-                                 f (or (if prs
-                                         (prs op)
-                                         #_(fn [{:keys [properties children]} _] (into [op properties] children)))
-                                       (-fail! ::missing-constraint-parser {:constraint ?constraint}))]
+                                 f (or (prs op)
+                                       (-fail! ::missing-constraint-parser {:op op
+                                                                            :constraint ?constraint}))]
                              (m/schema (if (or (nil? ?p) (map? ?p))
                                          (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
                                          (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))
@@ -94,16 +95,17 @@
    ::true (fn [_ into-properties _] into-properties)})
 
 (defn default-constraint-form []
-  {::and (fn [c options]
-           (prn "::and" (m/children c))
-           (into [:and] (map m/form) (m/children c)))
+  {::and (fn [c options] (into [:and] (map m/form) (m/children c)))
    ::true-constraint (fn [c options] [:true])})
 
 (defn base-constraint-extensions []
   {:string {:-walk -walk-leaf+constraints
             :constraint-from-properties -constraint-from-properties
             :parse-constraint (into (default-parse-constraints)
-                                    {:max (fn [{:keys [properties children]} opts]
+                                    {:count (fn [{:keys [properties children]} opts]
+                                              (m/-check-children! :count properties children 2 2)
+                                              (into [::count-constraint properties] children))
+                                     :max (fn [{:keys [properties children]} opts]
                                             (m/-check-children! :max properties children 1 1)
                                             [::count-constraint 0 (first children)])
                                      :min (fn [{:keys [properties children]} opts]
@@ -117,19 +119,28 @@
                                                 [::count-constraint {:gen/min (first children)} 0 nil])})
             :constraint-form (into (default-constraint-form)
                                    {::count-constraint (fn [c options]
-                                                         (let [[min max] (m/children c)
+                                                         (let [[min-count max-count] (m/children c)
                                                                {gen-min :gen/min gen-max :gen/max} (m/properties c)
                                                                frms (cond-> []
-                                                                      (pos? min) (conj [:min min])
-                                                                      max (conj [:max max])
+                                                                      (pos? min-count) (conj [:min min-count])
+                                                                      max-count (conj [:max max-count])
                                                                       (some-> gen-min pos?) (conj [:gen/min gen-min])
-                                                                      gen-max (conj [:gen/max max]))]
+                                                                      gen-max (conj [:gen/max gen-max]))]
                                                            (case (count frms)
-                                                             0 [:and]
+                                                             0 [:true]
                                                              1 (first frms)
-                                                             (into [:and] frms))))})
+                                                             (let [ps (cond-> nil
+                                                                        (some-> gen-min pos?) (assoc :gen/min gen-min)
+                                                                        gen-max (assoc :gen/max gen-max))]
+                                                               (-> [:count]
+                                                                   (cond-> ps (conj ps))
+                                                                   (conj min-count max-count))))))})
             :parse-properties (into (default-parse-properties)
-                                    {:max (fn [v opts] [:max v])
+                                    {:count (fn [v opts]
+                                              (if (nat-int? v)
+                                                [:count v v]
+                                                (into [:count] v)))
+                                     :max (fn [v opts] [:max v])
                                      :min (fn [v opts] [:min v])
                                      :gen/max (fn [v opts] [:gen/max v])
                                      :gen/min (fn [v opts] [:gen/min v])})
@@ -179,11 +190,20 @@
             (reify
               mcp/Constraint
               (-constraint? [_] true)
-              (-intersect [_ that options]
+              (-intersect [_ that options']
                 (when (= type (m/type that))
-                  (let []
-                    #_
-                    (m/-into-schema parent))))
+                  (let [{gen-min :gen/min gen-max :gen/max} properties
+                        [min-count' max-count'] (m/children that)
+                        {gen-min' :gen/min gen-max' :gen/max} (m/properties that)
+                        gen-min (or (when (and gen-min gen-min') (cc/max gen-min gen-min')) gen-min gen-min')
+                        gen-max (or (when (and gen-max gen-max') (cc/min gen-max gen-max')) gen-max gen-max')]
+                    (m/-into-schema parent
+                                    (cond-> {}
+                                      gen-min (assoc :gen/min gen-min)
+                                      gen-max (assoc :gen/max gen-max))
+                                    [(cc/max min-count min-count')
+                                     (or (when (and max-count max-count') (cc/min max-count max-count')) max-count max-count')]
+                                    options))))
               m/AST
               (-to-ast [this _] (m/-to-value-ast this))
               m/Schema
@@ -288,15 +308,18 @@
             cs))
 
 (defn- -intersect-common-constraints [cs]
-  (->> (group-by m/type cs)
+  (->> cs
+       (group-by m/type)
+       (sort-by key)
        (into [] (mapcat (fn [[_ v]]
                           (case (count v)
-                            1 v
+                            1 (subvec v 0 1)
                             (let [[l r & nxt] v]
+                              ;; if the first two intersect successfully, assume the rest do too
                               (if-some [in (mcp/-intersect l r nil)]
-                                (if nxt
-                                  (reduce #(mcp/-intersect %1 %2 nil) in nxt)
-                                  in)
+                                [(if nxt
+                                   (reduce #(mcp/-intersect %1 %2 nil) in nxt)
+                                   in)]
                                 v))))))))
 
 (defn -and-constraint []
@@ -309,44 +332,46 @@
       (-children-schema [_ _])
       (-into-schema [parent properties children options]
         (let [children (m/-vmap #(constraint % options) children)
-              this (volatile! nil)
-              ;;FIXME use pretty constraint form
-              form (delay (-constraint-form @this options))
-              cache (m/-create-cache options)
-              ichildren (delay (-> children -flatten-and -intersect-common-constraints))
-              ->parser (fn [f m] (let [parsers (m (m/-vmap f children))]
-                                   #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
-          (vreset!
-            this
-            ^{:type ::m/schema}
-            (reify
-              mcp/Constraint
-              (-constraint? [_] true)
-              (-intersect [_ that options]
-                (when (= type (m/type that))
-                  (m/-into-schema parent properties (into children (m/children that)) options)))
-              m/Schema
-              (-validator [_]
-                (let [validators (m/-vmap m/-validator @ichildren)] (miu/-every-pred validators)))
-              (-explainer [_ path]
-                (let [explainers (m/-vmap (fn [[i c]] (m/-explainer c (conj path i))) (map-indexed vector children))]
-                  (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
-              (-parser [_] (->parser m/-parser seq))
-              (-unparser [_] (->parser m/-unparser rseq))
-              (-transformer [this transformer method options]
-                (m/-parent-children-transformer this children transformer method options))
-              (-walk [this walker path options] (m/-walk-indexed this walker path options))
-              (-properties [_] properties)
-              (-options [_] options)
-              (-children [_] children)
-              (-parent [_] parent)
-              (-form [_] @form)
-              m/Cached
-              (-cache [_] cache)
-              m/LensSchema
-              (-keep [_])
-              (-get [_ key default] (get children key default))
-              (-set [this key value] (m/-set-assoc-children this key value)))))))))
+              ichildren (-> children -flatten-and -intersect-common-constraints)]
+          (case (count ichildren)
+            1 (first ichildren)
+            (let [this (volatile! nil)
+                  ;;FIXME use pretty constraint form
+                  form (delay (-constraint-form @this options))
+                  cache (m/-create-cache options)
+                  ->parser (fn [f m] (let [parsers (m (m/-vmap f children))]
+                                       #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
+              (vreset!
+                this
+                ^{:type ::m/schema}
+                (reify
+                  mcp/Constraint
+                  (-constraint? [_] true)
+                  (-intersect [_ that options]
+                    (when (= type (m/type that))
+                      (m/-into-schema parent properties (into children (m/children that)) options)))
+                  m/Schema
+                  (-validator [_]
+                    (let [validators (m/-vmap m/-validator @ichildren)] (miu/-every-pred validators)))
+                  (-explainer [_ path]
+                    (let [explainers (m/-vmap (fn [[i c]] (m/-explainer c (conj path i))) (map-indexed vector @ichildren))]
+                      (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
+                  (-parser [_] (->parser m/-parser seq))
+                  (-unparser [_] (->parser m/-unparser rseq))
+                  (-transformer [this transformer method options]
+                    (m/-parent-children-transformer this children transformer method options))
+                  (-walk [this walker path options] (m/-walk-indexed this walker path options))
+                  (-properties [_] properties)
+                  (-options [_] options)
+                  (-children [_] children)
+                  (-parent [_] parent)
+                  (-form [_] @form)
+                  m/Cached
+                  (-cache [_] cache)
+                  m/LensSchema
+                  (-keep [_])
+                  (-get [_ key default] (get children key default))
+                  (-set [this key value] (m/-set-assoc-children this key value)))))))))))
 
 (defn base-constraints []
   {::count-constraint (-count-constraint)

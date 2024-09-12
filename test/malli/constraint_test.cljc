@@ -71,14 +71,20 @@
   (is (= [:true] (m/form (mc/constraint [:true] (string-context)))))
   ;;TODO
   #_(is (= ::FIXME (m/ast (mc/constraint [:max 1] (string-context)))))
-  (is (= [:and [:min 1] [:max 1]] (m/form (mc/constraint [:and [:min 1] [:max 1]] (string-context)))))
+  (testing "constraints are simplified"
+    (is (= [:count 1 1] (m/form (mc/constraint [:and [:min 1] [:max 1]] (string-context))))))
+  (testing "but properties are preserved"
+    (is (= [:string {:and [[:and [:min 1] [:max 1]]]}]
+           (m/form (m/schema [:string {:and [[:and [:min 1] [:max 1]]]}] (string-context))))))
   (is (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-context)) "a"))
   (is (m/validate (m/schema [:string {:min 1 :max 1}] (constraint-options)) "a"))
   (is (m/validate (m/schema [:string {:and [[:min 1] [:max 1]]}] (constraint-options)) "a"))
   (is (not (m/validate (mc/constraint [:and [:min 1] [:max 1]] (string-context)) "")))
   (is (= '({:path [], :in [], :schema [:min 1], :value "" :type ::mc/count-limits})
          (errors (m/explain (mc/constraint [:min 1] (string-context)) ""))))
-  (is (= '({:path [0], :in [], :schema [:min 1], :value "" :type ::mc/count-limits})
+  (is (= '({:path [], :in [], :schema [:max 1], :value "12" :type ::mc/count-limits})
+         (errors (m/explain (mc/constraint [:max 1] (string-context)) "12"))))
+  (is (= '({:path [], :in [], :schema [:count 1 1], :value "" :type ::mc/count-limits})
          (errors (m/explain (mc/constraint [:and [:min 1] [:max 1]] (string-context)) ""))))
   (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:min 5], :value "", :type :malli.constraint/count-limits}]
          (errors
@@ -90,9 +96,7 @@
            (m/explain (m/schema [:string {:max 1}]
                                 (constraint-options))
                       "20"))))
-  ;; 1 path means the second child of [:and [:max 10] [:min 5]]. this is the canonical represent of the constraint yielded
-  ;; from {:min 5 :max 10} after mc/-constraint-from-properties sorts the constraint keys and pours them into an :and.
-  (is (= [{:path [:malli.constraint/constraint 1], :in [], :schema [:min 5], :value "", :type :malli.constraint/count-limits}]
+  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:count 5 10], :value "", :type :malli.constraint/count-limits}]
          (errors
            (m/explain (m/schema [:string {:min 5 :max 10}]
                                 (constraint-options))
@@ -101,7 +105,7 @@
            (m/explain (m/schema [:string {:and [[:max 10] [:min 5]]}]
                                 (constraint-options))
                       ""))))
-  (is (= [{:path [:malli.constraint/constraint 1], :in [], :schema [:min 1], :value "", :type :malli.constraint/count-limits}]
+  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:count 1 1], :value "", :type :malli.constraint/count-limits}]
          (errors
            (m/explain (m/schema [:string {:min 1 :max 1}]
                                 (constraint-options))
@@ -110,8 +114,46 @@
            (m/explain (m/schema [:string {:and [[:max 1] [:min 1]]}]
                                 (constraint-options))
                       ""))))
-  (is (= [{:path [:malli.constraint/constraint 0], :in [], :schema [:min 1], :value "", :type :malli.constraint/count-limits}]
+  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:count 1 1], :value "", :type :malli.constraint/count-limits}]
          (errors
            (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]
                                 (constraint-options))
-                      "")))))
+                      ""))))
+  (is (= ["should have 1 element"]
+         (me/humanize
+           (m/explain (m/schema [:string {:min 1 :max 1}]
+                                (constraint-options))
+                      ""))
+         (me/humanize
+           (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]
+                                (constraint-options))
+                      ""))
+         (me/humanize
+           (m/explain (m/schema [:string {:and [[:count 1 1]]}]
+                                (constraint-options))
+                      ""))
+         (me/humanize
+           (m/explain (m/schema [:string {:count [1 1]}]
+                                (constraint-options))
+                      ""))
+         (me/humanize
+           (m/explain (m/schema [:string {:count 1}]
+                                (constraint-options))
+                      ""))))
+  (is (= ["should have at most 1 element"]
+         (me/humanize
+           (m/explain (m/schema [:string {:and [[:max 1]]}]
+                                (constraint-options))
+                      "12"))
+         (me/humanize
+           (m/explain (m/schema [:string {:max 1}]
+                                (constraint-options))
+                      "12"))
+         (me/humanize
+           (m/explain (m/schema [:string {:count [0 1]}]
+                                (constraint-options))
+                      "12"))
+         (me/humanize
+           (m/explain (m/schema [:string {:and [[:count 0 1]]}]
+                                (constraint-options))
+                      "12")))))

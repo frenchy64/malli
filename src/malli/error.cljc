@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [malli.constraint.protocols :as mcp]
             [malli.core :as m]
+            [malli.impl.util :as miu]
             [malli.util :as mu]))
 
 (defn -pr-str [v] #?(:clj (pr-str v), :cljs (str v)))
@@ -15,15 +16,22 @@
         (and min (< value min)) (str "should be at least " min)
         max (str "should be at most " max)))))
 
+(defn- en-count-limits [min max value]
+  (let [plural #(if (= 1 %) "" "s")]
+    (cond
+      (and min (= min max)) (str "should have " min " element" (plural min))
+      (and min (< (miu/-safe-count value) min)) (str "should have at least " min " element" (plural min))
+      max (str "should have at most " max " element" (plural max)))))
+
 (def default-errors
   {::unknown {:error/message {:en "unknown error"}}
    ::m/missing-key {:error/message {:en "missing required key"}}
+   :malli.constraint/count-limits {:error/fn {:en (fn [{:keys [schema value]} _]
+                                                    (let [[min max] (m/children schema)]
+                                                      (en-count-limits min max value)))}}
    ::m/limits {:error/fn {:en (fn [{:keys [schema value]} _]
                                 (let [{:keys [min max]} (m/properties schema)]
-                                  (cond
-                                    (and min (= min max)) (str "should have " min " elements")
-                                    (and min (< (count value) min)) (str "should have at least " min " elements")
-                                    max (str "should have at most " max " elements"))))}}
+                                  (en-count-limits min max value)))}}
    ::m/tuple-size {:error/fn {:en (fn [{:keys [schema value]} _]
                                     (let [size (count (m/children schema))]
                                       (str "invalid tuple size " (count value) ", expected " size)))}}

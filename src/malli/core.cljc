@@ -712,8 +712,9 @@
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [form (delay (-simple-form parent properties children identity options))
-                  constraint-context (delay (or (get (::constraint-options options) type)
-                                                (get @constraint-extensions type)))
+                  constraint-context (delay (some-> (or (get (::constraint-options options) type)
+                                                        (get @constraint-extensions type))
+                                                    (assoc :type type)))
                   constraint (delay (when-some [{:keys [constraint-from-properties]} @constraint-context]
                                       (constraint-from-properties properties (assoc options ::constraint-context @constraint-context))))
                   cache (-create-cache options)]
