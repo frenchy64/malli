@@ -3,6 +3,7 @@
             [clojure.set :as set]
             [malli.core :as m]
             [malli.constraint :as mc]
+            [malli.constraint.protocols :as mcp]
             [malli.impl.util :as miu]))
 
 (defn -conj-number-constraints [[sol1 & sols :as all-sols]]
@@ -90,14 +91,15 @@ collected."
     (and max gen-max (> gen-max max)) []
     :else (let [min (or gen-min min)
                 max (or gen-max max)]
-            (cond-> {}
-              (some-> min pos?) (assoc :min-count min)
-              max (assoc :max-count max)))))
+            [(cond-> {}
+               (some-> min pos?) (assoc :min-count min)
+               max (assoc :max-count max))])))
 
 (defmulti -constraint-solutions* (fn [constraint constraint-opts options] (m/type constraint)))
 
 (defn -constraint-solutions [constraint constraint-opts options]
   {:post [(every? map? %)]}
+  (assert (mcp/-constraint? constraint) (pr-str (class constraint)))
   (lazy-seq
     (-constraint-solutions* constraint constraint-opts options)))
 

@@ -18,3 +18,13 @@
   (-constrained-schema? [this] false)
   (-get-constraint [this])
   (-set-constraint [this c]))
+
+(extend-type nil
+  Constraint
+  (-constraint? [_] false)
+  (-intersect [_ _ _])
+
+  ConstrainedSchema
+  (-constrained-schema? [this] false)
+  (-get-constraint [this])
+  (-set-constraint [this c]))
