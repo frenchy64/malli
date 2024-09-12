@@ -4,6 +4,7 @@
             [clojure.test.check.generators :as gen]
             [clojure.walk :as walk]
             [malli.constraint :as mc]
+            [malli.constraint.protocols :as mcp]
             [malli.core :as m]
             [malli.edn :as edn]
             [malli.generator :as mg]
@@ -96,7 +97,6 @@
            (m/explain (m/schema [:string {:min 5 :max 10}]
                                 (constraint-options))
                       ""))
-         ;;FIXME
          (errors
            (m/explain (m/schema [:string {:and [[:max 10] [:min 5]]}]
                                 (constraint-options))
@@ -104,5 +104,14 @@
   (is (= [{:path [:malli.constraint/constraint 1], :in [], :schema [:min 1], :value "", :type :malli.constraint/count-limits}]
          (errors
            (m/explain (m/schema [:string {:min 1 :max 1}]
+                                (constraint-options))
+                      ""))
+         (errors
+           (m/explain (m/schema [:string {:and [[:max 1] [:min 1]]}]
+                                (constraint-options))
+                      ""))))
+  (is (= [{:path [:malli.constraint/constraint 0], :in [], :schema [:min 1], :value "", :type :malli.constraint/count-limits}]
+         (errors
+           (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]
                                 (constraint-options))
                       "")))))

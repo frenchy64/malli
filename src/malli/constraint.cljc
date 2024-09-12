@@ -83,7 +83,7 @@
            [::true-constraint])})
 
 (defn default-parse-properties []
-  {:and (fn [{:keys [children]} _] (into [:and] children))})
+  {:and (fn [v _] (into [:and] v))})
 
 (defn default-unparse-properties []
   {::and
@@ -94,7 +94,9 @@
    ::true (fn [_ into-properties _] into-properties)})
 
 (defn default-constraint-form []
-  {::and (fn [c options] (into [:and] (map m/form) (m/children c)))
+  {::and (fn [c options]
+           (prn "::and" (m/children c))
+           (into [:and] (map m/form) (m/children c)))
    ::true-constraint (fn [c options] [:true])})
 
 (defn base-constraint-extensions []
