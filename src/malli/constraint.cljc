@@ -28,7 +28,8 @@
                                          (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
                                          (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))
                                        options))
-     :else (-fail! ::invalid-constraint {:constraint ?constraint}))))
+     :else (-fail! ::invalid-constraint {:outer-schema (-> options ::m/constraint-context :type)
+                                         :constraint ?constraint}))))
 
 (defn -constraint-from-properties [properties options]
   (let [{:keys [parse-properties]} (::m/constraint-context options)
@@ -43,12 +44,6 @@
         0 (constraint [:true] options)
         1 (first cs)
         (constraint (into [:and] cs) options)))))
-
-(comment
-  (-constraint-from-properties
-    {:max 1 :min 0}
-    {::m/constraint-context (:string (base-constraint-extensions))})
-  )
 
 (defn -walk-leaf+constraints [schema walker path constraint {::m/keys [constraint-opts] :as options}]
   (when (m/-accept walker schema path options)
@@ -335,7 +330,8 @@
               ichildren (-> children -flatten-and -intersect-common-constraints)]
           (case (count ichildren)
             1 (first ichildren)
-            (let [this (volatile! nil)
+            (let [children ichildren
+                  this (volatile! nil)
                   ;;FIXME use pretty constraint form
                   form (delay (-constraint-form @this options))
                   cache (m/-create-cache options)
@@ -352,9 +348,9 @@
                       (m/-into-schema parent properties (into children (m/children that)) options)))
                   m/Schema
                   (-validator [_]
-                    (let [validators (m/-vmap m/-validator @ichildren)] (miu/-every-pred validators)))
+                    (let [validators (m/-vmap m/-validator children)] (miu/-every-pred validators)))
                   (-explainer [_ path]
-                    (let [explainers (m/-vmap (fn [[i c]] (m/-explainer c (conj path i))) (map-indexed vector @ichildren))]
+                    (let [explainers (m/-vmap (fn [[i c]] (m/-explainer c (conj path i))) (map-indexed vector children))]
                       (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
                   (-parser [_] (->parser m/-parser seq))
                   (-unparser [_] (->parser m/-unparser rseq))

@@ -692,6 +692,17 @@
 ;; Schemas
 ;;
 
+(defn -constraint-context [type options]
+  (some-> (or (get (::constraint-options options) type)
+              (get @constraint-extensions type))
+          (assoc :type type)))
+
+(defn -constraint-from-properties [{:keys [constraint-from-properties] :as constraint-context} properties options]
+  (if constraint-from-properties
+    (constraint-from-properties properties (assoc options ::constraint-context constraint-context))
+    (-fail! ::cannot-parse-constraint-from-properties {:properties properties
+                                                       :schema-type (:type constraint-context)})))
+
 (defn -simple-schema [props]
   (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile]
          :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props]
@@ -712,11 +723,8 @@
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [form (delay (-simple-form parent properties children identity options))
-                  constraint-context (delay (some-> (or (get (::constraint-options options) type)
-                                                        (get @constraint-extensions type))
-                                                    (assoc :type type)))
-                  constraint (delay (when-some [{:keys [constraint-from-properties]} @constraint-context]
-                                      (constraint-from-properties properties (assoc options ::constraint-context @constraint-context))))
+                  constraint-context (delay (-constraint-context type options))
+                  constraint (delay (some-> @constraint-context (-constraint-from-properties properties options)))
                   cache (-create-cache options)]
               (-check-children! type properties children min max)
               ^{:type ::schema}
