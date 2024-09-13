@@ -44,6 +44,11 @@
     (reset! registry* (registry ?registry))
     (throw (ex-info "can't set default registry, invalid mode" {:mode mode, :type type}))))
 
+(defn swap-default-registry! [f & args]
+  (if-not (identical? mode "strict")
+    (apply swap! registry* f args)
+    (throw (ex-info "can't set default registry, invalid mode" {:mode mode, :type type}))))
+
 (defn ^:no-doc custom-default-registry []
   (reify
     Registry
