@@ -4,6 +4,11 @@
             [malli.core :as m]
             [malli.error :as me]))
 
+(defn constraint-options []
+  {::m/constraint-options (mc/base-constraint-extensions)
+   :registry (merge (mc/base-constraints)
+                    (m/default-schemas))})
+
 (deftest string-constraint-test
   (testing ":min/:max"
     (is (m/validate [:string {:min 1 :max 5}] "ab"))

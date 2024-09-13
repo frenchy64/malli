@@ -17,11 +17,11 @@
         max (str "should be at most " max)))))
 
 (defn- en-count-limits [min max value]
-  (let [plural #(if (= 1 %) "" "s")]
+  (let [elements #(str " " (if (string? value) "character" "element") (when-not (= 1 %) "s"))]
     (cond
-      (and min (= min max)) (str "should have " min " element" (plural min))
-      (and min (< (miu/-safe-count value) min)) (str "should have at least " min " element" (plural min))
-      max (str "should have at most " max " element" (plural max)))))
+      (and min (= min max)) (str "should have " min (elements min))
+      (and min (< (miu/-safe-count value) min)) (str "should have at least " min (elements min))
+      max (str "should have at most " max (elements max)))))
 
 (def default-errors
   {::unknown {:error/message {:en "unknown error"}}
