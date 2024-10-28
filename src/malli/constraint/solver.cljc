@@ -101,7 +101,7 @@ collected."
 
 (defn -constraint-solutions [constraint constraint-opts options]
   {:post [(every? map? %)]}
-  (assert (mcp/-constraint? constraint) (pr-str (class constraint)))
+  (assert (mcp/-constraint? constraint) (pr-str (#?(:cljs type :default class) constraint)))
   (lazy-seq
     (-constraint-solutions* constraint constraint-opts options)))
 
