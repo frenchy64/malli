@@ -80,6 +80,7 @@
                                            (cond-> into-properties
                                              ;; [:string {:max 4}] <= [::mc/count-constraint 0 4]
                                              ;; :string <= [::mc/count-constraint 0 nil]
+                                             ;;FIXME what does ::mc/gen mean?
                                              cmax (update (if (::mc/gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
                                              ;; [:string {:min 5}] <= [::mc/count-constraint 5 nil]
                                              ;; :string <= [::mc/count-constraint 0 nil]
