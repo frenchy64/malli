@@ -34,10 +34,10 @@ jobs:
           path: |
             ~/.m2/repository
             ~/.gitlibs
-          key: ${{ runner.os }}-test-deps-${{ hashFiles('**/deps.edn') }}-${{ matrix.jdk }}
+          key: ${{ runner.os }}-build-clj-${{ hashFiles('**/deps.edn') }}-${{ matrix.jdk }}
           restore-keys: |
-            ${{ runner.os }}-test-deps-${{ hashFiles('**/deps.edn') }}-
-            ${{ runner.os }}-test-deps-
+            ${{ runner.os }}-build-clj-${{ hashFiles('**/deps.edn') }}-
+            ${{ runner.os }}-build-clj-
       - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@master
         with:
@@ -76,9 +76,9 @@ jobs:
           path: |
             ~/.m2/repository
             ~/.gitlibs
-          key: ${{ runner.os }}-test-deps-${{ hashFiles('**/deps.edn') }}
+          key: ${{ runner.os }}-build-cljs-${{ hashFiles('**/deps.edn') }}
           restore-keys: |
-            ${{ runner.os }}-test-deps-
+            ${{ runner.os }}-build-cljs-
       - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@master
         with:
@@ -120,10 +120,10 @@ jobs:
             ~/.m2/repository
             ~/.deps.clj
             ~/.gitlibs
-          key: ${{ runner.os }}-test-deps-${{ hashFiles('**/deps.edn') }}-${{ hashFiles('**/bb.edn') }}
+          key: ${{ runner.os }}-build-bb-${{ hashFiles('**/deps.edn') }}-${{ hashFiles('**/bb.edn') }}
           restore-keys: |
-            ${{ runner.os }}-test-deps-${{ hashFiles('**/deps.edn') }}-
-            ${{ runner.os }}-test-deps-
+            ${{ runner.os }}-build-bb-${{ hashFiles('**/deps.edn') }}-
+            ${{ runner.os }}-build-bb-
       - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@master
         with:
