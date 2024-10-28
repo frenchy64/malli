@@ -9,7 +9,7 @@
   (-get-constraint [this])
   (-set-constraint [this c]))
 
-(extend-type Object
+(extend-type #?(:clj Object, :cljs default)
   Constraint
   (-constraint? [_] false)
   (-intersect [_ _ _])
