@@ -114,7 +114,7 @@
                (me/humanize)))))
 
   (testing "vector"
-    (is (= '[nil nil [nil ["should be an int"]]]
+    (is (= [nil nil [nil ["should be an int"]]]
            (-> [:vector [:vector int?]]
                (m/explain [[1 2] [2 2] [3 "4"]])
                (me/humanize)))))
@@ -248,7 +248,6 @@
 
   (testing "top-level map-schemas are written in :malli/error"
     (let [schema [:and [:map
-                        {:> [:x :y]}
                         [:x int?]
                         [:y int?]
                         [:z int?]]
