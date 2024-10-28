@@ -1,6 +1,7 @@
 (ns malli.constraint.string-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.test.check.generators :as gen]
+            [malli.constraint :as mc]
             [malli.core :as m]
             [malli.error :as me]))
 
