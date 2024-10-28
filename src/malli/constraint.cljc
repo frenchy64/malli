@@ -1,13 +1,10 @@
 (ns malli.constraint
-  (:require [clojure.core :as cc]
-            [malli.constraint.and :refer [-and-constraint]]
+  (:require [malli.constraint.and :refer [-and-constraint]]
             [malli.constraint.count :refer [-count-constraint]]
-            [malli.constraint.true :refer [-true-constraint]]
             [malli.constraint.ext.string :as string-ext]
             [malli.constraint.protocols :as mcp]
+            [malli.constraint.true :refer [-true-constraint]]
             [malli.constraint.util :as mcu]
-            [malli.core :as m]
-            [malli.impl.util :as miu :refer [-fail!]]
             [malli.registry :as mr]))
 
 (defn base-constraint-extensions []
