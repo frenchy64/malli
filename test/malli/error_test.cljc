@@ -320,15 +320,14 @@
 
 (deftest string-test
   (is (= {:a ["should be a string"],
-          :b ["should be at least 1 character, given 0"],
-          :c ["should be at most 4 characters, given 7"],
-          :d [["should be at least 1 character, given 0"]
-              ["should be at most 4 characters, given 5"]],
-          :e ["should be a string"],
-          :f ["should be at most 4 characters, given 7"],
-          :g ["should be at most 1 character, given 2"],
-          ;;FIXME regression
-          :h ["should be at least 1 character, given 0"]}
+          :b ["should be at least 1 character"],
+          :c ["should be at most 4 characters"],
+          :d [["should be at least 1 character"]
+              ["should be at most 4 characters"]],
+          :e ["should be a string"]
+          :f ["should be 4 characters"]
+          :g ["should be at most 1 character"]
+          :h ["should be 1 character"]}
          (-> [:map
               [:a :string]
               [:b [:string {:min 1}]]
@@ -350,14 +349,13 @@
              (me/humanize)))))
 
 (deftest int-test
-  (is (= {:a ["should be an integer"],
-          :b ["should be at least 1, given 0"],
-          :c ["should be at most 4, given 5"],
-          :d [["should be at least 1, given 0"]
-              ["should be at most 4, given 5"]],
-          :e ["should be an integer"],
-          ;;FIXME regression
-          :f ["should be at most 4, given 5"]}
+  (is (= {:a ["should be an integer"]
+          :b ["should be at least 1"]
+          :c ["should be at most 4"]
+          :d [["should be at least 1"]
+              ["should be at most 4"]]
+          :e ["should be an integer"]
+          :f ["should be 4"]}
          (-> [:map
               [:a :int]
               [:b [:int {:min 1}]]
@@ -375,14 +373,13 @@
              (me/humanize)))))
 
 (deftest double-test
-  (is (= {:a ["should be a double"],
-          :b ["should be at least 1, given 0.0"],
-          :c ["should be at most 4, given 5.0"],
-          :d [["should be at least 1, given 0.0"]
-              ["should be at most 4, given 5.0"]],
-          :e ["should be a double"],
-          ;;FIXME regression
-          :f ["should be at most 4, given 5.0"]}
+  (is (= {:a ["should be a double"]
+          :b ["should be at least 1"]
+          :c ["should be at most 4"]
+          :d [["should be at least 1"]
+              ["should be at most 4"]]
+          :e ["should be a double"]
+          :f ["should be 4"]}
          (-> [:map
               [:a :double]
               [:b [:double {:min 1}]]
