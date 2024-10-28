@@ -28,7 +28,8 @@ jobs:
         with:
           distribution: zulu
           java-version: ${{ matrix.jdk }}
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: cache-restore
         with:
           path: |
             ~/.m2/repository
@@ -43,6 +44,15 @@ jobs:
           cli: latest
       - name: Run tests
         run: CLOJURE_ALIAS=clojure-${{ matrix.clojure }} bin/kaocha
+      - name: Always Save Cache
+        id: cache-save
+        if: always() && steps.cache-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
 
   build-cljs:
     timeout-minutes: 5
@@ -59,7 +69,8 @@ jobs:
         with:
           distribution: zulu
           java-version: 11
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: cache-restore
         with:
           path: |
             ~/.m2/repository
@@ -79,6 +90,15 @@ jobs:
         run: npm ci
       - name: Run tests on ${{ matrix.mode }}
         run: bin/node ${{ matrix.mode }}
+      - name: Always Save Cache
+        id: cache-save
+        if: always() && steps.cache-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
 
   build-bb:
     timeout-minutes: 5
@@ -92,7 +112,8 @@ jobs:
         with:
           distribution: zulu
           java-version: 11
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: cache-restore
         with:
           path: |
             ~/.m2/repository
@@ -109,3 +130,13 @@ jobs:
           bb: latest
       - name: Run tests
         run: bb test-bb
+      - name: Always Save Cache
+        id: cache-save
+        if: always() && steps.cache-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
+          path: |
+            ~/.m2/repository
+            ~/.deps.clj
+            ~/.gitlibs
