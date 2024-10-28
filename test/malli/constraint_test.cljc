@@ -35,12 +35,14 @@
            ::mc/true-constraint)))
   (testing "IntoSchema's are not allowed in raw form"
     (is (thrown-with-msg?
-          Exception #":malli\.constraint/missing-parse-constraint-options"
+          #?(:clj Exception, :cljs js/Error)
+          #":malli\.constraint/missing-parse-constraint-options"
           (mc/constraint [::mc/true-constraint]
                          {:registry {::mc/true-constraint (mc/-true-constraint)}}))))
   (testing "m/form requires a constraint context"
     (is (thrown-with-msg?
-          Exception #":malli\.constraint/no-constraint-form"
+          #?(:clj Exception, :cljs js/Error)
+          #":malli\.constraint/no-constraint-form"
           (m/form (mc/constraint (m/schema (mc/-true-constraint)))))))
   (testing ":parse-constraint desugars constraints"
     (is (= (m/type (mc/constraint [:min 1] count-constraint-options))
