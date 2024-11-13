@@ -738,6 +738,10 @@
                 (-to-ast [this _] (to-ast this))
                 Schema
                 (-validator [_]
+                  (if-let [pvalidator (when property-pred (property-pred properties))]
+                    (fn [x] (and (pred x) (pvalidator x)))
+                    pred)
+                  #_;;WIP
                   (let [cvalidator (some-> @constraint -validator)
                         pvalidator (when-not cvalidator (when property-pred (property-pred properties)))]
                     (-> [pred]
