@@ -712,7 +712,8 @@
                 Schema
                 (-validator [_]
                   (if-let [pvalidator (when property-pred (property-pred properties))]
-                    (fn [x] (and (pred x) (pvalidator x))) pred))
+                    (fn [x] (and (pred x) (pvalidator x)))
+                    pred))
                 (-explainer [this path]
                   (let [validator (-validator this)]
                     (fn explain [x in acc]

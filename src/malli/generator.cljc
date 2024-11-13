@@ -559,7 +559,8 @@
                   (-create-from-elements props)
                   (-create-from-schema props options)
                   (-create-from-gen props schema options)
-                  nil-gen))))
+                  (m/-fail! ::no-generator {:options options
+                                            :schema schema})))))
 
 (defn- -create [schema options]
   (let [props (-merge (m/type-properties schema)
