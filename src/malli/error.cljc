@@ -7,14 +7,18 @@
 
 (defn -pr-str [v] #?(:clj (pr-str v), :cljs (str v)))
 
+(defn en-range-min-max [min max value]
+  (cond
+    (and min (= min max)) (str "should be " min)
+    (and min (< value min)) (str "should be at least " min)
+    max (str "should be at most " max)))
+
 (defn -pred-min-max-error-fn [{:keys [pred message]}]
   (fn [{:keys [schema value]} _]
     (let [{:keys [min max]} (m/properties schema)]
-      (cond
-        (not (pred value)) message
-        (and min (= min max)) (str "should be " min)
-        (and min (< value min)) (str "should be at least " min)
-        max (str "should be at most " max)))))
+      (if (not (pred value))
+        message
+        (en-range-min-max min max value)))))
 
 (defn- en-count-limits [min max value]
   (let [elements #(str " " (if (string? value) "character" "element") (when-not (= 1 %) "s"))]
@@ -29,6 +33,9 @@
    :malli.constraint/count-limits {:error/fn {:en (fn [{:keys [schema value]} _]
                                                     (let [[min max] (m/children schema)]
                                                       (en-count-limits min max value)))}}
+   :malli.constraint/range-limits {:error/fn {:en (fn [{:keys [schema value]} _]
+                                                    (let [[min max] (m/children schema)]
+                                                      (en-range-min-max min max value)))}}
    ::m/limits {:error/fn {:en (fn [{:keys [schema value]} _]
                                 (let [{:keys [min max]} (m/properties schema)]
                                   (en-count-limits min max value)))}}

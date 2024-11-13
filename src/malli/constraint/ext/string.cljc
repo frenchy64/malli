@@ -1,13 +1,7 @@
 (ns malli.constraint.ext.string
-  (:require [clojure.core :as cc]
-            [clojure.set :as set]
-            [malli.constraint.protocols :as mcp]
-            [malli.core :as m]
+  (:require [malli.core :as m]
             [malli.constraint :as-alias mc]
-            [malli.constraint.util :as mcu]
-            [malli.impl.util :as miu :refer [-fail!]]
-            [malli.registry :as mr])
-  #?(:clj (:import (clojure.lang IPersistentVector))))
+            [malli.constraint.util :as mcu]))
 
 (defn base-constraint-extensions []
   {:string {:-walk mcu/-walk-leaf+constraints
@@ -50,7 +44,7 @@
                                                                 ;; [:string {:and [:gen/min 5]}] <= [::mc/count-constraint {:gen/min 5} 0 nil]
                                                                 ;; [:string {:and [:gen/max 4]}] <= [::mc/count-constraint {:gen/max 4} 0 nil]
                                                                 1 (first frms)
-                                                                ;; [:string {:and [:count {:gen/min 1 :gen/max 2} 3 4]] <= [::mc/count-constraint {:gen/min 1 :gen/max 2} 3 4]
+                                                                ;; [:string {:and [:count {:gen/min 1 :gen/max 2} 3 4]}] <= [::mc/count-constraint {:gen/min 1 :gen/max 2} 3 4]
                                                                 (let [ps (cond-> nil
                                                                            (some-> gen-min pos?) (assoc :gen/min gen-min)
                                                                            gen-max (assoc :gen/max gen-max))]
