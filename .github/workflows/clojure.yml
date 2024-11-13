@@ -14,8 +14,8 @@ jobs:
     strategy:
       matrix:
         # Supported Java versions: LTS releases and latest
-        # TODO add back other jvms
-        jdk: [21]
+        jdk: [8, 11, 17, 21]
+        clojure: [11]
 
     name: Java ${{ matrix.jdk }}
 
@@ -59,8 +59,7 @@ jobs:
     name: ClojureScript
     strategy:
       matrix:
-        # TODO add back other modes
-        mode: [none]
+        mode: [none, advanced, cherry-none, cherry-advanced]
 
     runs-on: ubuntu-latest
     steps:
