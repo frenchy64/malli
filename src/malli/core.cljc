@@ -705,7 +705,8 @@
                                                        :schema-type (:type constraint-context)})))
 
 (defn -simple-schema [props]
-  (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile]
+  (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile
+                constraints-override-property-pred]
          :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props]
     (if (fn? props)
       (do
@@ -738,17 +739,18 @@
                 (-to-ast [this _] (to-ast this))
                 Schema
                 (-validator [_]
-                  (if-let [pvalidator (when property-pred (property-pred properties))]
-                    (fn [x] (and (pred x) (pvalidator x)))
-                    pred)
-                  #_;;WIP
                   (let [cvalidator (some-> @constraint -validator)
-                        pvalidator (when-not cvalidator (when property-pred (property-pred properties)))]
-                    (-> [pred]
-                        (cond->
-                          pvalidator (conj pvalidator)
-                          cvalidator (conj cvalidator))
-                        miu/-every-pred)))
+                        pvalidator (when property-pred
+                                     (when (or (not cvalidator)
+                                               (not constraints-override-property-pred))
+                                       (property-pred properties)))]
+                    (if (and (not cvalidator)
+                             (not pvalidator))
+                      pred ;;FIXME why is it critical this isn't eta-expanded?
+                      (fn [x]
+                        (and (pred x)
+                             (or (not pvalidator) (pvalidator x))
+                             (or (not cvalidator) (cvalidator x)))))))
                 (-explainer [this path]
                   (let [cexplainer (some-> @constraint (-explainer (conj path :malli.constraint/constraint)))
                         pvalidator (when-not cexplainer (when property-pred (property-pred properties)))
@@ -786,7 +788,8 @@
 (defn -nil-schema [] (-simple-schema {:type :nil, :pred nil?}))
 (defn -any-schema [] (-simple-schema {:type :any, :pred any?}))
 (defn -some-schema [] (-simple-schema {:type :some, :pred some?}))
-(defn -string-schema [] (-simple-schema {:type :string, :pred string?, :property-pred (-min-max-pred count)}))
+(defn -string-schema [] (-simple-schema {:type :string, :pred string?, :property-pred (-min-max-pred count)
+                                         :constraints-override-property-pred true}))
 (defn -int-schema [] (-simple-schema {:type :int, :pred int?, :property-pred (-min-max-pred nil)}))
 (defn -float-schema [] (-simple-schema {:type :float, :pred float?, :property-pred (-min-max-pred nil)}))
 (defn -double-schema [] (-simple-schema {:type :double, :pred double?, :property-pred (-min-max-pred nil)}))
