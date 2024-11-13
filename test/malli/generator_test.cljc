@@ -243,7 +243,8 @@
 
   (testing "generator override"
     (testing "without generator"
-      (let [schema [:fn {:gen/fmap '(fn [_] (rand-int 10))}
+      (let [schema [:fn {:gen/return 5
+                         :gen/fmap '(fn [_] (rand-int 10))}
                     '(fn [x] (<= 0 x 10))]
             generator (mg/generator schema)]
         (dotimes [_ 100]
@@ -1001,7 +1002,10 @@
 
 (defn alphanumeric-char? [c]
   {:pre [(char? c)]}
-  (let [i (int c)]
+  (let [int (fn [c]
+              #?(:clj (int c)
+                 :cljs (.charCodeAt c 0)))
+        i (int c)]
     (or (<= (int \a) i (int \z))
         (<= (int \A) i (int \Z))
         (<= (int \0) i (int \9)))))

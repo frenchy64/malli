@@ -741,16 +741,16 @@
                 (-validator [_]
                   (let [cvalidator (some-> @constraint -validator)
                         pvalidator (when property-pred
-                                     (when (or (not cvalidator)
-                                               (not constraints-override-property-pred))
+                                     (when-not cvalidator
                                        (property-pred properties)))]
-                    (if (and (not cvalidator)
-                             (not pvalidator))
-                      pred ;;FIXME why is it critical this isn't eta-expanded?
-                      (fn [x]
-                        (and (pred x)
-                             (or (not pvalidator) (pvalidator x))
-                             (or (not cvalidator) (cvalidator x)))))))
+                    (-> [pred]
+                        (cond->
+                          pvalidator (conj pvalidator)
+                          cvalidator (conj cvalidator))
+                        ;; [pred] must not be wrapped to catch malli.generator ga/gen-for-pred special case
+                        ;; possibly relied on mostly by predicate schemas.
+                        ;; relevant: https://github.com/metosin/malli/pull/1092/files
+                        miu/-every-pred)))
                 (-explainer [this path]
                   (let [cexplainer (some-> @constraint (-explainer (conj path :malli.constraint/constraint)))
                         pvalidator (when-not cexplainer (when property-pred (property-pred properties)))

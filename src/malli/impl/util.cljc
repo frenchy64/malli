@@ -68,11 +68,17 @@
 
 (def ^{:arglists '([[& preds]])} -every-pred
   #?(:clj  (-pred-composer and 16)
-     :cljs (fn [preds] (fn [m] (boolean (reduce #(or (%2 m) (reduced false)) true preds))))))
+     :cljs (fn [preds]
+             (if-some [preds (not-empty (reverse preds))]
+               (reduce (fn [acc f] (fn [x] (and (f x) (acc x)))) (first preds) (next preds))
+               any?))))
 
 (def ^{:arglists '([[& preds]])} -some-pred
   #?(:clj  (-pred-composer or 16)
-     :cljs (fn [preds] (fn [x] (boolean (some #(% x) preds))))))
+     :cljs (fn [preds]
+             (if-some [preds (not-empty (reverse preds))]
+               (reduce (fn [acc f] (fn [x] (or (f x) (acc x)))) (first preds) (next preds))
+               (fn [_] false)))))
 
 (defn -exception [type data] (ex-info (str type) {:type type, :message type, :data data}))
 
