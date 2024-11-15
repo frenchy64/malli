@@ -104,7 +104,7 @@
   (solver/-constraint-solutions
     constraint constraint-opts (assoc options ::solver/mode :gen)))
 
-(defn -string-gen* [min-max options]
+(defn -string-gen* [{:keys [min max]} options]
   (cond
     (and min (= min max)) (gen/fmap str/join (gen/vector gen/char-alphanumeric min))
     (and min max) (gen/fmap str/join (gen/vector gen/char-alphanumeric min max))
