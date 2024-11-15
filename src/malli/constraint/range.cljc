@@ -57,7 +57,6 @@
               (-to-ast [this _] (m/-to-value-ast this))
               m/Schema
               (-validator [_]
-                (prn "range validator" min-range max-range)
                 (cond
                   (and min-range max-range) (if (= min-range max-range)
                                               #(= min-range %)

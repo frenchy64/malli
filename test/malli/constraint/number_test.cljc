@@ -39,28 +39,29 @@
            (me/humanize (explain [:int {:min 1 :max 1}] 3))
            (me/humanize (explain [:int {:and [[:min 1] [:max 1]]}] 3))))))
 
-(deftest double-constraint-test
-  (testing ":min/:max"
-    (is (validate [:double {:min 1.0 :max 5.0}] 2.0))
-    (is (validate [:double {:min 4.0 :max 4.0}] 4.0))
-    (is (not (validate [:double {:min 1.0 :max 5.0}] "")))
-    (is (= ["should be at least 1.0"]
-           (me/humanize (explain [:double {:min 1.0}] 0.0))
-           (me/humanize (explain [:double {:min 1.0 :max 10.0}] 0.0))
-           (me/humanize (explain [:double {:and [[:min 1.0]]}] 0.0))))
-    (is (= ["should be at least 2.0"]
-           (me/humanize (explain [:double {:min 2.0}] 0.0))
-           (me/humanize (explain [:double {:min 2.0 :max 10.0}] 0.0))
-           (me/humanize (explain [:double {:and [[:min 2.0]]}] 0.0))))
-    (is (= ["should be at most 1.0"]
-           (me/humanize (explain [:double {:max 1.0}] 2.0))
-           (me/humanize (explain [:double {:max 1.0}] 2.0))
-           (me/humanize (explain [:double {:min 0.0 :max 1.0}] 2.0))
-           (me/humanize (explain [:double {:and [[:max 1.0]]}] 2.0))))
-    (is (= ["should be at most 2.0"]
-           (me/humanize (explain [:double {:max 2.0}] 3.0))
-           (me/humanize (explain [:double {:min 1.0 :max 2.0}] 3.0))
-           (me/humanize (explain [:double {:and [[:max 2.0]]}] 3.0))))
-    (is (= ["should be 1.0"]
-           (me/humanize (explain [:double {:min 1.0 :max 1.0}] 3.0))
-           (me/humanize (explain [:double {:and [[:min 1.0] [:max 1.0]]}] 3.0))))))
+(deftest double+float-constraint-test
+  (doseq [type [:double :float]]
+    (testing (str type " :min/:max")
+      (is (validate [type {:min 1.0 :max 5.0}] 2.0))
+      (is (validate [type {:min 4.0 :max 4.0}] 4.0))
+      (is (not (validate [type {:min 1.0 :max 5.0}] "")))
+      (is (= ["should be at least 1.0"]
+             (me/humanize (explain [type {:min 1.0}] 0.0))
+             (me/humanize (explain [type {:min 1.0 :max 10.0}] 0.0))
+             (me/humanize (explain [type {:and [[:min 1.0]]}] 0.0))))
+      (is (= ["should be at least 2.0"]
+             (me/humanize (explain [type {:min 2.0}] 0.0))
+             (me/humanize (explain [type {:min 2.0 :max 10.0}] 0.0))
+             (me/humanize (explain [type {:and [[:min 2.0]]}] 0.0))))
+      (is (= ["should be at most 1.0"]
+             (me/humanize (explain [type {:max 1.0}] 2.0))
+             (me/humanize (explain [type {:max 1.0}] 2.0))
+             (me/humanize (explain [type {:min 0.0 :max 1.0}] 2.0))
+             (me/humanize (explain [type {:and [[:max 1.0]]}] 2.0))))
+      (is (= ["should be at most 2.0"]
+             (me/humanize (explain [type {:max 2.0}] 3.0))
+             (me/humanize (explain [type {:min 1.0 :max 2.0}] 3.0))
+             (me/humanize (explain [type {:and [[:max 2.0]]}] 3.0))))
+      (is (= ["should be 1.0"]
+             (me/humanize (explain [type {:min 1.0 :max 1.0}] 3.0))
+             (me/humanize (explain [type {:and [[:min 1.0] [:max 1.0]]}] 3.0)))))))
