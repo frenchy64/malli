@@ -102,7 +102,7 @@
            (m/explain (m/schema [:string {:max 1}]
                                 (constraint-options))
                       "20"))))
-  ;; TODO should be [:schema [:min 5]], :in [0]
+  ;; TODO should be :path [:malli.constraint/constraint 0]
   (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:and [:min 5] [:max 10]], :value "", :type :malli.constraint/count-limits}]
          (errors
            (m/explain (m/schema [:string {:min 5 :max 10}]

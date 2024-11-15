@@ -24,8 +24,7 @@
         (let [[min-count max-count] children
               ;; unclear if we want to enforce (<= min-count max-count)
               ;; it's a perfectly well formed constraint that happens to satisfy no values
-              _ (when-not (or (nil? min-count)
-                              (nat-int? min-count))
+              _ (when-not (nat-int? min-count)
                   (-fail! ::mc/count-constraint-min {:min min-count}))
               _ (when-not (or (nil? max-count)
                               (nat-int? max-count))
