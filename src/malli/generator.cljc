@@ -1,6 +1,7 @@
 ;; See also `malli.generator-ast` for viewing generators as data
 (ns malli.generator
-  (:require [clojure.spec.gen.alpha :as ga]
+  (:require [clojure.set :as set]
+            [clojure.spec.gen.alpha :as ga]
             [clojure.string :as str]
             [clojure.test.check :as check]
             [clojure.test.check.generators :as gen]
@@ -590,11 +591,9 @@
 
 (defmethod -schema-generator :double [schema options] (-double-schema-gen schema options))
 
-(defmethod -schema-generator :float [schema options]
+(defn -float-gen* [props min-max-props]
   (let [max-float #?(:clj Float/MAX_VALUE :cljs (.-MAX_VALUE js/Number))
         min-float (- max-float)
-        props (m/properties schema options)
-        min-max-props (-min-max schema options)
         infinite? #?(:clj false :cljs (get props :gen/infinite? false))]
     (->> (merge {:infinite? infinite?
                  :NaN? (get props :gen/NaN? false)}
@@ -605,6 +604,36 @@
                                       #?(:clj max-float :cljs nil)))))
          (gen/double*)
          (gen/fmap float))))
+
+(defn -float-gen-legacy [schema options]
+  (-float-gen* (m/properties schema options) (-min-max schema options)))
+
+(defn -float-gen-constrained [schema solutions options]
+  (do ;; side effect
+      (-min-max schema options))
+  (gen-one-of
+    (mapv (fn [solution]
+            (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                          :min-range :max-range))]
+              (m/-fail! ::unsupported-double-constraint-solution {:schema schema :solution solution}))
+            (-float-gen* (select-keys (m/properties schema options) [:gen/NaN? :gen/infinite?])
+                         (set/rename-keys solution {:min-range :min
+                                                    :max-range :max})))
+          solutions)))
+
+(defn -float-gen [schema options]
+  (if-not (mcp/-constrained-schema? schema)
+    (-float-gen-legacy schema options)
+    (let [constraint (or (mcp/-get-constraint schema)
+                         (m/-fail! ::missing-constraint {:type (m/type schema)
+                                                         :schema schema}))
+          solutions (-constraint-solutions constraint (m/type schema) options)]
+      (when (empty? solutions)
+        (m/-fail! ::unsatisfiable-float-constraint {:schema schema
+                                                    :constraint constraint}))
+      (-float-gen-constrained schema solutions options))))
+
+(defmethod -schema-generator :float [schema options] (-float-gen schema options))
 (defmethod -schema-generator :boolean [_ _] gen/boolean)
 (defmethod -schema-generator :keyword [_ _] gen/keyword)
 (defmethod -schema-generator :symbol [_ _] gen/symbol)
