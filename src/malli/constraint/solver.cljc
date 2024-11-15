@@ -6,6 +6,20 @@
             [malli.constraint.protocols :as mcp]
             [malli.impl.util :as miu]))
 
+(defn -int-solutions [min-int max-int mink maxk]
+  (lazy-seq
+    (if (and min-int max-int)
+      (if (<= min-int max-int)
+        ;; TODO exact int
+        [{mink min-int
+          maxk max-int}]
+        [])
+      (if min-int
+        [{mink min-int}]
+        (if max-int
+          [{maxk max-int}]
+          [{}])))))
+
 (defn -conj-number-constraints [[sol1 & sols :as all-sols]]
   (if (empty? all-sols)
     [{}]
@@ -13,30 +27,8 @@
           min-count (some->> (seq (keep :min-count all-sols)) (apply max))
           max-range (some->> (seq (keep :max-range all-sols)) (apply min))
           min-range (some->> (seq (keep :min-range all-sols)) (apply max))
-          count-solutions (lazy-seq
-                            (if (and min-count max-count)
-                              (if (<= min-count max-count)
-                                ;; TODO exact count
-                                [{:min-count min-count
-                                  :max-count max-count}]
-                                [])
-                              (if min-count
-                                [{:min-count min-count}]
-                                (if max-count
-                                  [{:max-count max-count}]
-                                  [{}]))))
-          range-solutions (lazy-seq
-                            (if (and min-range max-range)
-                              (if (<= min-range max-range)
-                                ;; TODO exact range
-                                [{:min-range min-range
-                                  :max-range max-range}]
-                                [])
-                              (if min-range
-                                [{:min-range min-range}]
-                                (if max-range
-                                  [{:max-range max-range}]
-                                  [{}]))))
+          count-solutions (-int-solutions min-count max-count :min-count :max-count)
+          range-solutions (-int-solutions min-range max-range :min-range :max-range)
           all-solutions [count-solutions range-solutions]]
       (lazy-seq
         (->> (apply comb/cartesian-product all-solutions)
