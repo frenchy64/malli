@@ -129,7 +129,8 @@
 
 (deftest float-constraint-generate-test
   (testing ":and + :min + :max"
-    (is (= (mapv float [0.5 -2.0 -0.0 -3.0 3.0 -0.78125 1.75 1.0 1.1054688 -6.0])
+    (is (= #?(:cljs [-1 2 0 1 -1 1 3.25 -3 -0.9375 -2]
+              :default (mapv float [0.5 -2.0 -0.0 -3.0 3.0 -0.78125 1.75 1.0 1.1054688 -6.0]))
            (mg/sample [:float {}] {:seed 0})
            (mg/sample [:float {}] (add-constraints {:seed 0}))
            (mg/sample [:float {:and []}] (add-constraints {:seed 0}))))
