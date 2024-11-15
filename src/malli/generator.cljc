@@ -552,13 +552,15 @@
 
 (defmethod -schema-generator :int [schema options] (-int-gen schema options))
 
-(defn -double-gen-legacy [schema options]
-  (gen/double* (merge (let [props (m/properties schema options)]
-                        {:infinite? (get props :gen/infinite? false)
-                         :NaN? (get props :gen/NaN? false)})
-                      (-> (-min-max schema options)
+(defn -double-gen* [props min-max]
+  (gen/double* (merge {:infinite? (get props :gen/infinite? false)
+                       :NaN? (get props :gen/NaN? false)}
+                      (-> min-max
                           (update :min #(some-> % double))
                           (update :max #(some-> % double))))))
+
+(defn -double-gen-legacy [schema options]
+  (-double-gen* (m/properties schema options) (-min-max schema options)))
 
 (defn -double-gen-constrained [schema solutions options]
   (do ;; side effect
@@ -570,11 +572,9 @@
               (m/-fail! ::unsupported-double-constraint-solution {:schema schema :solution solution}))
             (let [{min :min-range
                    max :max-range} solution]
-              (gen/double* (merge (let [props (m/properties schema options)]
-                                    {:infinite? (get props :gen/infinite? false)
-                                     :NaN? (get props :gen/NaN? false)})
-                                  {:min (some-> min double)
-                                   :max (some-> max double)}))))
+              (-double-gen* (m/properties schema options)
+                            (set/rename-keys solution {:min-range :min
+                                                       :max-range :max}))))
           solutions)))
 
 (defn -double-schema-gen [schema options]
@@ -591,13 +591,13 @@
 
 (defmethod -schema-generator :double [schema options] (-double-schema-gen schema options))
 
-(defn -float-gen* [props min-max-props]
+(defn -float-gen* [props min-max]
   (let [max-float #?(:clj Float/MAX_VALUE :cljs (.-MAX_VALUE js/Number))
         min-float (- max-float)
         infinite? #?(:clj false :cljs (get props :gen/infinite? false))]
     (->> (merge {:infinite? infinite?
                  :NaN? (get props :gen/NaN? false)}
-                (-> min-max-props
+                (-> min-max
                     (update :min #(or (some-> % float)
                                       #?(:clj min-float :cljs nil)))
                     (update :max #(or (some-> % float)
