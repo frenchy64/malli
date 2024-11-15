@@ -1,4 +1,4 @@
-(ns malli.constraint.ext.int
+(ns malli.constraint.ext.number
   (:require [malli.core :as m]
             [malli.constraint :as-alias mc]
             [malli.constraint.util :as mcu]))

@@ -2,7 +2,7 @@
   (:require [malli.constraint.and :refer [-and-constraint]]
             [malli.constraint.count :refer [-count-constraint]]
             [malli.constraint.range :refer [-range-constraint]]
-            [malli.constraint.ext.int :as int-ext]
+            [malli.constraint.ext.number :as number-ext]
             [malli.constraint.ext.string :as string-ext]
             [malli.constraint.protocols :as mcp]
             [malli.constraint.true :refer [-true-constraint]]
@@ -10,7 +10,7 @@
             [malli.registry :as mr]))
 
 (defn base-constraint-extensions []
-  (merge (int-ext/base-constraint-extensions)
+  (merge (number-ext/base-constraint-extensions)
          (string-ext/base-constraint-extensions)))
 
 (defn base-constraints []
