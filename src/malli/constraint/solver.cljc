@@ -7,31 +7,35 @@
             [malli.impl.util :as miu]))
 
 (defn -int-solutions [min-int max-int mink maxk]
-  (lazy-seq
-    (if (and min-int max-int)
-      (if (<= min-int max-int)
-        ;; TODO exact int
-        [{mink min-int
-          maxk max-int}]
-        [])
-      (if min-int
-        [{mink min-int}]
-        (if max-int
-          [{maxk max-int}]
-          [{}])))))
+  (when (or min-int max-int)
+    (lazy-seq
+      (if (and min-int max-int)
+        (if (<= min-int max-int)
+          ;; TODO exact int
+          [{mink min-int
+            maxk max-int}]
+          [])
+        (if min-int
+          [{mink min-int}]
+          (if max-int
+            [{maxk max-int}]
+            [{}]))))))
 
 (defn -number-constraints [all-sols mink maxk]
   (let [the-max (some->> (seq (keep maxk all-sols)) (apply min))
         the-min (some->> (seq (keep mink all-sols)) (apply max))]
     (-int-solutions the-min the-max mink maxk)))
 
-(defn -conj-number-constraints [[sol1 & sols :as all-sols]]
-  (if (empty? all-sols)
-    [{}]
+(defn -conj-number-constraints [all-sols]
+  (if-some [sols (when (seq all-sols)
+                   (not-empty (into [] (keep (fn [mink maxk]
+                                               (-number-constraints all-sols mink maxk)))
+                                    [[:min-count :max-count]
+                                     [:min-range :max-range]])))]
     (lazy-seq
-      (->> (apply comb/cartesian-product [(-number-constraints all-sols :min-count :max-count)
-                                          (-number-constraints all-sols :min-range :max-range)])
-           (map #(apply merge %))))))
+      (->> (apply comb/cartesian-product sols)
+           (map #(apply merge %))))
+    [{}]))
 
 (comment
  (map #(apply merge %) (comb/cartesian-product [{:< 1} {:> 2}] [{:max-count 1} {:min-count 3}]))
@@ -50,10 +54,7 @@
                                                (disj (into #{} (mapcat keys) all-sols)
                                                      :max-count :min-count))]
                   (miu/-fail! ::unsupported-conj-solution {:unsupported-keys unsupported-keys}))
-                (let [number-solutions
-                      (if (not-any? (some-fn :max-count :min-count) all-sols)
-                        [{}]
-                        (-conj-number-constraints all-sols))
+                (let [number-solutions (-conj-number-constraints all-sols)
                       combined-sols (comb/cartesian-product
                                       number-solutions)]
                   (if (empty? combined-sols)
