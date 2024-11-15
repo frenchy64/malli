@@ -520,7 +520,38 @@
 (defmethod -schema-generator :some [_ _] gen/any-printable)
 (defmethod -schema-generator :nil [_ _] nil-gen)
 (defmethod -schema-generator :string [schema options] (-string-gen schema options))
-(defmethod -schema-generator :int [schema options] (gen/large-integer* (-min-max schema options)))
+
+(defn -int-gen-legacy [schema options]
+  (gen/large-integer* (-min-max schema options)))
+
+(defn -int-gen-constrained [schema solutions options]
+  (do ;; side effect
+      (-min-max schema options))
+  (prn solutions)
+  (gen-one-of
+    (mapv (fn [solution]
+            (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                          :min-range :max-range))]
+              (m/-fail! ::unsupported-int-constraint-solution {:schema schema :solution solution}))
+            (let [{min :min-range
+                   max :max-range} solution]
+              (gen/large-integer* {:min min :max max})))
+          solutions)))
+
+(defn -int-gen [schema options]
+  (if-not (mcp/-constrained-schema? schema)
+    (-int-gen-legacy schema options)
+    (let [constraint (or (mcp/-get-constraint schema)
+                         (m/-fail! ::missing-constraint {:type (m/type schema)
+                                                         :schema schema}))
+          solutions (-constraint-solutions constraint (m/type schema) options)]
+      ;(prn "solutions" solutions)
+      (when (empty? solutions)
+        (m/-fail! ::unsatisfiable-int-constraint {:schema schema
+                                                  :constraint constraint}))
+      (-int-gen-constrained schema solutions options))))
+
+(defmethod -schema-generator :int [schema options] (-int-gen schema options))
 (defmethod -schema-generator :double [schema options]
   (gen/double* (merge (let [props (m/properties schema options)]
                         {:infinite? (get props :gen/infinite? false)

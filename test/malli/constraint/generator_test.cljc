@@ -45,35 +45,46 @@
 
 (deftest int-constraint-generate-test
   (testing ":and + :min + :max"
-    (is (thrown-with-msg?
-          #?(:clj Exception, :cljs js/Error)
-          #":malli\.constraint/count-constraint-min"
-          (mg/generate [:int {:min -1}] (add-constraints {}))))
     (is (= [0 -1 0 -3 0 1 16 0 7 3]
+           (vec (mg/sample [:int {}] {:seed 0}))
            (vec (mg/sample [:int {}]
                            (add-constraints {:seed 0})))
            (vec (mg/sample [:int {:and []}]
                            (add-constraints {:seed 0})))))
     (is (= [10 11 10 13 10 11 26 10 17 13]
+           (vec (mg/sample [:int {:min 10}] {:seed 0}))
            (vec (mg/sample [:int {:min 10}]
                            (add-constraints {:seed 0})))
-           ;;TODO
            (vec (mg/sample [:int {:and [[:min 10]]}]
                            (add-constraints {:seed 0})))))
     (is (= [0 -1 0 -3 0 1 -16 0 7 3]
+           (vec (mg/sample [:int {:max 10}] {:seed 0}))
            (vec (mg/sample [:int {:max 10}]
                            (add-constraints {:seed 0})))
-           ;;TODO
            (vec (mg/sample [:int {:and [[:max 10]]}]
                            (add-constraints {:seed 0})))))
     (is (= [4 5 4 5 4 5 6 4 5 5]
            (vec (mg/sample [:int {:min 4 :max 6}]
+                           {:seed 0}))
+           (vec (mg/sample [:int {:min 4 :max 6}]
                            (add-constraints {:seed 0})))
-           ;;TODO
            (vec (mg/sample [:int {:and [[:min 4] [:max 6]]}]
                            (add-constraints {:seed 0})))))
+    (is (= [-5 -6 -5 -8 -5 -6 -9 -5 -8 -8]
+           (vec (mg/sample [:int {:min -10 :max -5}] {:seed 0}))
+           (vec (mg/sample [:int {:min -10 :max -5}]
+                           (add-constraints {:seed 0})))
+           (vec (mg/sample [:int {:and [[:min -10] [:max -5]]}]
+                           (add-constraints {:seed 0})))))
+    (is (every? pos-int? (mg/sample [:int {:min 1}] {})))
     (is (every? pos-int? (mg/sample [:int {:min 1}] (add-constraints {}))))
-    (is (thrown-with-msg?
+    #?(:clj (testing "without constraints properties are checked for satisfiability"
+              (is (thrown-with-msg?
+                    AssertionError,
+                    #"(<= min max)"
+                    (mg/generate [:int {:min 10 :max 9}] {})))))
+    (testing "with constraints the solver signals unsatisfiability with zero solutions"
+      (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
           #":malli\.generator/unsatisfiable-int-constraint"
-          (mg/generate [:int {:min 10 :max 9}] (add-constraints {}))))))
+          (mg/generate [:int {:min 10 :max 9}] (add-constraints {})))))))

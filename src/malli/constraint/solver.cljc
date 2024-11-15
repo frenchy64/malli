@@ -85,8 +85,9 @@ collected."
   [f coll]
   (join (map f coll)))
 
-(defn- -min-max-count [min max gen-min gen-max]
+(defn- -min-max [min max gen-min gen-max mink maxk]
   (cond
+    ;; not sure about these cases, why is a smaller :gen/min contradictory?
     (and min gen-min (< gen-min min)) []
     (and max gen-max (> gen-max max)) []
     :else (let [min (or gen-min min)
@@ -94,8 +95,8 @@ collected."
             (if (and min max (> min max))
               []
               [(cond-> {}
-                 (some-> min pos?) (assoc :min-count min)
-                 max (assoc :max-count max))]))))
+                 min (assoc mink min)
+                 max (assoc maxk max))]))))
 
 (defmulti -constraint-solutions* (fn [constraint constraint-opts options] (m/type constraint)))
 
@@ -113,5 +114,11 @@ collected."
   [constraint constraint-opts {::keys [mode] :as options}]
   (let [[min max] (m/children constraint)
         {gen-min :gen/min gen-max :gen/max} (when (= :gen mode) (m/properties constraint))]
-    (-min-max-count min max gen-min gen-max)))
+    (assert (<= 0 min)) ;;should this be enforced?
+    (-min-max min max gen-min gen-max :min-count :max-count)))
+(defmethod -constraint-solutions* ::mc/range-constraint
+  [constraint constraint-opts {::keys [mode] :as options}]
+  (let [[min max] (m/children constraint)
+        {gen-min :gen/min gen-max :gen/max} (when (= :gen mode) (m/properties constraint))]
+    (-min-max min max gen-min gen-max :min-range :max-range)))
 (defmethod -constraint-solutions* :default [constraint constraint-opts options] (miu/-fail! ::unknown-constraint {:constraint constraint}))
