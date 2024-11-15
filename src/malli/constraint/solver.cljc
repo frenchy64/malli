@@ -6,7 +6,7 @@
             [malli.constraint.protocols :as mcp]
             [malli.impl.util :as miu]))
 
-(defn -int-solutions [min-int max-int mink maxk]
+(defn -number-solutions [min-int max-int mink maxk]
   (when (or min-int max-int)
     (lazy-seq
       (if (and min-int max-int)
@@ -24,7 +24,7 @@
 (defn -number-constraints [all-sols mink maxk]
   (let [the-max (some->> (seq (keep maxk all-sols)) (apply min))
         the-min (some->> (seq (keep mink all-sols)) (apply max))]
-    (-int-solutions the-min the-max mink maxk)))
+    (-number-solutions the-min the-max mink maxk)))
 
 (defn -conj-number-constraints [all-sols]
   (if-some [sols (when (seq all-sols)
