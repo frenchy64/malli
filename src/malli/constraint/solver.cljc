@@ -28,7 +28,7 @@
 
 (defn -conj-number-constraints [all-sols]
   (if-some [sols (when (seq all-sols)
-                   (not-empty (into [] (keep (fn [mink maxk]
+                   (not-empty (into [] (keep (fn [[mink maxk]]
                                                (-number-constraints all-sols mink maxk)))
                                     [[:min-count :max-count]
                                      [:min-range :max-range]])))]
