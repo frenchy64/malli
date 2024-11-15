@@ -1302,6 +1302,8 @@
             (-check-children! type properties children 1 1)
             (let [[schema :as children] (-vmap #(schema % options) children)
                   form (delay (-simple-form parent properties children -form options))
+                  constraint-context (delay (-constraint-context type options))
+                  constraint (delay (some-> @constraint-context (-constraint-from-properties properties options)))
                   cache (-create-cache options)
                   bounded (when (:bounded props)
                             (when fempty
@@ -1335,6 +1337,10 @@
                                                        :else x')))))))]
               ^{:type ::schema}
               (reify
+                mcp/ConstrainedSchema
+                (-constrained-schema? [this] (boolean @constraint-context))
+                (-get-constraint [this] @constraint)
+                (-set-constraint [this c] (-set-constraint this c @constraint-context))
                 AST
                 (-to-ast [this _] (-to-child-ast this))
                 Schema

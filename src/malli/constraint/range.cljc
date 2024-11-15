@@ -21,15 +21,15 @@
       (-children-schema [_ _])
       (-into-schema [parent properties children options]
         (m/-check-children! type properties children 2 2)
-        (let [[min-count max-count] children
-              ;; unclear if we want to enforce (<= min-count max-count)
+        (let [[min-range max-range] children
+              ;; unclear if we want to enforce (<= min-range max-range)
               ;; it's a perfectly well formed constraint that happens to satisfy no values
-              _ (when-not (or (nil? min-count)
-                              (number? min-count))
-                  (-fail! ::mc/range-constraint-min {:min min-count}))
-              _ (when-not (or (nil? max-count)
-                              (number? max-count))
-                  (-fail! ::mc/range-constraint-max {:max max-count}))
+              _ (when-not (or (nil? min-range)
+                              (number? min-range))
+                  (-fail! ::mc/range-constraint-min {:min min-range}))
+              _ (when-not (or (nil? max-range)
+                              (number? max-range))
+                  (-fail! ::mc/range-constraint-max {:max max-range}))
               this (volatile! nil)
               form (delay (mcu/-constraint-form @this options))
               cache (m/-create-cache options)]
@@ -42,7 +42,7 @@
               (-intersect [_ that options']
                 (when (= type (m/type that))
                   (let [{gen-min :gen/min gen-max :gen/max} properties
-                        [min-count' max-count'] (m/children that)
+                        [min-range' max-range'] (m/children that)
                         {gen-min' :gen/min gen-max' :gen/max} (m/properties that)
                         gen-min (or (when (and gen-min gen-min') (cc/max gen-min gen-min')) gen-min gen-min')
                         gen-max (or (when (and gen-max gen-max') (cc/min gen-max gen-max')) gen-max gen-max')]
@@ -50,22 +50,23 @@
                                     (cond-> {}
                                       gen-min (assoc :gen/min gen-min)
                                       gen-max (assoc :gen/max gen-max))
-                                    [(or (when (and min-count min-count') (cc/max min-count min-count')) min-count min-count')
-                                     (or (when (and max-count max-count') (cc/min max-count max-count')) max-count max-count')]
+                                    [(or (when (and min-range min-range') (cc/max min-range min-range')) min-range min-range')
+                                     (or (when (and max-range max-range') (cc/min max-range max-range')) max-range max-range')]
                                     options))))
               m/AST
               (-to-ast [this _] (m/-to-value-ast this))
               m/Schema
               (-validator [_]
+                (prn "range validator" min-range max-range)
                 (cond
-                  (and min-count max-count) (if (= min-count max-count)
-                                              #(= min-count %)
-                                              (if (<= min-count max-count)
-                                                #(and (<= min-count %)
-                                                      (<= % max-count))
+                  (and min-range max-range) (if (= min-range max-range)
+                                              #(= min-range %)
+                                              (if (<= min-range max-range)
+                                                #(and (<= min-range %)
+                                                      (<= % max-range))
                                                 (fn [_] false)))
-                  min-count #(<= min-count %)
-                  max-count #(<= % max-count)
+                  min-range #(<= min-range %)
+                  max-range #(<= % max-range)
                   :else any?))
               (-explainer [this path]
                 (let [pred (m/-validator this)]
