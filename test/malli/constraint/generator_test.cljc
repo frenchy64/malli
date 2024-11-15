@@ -56,12 +56,18 @@
            (vec (mg/sample [:int {:min 10}]
                            (add-constraints {:seed 0})))
            (vec (mg/sample [:int {:and [[:min 10]]}]
+                           (add-constraints {:seed 0})))
+           (vec (mg/sample [:int {:and [[:min 10]
+                                        [:min 5]]}]
                            (add-constraints {:seed 0})))))
     (is (= [0 -1 0 -3 0 1 -16 0 7 3]
            (vec (mg/sample [:int {:max 10}] {:seed 0}))
            (vec (mg/sample [:int {:max 10}]
                            (add-constraints {:seed 0})))
            (vec (mg/sample [:int {:and [[:max 10]]}]
+                           (add-constraints {:seed 0})))
+           (vec (mg/sample [:int {:and [[:max 15]
+                                        [:max 10]]}]
                            (add-constraints {:seed 0})))))
     (is (= [4 5 4 5 4 5 6 4 5 5]
            (vec (mg/sample [:int {:min 4 :max 6}]
@@ -69,12 +75,18 @@
            (vec (mg/sample [:int {:min 4 :max 6}]
                            (add-constraints {:seed 0})))
            (vec (mg/sample [:int {:and [[:min 4] [:max 6]]}]
+                           (add-constraints {:seed 0})))
+           (vec (mg/sample [:int {:and [[:min 4] [:max 6]
+                                        [:min 3] [:max 7]]}]
                            (add-constraints {:seed 0})))))
     (is (= [-5 -6 -5 -8 -5 -6 -9 -5 -8 -8]
            (vec (mg/sample [:int {:min -10 :max -5}] {:seed 0}))
            (vec (mg/sample [:int {:min -10 :max -5}]
                            (add-constraints {:seed 0})))
            (vec (mg/sample [:int {:and [[:min -10] [:max -5]]}]
+                           (add-constraints {:seed 0})))
+           (vec (mg/sample [:int {:and [[:min -10] [:max -5]
+                                        [:min -11] [:max -4]]}]
                            (add-constraints {:seed 0})))))
     (is (every? pos-int? (mg/sample [:int {:min 1}] {})))
     (is (every? pos-int? (mg/sample [:int {:min 1}] (add-constraints {}))))

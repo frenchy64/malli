@@ -11,6 +11,8 @@
     [{}]
     (let [max-count (some->> (seq (keep :max-count all-sols)) (apply min))
           min-count (some->> (seq (keep :min-count all-sols)) (apply max))
+          max-range (some->> (seq (keep :max-range all-sols)) (apply min))
+          min-range (some->> (seq (keep :min-range all-sols)) (apply max))
           count-solutions (lazy-seq
                             (if (and min-count max-count)
                               (if (<= min-count max-count)
@@ -23,7 +25,19 @@
                                 (if max-count
                                   [{:max-count max-count}]
                                   [{}]))))
-          all-solutions [count-solutions]]
+          range-solutions (lazy-seq
+                            (if (and min-range max-range)
+                              (if (<= min-range max-range)
+                                ;; TODO exact range
+                                [{:min-range min-range
+                                  :max-range max-range}]
+                                [])
+                              (if min-range
+                                [{:min-range min-range}]
+                                (if max-range
+                                  [{:max-range max-range}]
+                                  [{}]))))
+          all-solutions [count-solutions range-solutions]]
       (lazy-seq
         (->> (apply comb/cartesian-product all-solutions)
              (map #(apply merge %)))))))
