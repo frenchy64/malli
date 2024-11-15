@@ -115,6 +115,11 @@
                                                    :constraint constraint}))
     solutions))
 
+(defn- -solutions-gen [schema solution->gen options]
+  (->> (-solve-schema-constraints schema options)
+       (mapv solution->gen)
+       gen-one-of))
+
 (defn -string-gen* [{:keys [min max]} options]
   (cond
     (and min (= min max)) (gen/fmap str/join (gen/vector gen/char-alphanumeric min))
@@ -133,15 +138,15 @@
   ;; preserve error message when :max < :gen/max. unclear if it's still a good idea
   ;; to enforce with constraints, since multiple maxes are allowed and :max-count is the min of all of them.
   {:pre [(-min-max schema options)]}
-  (->> (-solve-schema-constraints schema options)
-       (mapv (fn [solution]
-               (when-some [unsupported-keys (not-empty (disj (set (keys solution))
-                                                             :min-count :max-count))]
-                 (m/-fail! ::unsupported-string-constraint-solution {:schema schema :solution solution}))
-               (-string-gen* (set/rename-keys solution {:min-count :min
-                                                        :max-count :max})
-                             options)))
-       gen-one-of))
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-count :max-count))]
+                      (m/-fail! ::unsupported-string-constraint-solution {:schema schema :solution solution}))
+                    (-string-gen* (set/rename-keys solution {:min-count :min
+                                                             :max-count :max})
+                                  options))
+                  options))
 
 (defn- -coll-gen [schema f options]
   (let [{:keys [min max]} (-min-max schema options)
@@ -524,15 +529,15 @@
 
 (defn -int-gen-constrained [schema options]
   {:pre [(-min-max schema options)]}
-  (->> (-solve-schema-constraints schema options)
-       (mapv (fn [solution]
-               (when-some [unsupported-keys (not-empty (disj (set (keys solution))
-                                                             :min-range :max-range))]
-                 (m/-fail! ::unsupported-int-constraint-solution {:schema schema :solution solution}))
-               (let [{min :min-range
-                      max :max-range} solution]
-                 (-int-gen* {:min min :max max}))))
-       gen-one-of))
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-range :max-range))]
+                      (m/-fail! ::unsupported-int-constraint-solution {:schema schema :solution solution}))
+                    (let [{min :min-range
+                           max :max-range} solution]
+                      (-int-gen* {:min min :max max})))
+                  options))
 
 (defmethod -schema-generator :int [schema options]
   (-constrained-or-legacy-gen -int-gen-constrained -int-gen-legacy schema options))
@@ -549,17 +554,17 @@
 
 (defn -double-gen-constrained [schema options]
   {:pre [(-min-max schema options)]}
-  (->> (-solve-schema-constraints schema options)
-       (mapv (fn [solution]
-               (when-some [unsupported-keys (not-empty (disj (set (keys solution))
-                                                             :min-range :max-range))]
-                 (m/-fail! ::unsupported-double-constraint-solution {:schema schema :solution solution}))
-               (let [{min :min-range
-                      max :max-range} solution]
-                 (-double-gen* (m/properties schema options)
-                               (set/rename-keys solution {:min-range :min
-                                                          :max-range :max})))))
-       gen-one-of))
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-range :max-range))]
+                      (m/-fail! ::unsupported-double-constraint-solution {:schema schema :solution solution}))
+                    (let [{min :min-range
+                           max :max-range} solution]
+                      (-double-gen* (m/properties schema options)
+                                    (set/rename-keys solution {:min-range :min
+                                                               :max-range :max}))))
+                  options))
 
 (defmethod -schema-generator :double [schema options]
   (-constrained-or-legacy-gen -double-gen-constrained -double-gen-legacy schema options))
@@ -581,31 +586,21 @@
 (defn -float-gen-legacy [schema options]
   (-float-gen* (m/properties schema options) (-min-max schema options)))
 
-(defn -float-gen-constrained [schema solutions options]
+(defn -float-gen-constrained [schema options]
   {:pre [(-min-max schema options)]}
-  (gen-one-of
-    (mapv (fn [solution]
-            (when-some [unsupported-keys (not-empty (disj (set (keys solution))
-                                                          :min-range :max-range))]
-              (m/-fail! ::unsupported-double-constraint-solution {:schema schema :solution solution}))
-            (-float-gen* (select-keys (m/properties schema options) [:gen/NaN? :gen/infinite?])
-                         (set/rename-keys solution {:min-range :min
-                                                    :max-range :max})))
-          solutions)))
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-range :max-range))]
+                      (m/-fail! ::unsupported-double-constraint-solution {:schema schema :solution solution}))
+                    (-float-gen* (select-keys (m/properties schema options) [:gen/NaN? :gen/infinite?])
+                                 (set/rename-keys solution {:min-range :min
+                                                            :max-range :max})))
+                  options))
 
-(defn -float-gen [schema options]
-  (if-not (mcp/-constrained-schema? schema)
-    (-float-gen-legacy schema options)
-    (let [constraint (or (mcp/-get-constraint schema)
-                         (m/-fail! ::missing-constraint {:type (m/type schema)
-                                                         :schema schema}))
-          solutions (-constraint-solutions constraint (m/type schema) options)]
-      (when (empty? solutions)
-        (m/-fail! ::unsatisfiable-constraint {:schema schema
-                                                    :constraint constraint}))
-      (-float-gen-constrained schema solutions options))))
+(defmethod -schema-generator :float [schema options]
+  (-constrained-or-legacy-gen -float-gen-constrained -float-gen-legacy schema options))
 
-(defmethod -schema-generator :float [schema options] (-float-gen schema options))
 (defmethod -schema-generator :boolean [_ _] gen/boolean)
 (defmethod -schema-generator :keyword [_ _] gen/keyword)
 (defmethod -schema-generator :symbol [_ _] gen/symbol)
