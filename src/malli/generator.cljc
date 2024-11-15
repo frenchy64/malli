@@ -522,32 +522,20 @@
 (defn -int-gen-legacy [schema options]
   (-int-gen* (-min-max schema options)))
 
-(defn -int-gen-constrained [schema solutions options]
-  (do ;; side effect
-      (-min-max schema options))
-  (gen-one-of
-    (mapv (fn [solution]
-            (when-some [unsupported-keys (not-empty (disj (set (keys solution))
-                                                          :min-range :max-range))]
-              (m/-fail! ::unsupported-int-constraint-solution {:schema schema :solution solution}))
-            (let [{min :min-range
-                   max :max-range} solution]
-              (-int-gen* {:min min :max max})))
-          solutions)))
+(defn -int-gen-constrained [schema options]
+  {:pre [(-min-max schema options)]}
+  (->> (-solve-schema-constraints schema options)
+       (mapv (fn [solution]
+               (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                             :min-range :max-range))]
+                 (m/-fail! ::unsupported-int-constraint-solution {:schema schema :solution solution}))
+               (let [{min :min-range
+                      max :max-range} solution]
+                 (-int-gen* {:min min :max max}))))
+       gen-one-of))
 
-(defn -int-gen [schema options]
-  (if-not (mcp/-constrained-schema? schema)
-    (-int-gen-legacy schema options)
-    (let [constraint (or (mcp/-get-constraint schema)
-                         (m/-fail! ::missing-constraint {:type (m/type schema)
-                                                         :schema schema}))
-          solutions (-constraint-solutions constraint (m/type schema) options)]
-      (when (empty? solutions)
-        (m/-fail! ::unsatisfiable-constraint {:schema schema
-                                                  :constraint constraint}))
-      (-int-gen-constrained schema solutions options))))
-
-(defmethod -schema-generator :int [schema options] (-int-gen schema options))
+(defmethod -schema-generator :int [schema options]
+  (-constrained-or-legacy-gen -int-gen-constrained -int-gen-legacy schema options))
 
 (defn -double-gen* [props min-max]
   (gen/double* (merge {:infinite? (get props :gen/infinite? false)
