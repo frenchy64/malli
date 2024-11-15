@@ -40,7 +40,7 @@
     (is (every? seq (mg/sample [:string {:min 1}] (add-constraints {}))))
     (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
-          #":malli\.generator/unsatisfiable-string-constraint"
+          #":malli\.generator/unsatisfiable-constraint"
           (mg/generate [:string {:min 10 :max 9}] (add-constraints {}))))))
 
 (deftest integer-constraint-generate-test
@@ -81,7 +81,7 @@
     (testing "with constraints the solver signals unsatisfiability with zero solutions"
       (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
-          #":malli\.generator/unsatisfiable-int-constraint"
+          #":malli\.generator/unsatisfiable-constraint"
           (mg/generate [:int {:min 10 :max 9}] (add-constraints {})))))))
 
 (deftest double-constraint-generate-test
@@ -124,7 +124,7 @@
     (testing "with constraints the solver signals unsatisfiability with zero solutions"
       (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
-          #":malli\.generator/unsatisfiable-double-constraint"
+          #":malli\.generator/unsatisfiable-constraint"
           (mg/generate [:double {:min 10 :max 9}] (add-constraints {})))))))
 
 (deftest float-constraint-generate-test
@@ -168,5 +168,5 @@
     (testing "with constraints the solver signals unsatisfiability with zero solutions"
       (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
-          #":malli\.generator/unsatisfiable-float-constraint"
+          #":malli\.generator/unsatisfiable-constraint"
           (mg/generate [:float {:min 10 :max 9}] (add-constraints {})))))))
