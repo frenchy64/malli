@@ -104,6 +104,17 @@
   (solver/-constraint-solutions
     constraint constraint-opts (assoc options ::solver/mode :gen)))
 
+(defn -string-gen* [min-max options]
+  (cond
+    (and min (= min max)) (gen/fmap str/join (gen/vector gen/char-alphanumeric min))
+    (and min max) (gen/fmap str/join (gen/vector gen/char-alphanumeric min max))
+    min (gen/fmap str/join (gen-vector-min gen/char-alphanumeric min options))
+    max (gen/fmap str/join (gen/vector gen/char-alphanumeric 0 max))
+    :else gen/string-alphanumeric))
+
+(defn- -string-gen-legacy [schema options]
+  (-string-gen* (-min-max schema options) options))
+
 (defn- -string-gen-constrained [schema solutions options]
   ;(prn "solutions" solutions)
   ;; preserve error message when :max < :gen/max. unclear if it's still a good idea
@@ -115,27 +126,10 @@
             (when-some [unsupported-keys (not-empty (disj (set (keys solution))
                                                           :min-count :max-count))]
               (m/-fail! ::unsupported-string-constraint-solution {:schema schema :solution solution}))
-            (let [{min :min-count
-                   max :max-count
-                   :keys [string-class]} solution
-                  string-gen (fn [min max char-gen]
-                               (cond
-                                 (and min (= min max)) (gen/fmap str/join (gen/vector char-gen min))
-                                 (and min max) (gen/fmap str/join (gen/vector char-gen min max))
-                                 min (gen/fmap str/join (gen-vector-min char-gen min options))
-                                 max (gen/fmap str/join (gen/vector char-gen 0 max))
-                                 :else (gen/fmap str/join (gen/vector char-gen))))]
-              (string-gen min max gen/char-alphanumeric)))
+            (-string-gen* (set/rename-keys solution {:min-count :min
+                                                     :max-count :max})
+                          options))
           solutions)))
-
-(defn- -string-gen-legacy [schema options]
-  (let [{:keys [min max]} (-min-max schema options)]
-    (cond
-      (and min (= min max)) (gen/fmap str/join (gen/vector gen/char-alphanumeric min))
-      (and min max) (gen/fmap str/join (gen/vector gen/char-alphanumeric min max))
-      min (gen/fmap str/join (gen-vector-min gen/char-alphanumeric min options))
-      max (gen/fmap str/join (gen/vector gen/char-alphanumeric 0 max))
-      :else gen/string-alphanumeric)))
 
 (defn- -string-gen [schema options]
   (if-not (mcp/-constrained-schema? schema)
@@ -522,8 +516,11 @@
 (defmethod -schema-generator :nil [_ _] nil-gen)
 (defmethod -schema-generator :string [schema options] (-string-gen schema options))
 
+(defn -int-gen* [min-max]
+  (gen/large-integer* min-max))
+
 (defn -int-gen-legacy [schema options]
-  (gen/large-integer* (-min-max schema options)))
+  (-int-gen* (-min-max schema options)))
 
 (defn -int-gen-constrained [schema solutions options]
   (do ;; side effect
@@ -535,7 +532,7 @@
               (m/-fail! ::unsupported-int-constraint-solution {:schema schema :solution solution}))
             (let [{min :min-range
                    max :max-range} solution]
-              (gen/large-integer* {:min min :max max})))
+              (-int-gen* {:min min :max max})))
           solutions)))
 
 (defn -int-gen [schema options]
