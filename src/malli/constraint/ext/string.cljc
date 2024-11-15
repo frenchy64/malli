@@ -7,11 +7,7 @@
   {:string {:-walk mcu/-walk-leaf+constraints
             :constraint-from-properties mcu/-constraint-from-properties
             :parse-constraint (into (mcu/default-parse-constraints)
-                                    {;; [:count 5 5] => [::mc/count-constraint 5 5]
-                                     :count (fn [{:keys [properties children]} opts]
-                                              (m/-check-children! :count properties children 2 2)
-                                              (into [::mc/count-constraint properties] children))
-                                     ;; [:max 5] => [::mc/count-constraint 0 5]
+                                    {;; [:max 5] => [::mc/count-constraint 0 5]
                                      :max (fn [{:keys [properties children]} opts]
                                             (m/-check-children! :max properties children 1 1)
                                             [::mc/count-constraint 0 (first children)])
@@ -37,28 +33,18 @@
                                                                          (some-> gen-min pos?) (conj [:gen/min gen-min])
                                                                          gen-max (conj [:gen/max gen-max]))]
                                                               (case (count frms)
-                                                                ;; [:string {:and [:true]} <= [::mc/count-constraint 0 nil]
+                                                                ;; [:string {:and [[:true]]}] <= [::mc/count-constraint 0 nil]
                                                                 0 [:true]
-                                                                ;; [:string {:and [:min 5]} <= [::mc/count-constraint 5 nil]
-                                                                ;; [:string {:and [:max 4]} <= [::mc/count-constraint 0 4]
-                                                                ;; [:string {:and [:gen/min 5]}] <= [::mc/count-constraint {:gen/min 5} 0 nil]
-                                                                ;; [:string {:and [:gen/max 4]}] <= [::mc/count-constraint {:gen/max 4} 0 nil]
+                                                                ;; [:string {:and [[:min 5]]}] <= [::mc/count-constraint 5 nil]
+                                                                ;; [:string {:and [[:max 4]]}] <= [::mc/count-constraint 0 4]
+                                                                ;; [:string {:and [[:gen/min 5]]}] <= [::mc/count-constraint {:gen/min 5} 0 nil]
+                                                                ;; [:string {:and [[:gen/max 4]]}] <= [::mc/count-constraint {:gen/max 4} 0 nil]
                                                                 1 (first frms)
-                                                                ;; [:string {:and [:count {:gen/min 1 :gen/max 2} 3 4]}] <= [::mc/count-constraint {:gen/min 1 :gen/max 2} 3 4]
-                                                                (let [ps (cond-> nil
-                                                                           (some-> gen-min pos?) (assoc :gen/min gen-min)
-                                                                           gen-max (assoc :gen/max gen-max))]
-                                                                  (-> [:count]
-                                                                      (cond-> ps (conj ps))
-                                                                      (conj min-count max-count))))))})
+                                                                ;; [:string {:and [[:min 3] [:max 4] [:gen/min 1] [:gen/max 2]]]}]
+                                                                ;; <= [::mc/count-constraint {:gen/min 1 :gen/max 2} 3 4]
+                                                                (into [:and] frms))))})
             :parse-properties (into (mcu/default-parse-properties)
-                                    {;; (m/-get-constraint [:string {:count 5}]) => [:count 5 5]
-                                     :count (fn [v opts]
-                                              ;;FIXME ??
-                                              (if (nat-int? v)
-                                                [:count v v]
-                                                (into [:count] v)))
-                                     ;; (m/-get-constraint [:string {:max 5}]) => [:max 5]
+                                    {;; (m/-get-constraint [:string {:max 5}]) => [:max 5]
                                      :max (fn [v opts] [:max v])
                                      ;; (m/-get-constraint [:string {:min 5}]) => [:min 5]
                                      :min (fn [v opts] [:min v])

@@ -77,7 +77,8 @@
   ;;TODO
   #_(is (= ::FIXME (m/ast (mcu/constraint [:max 1] (string-context)))))
   (testing "constraints are simplified"
-    (is (= [:count 1 1] (m/form (mcu/constraint [:and [:min 1] [:max 1]] (string-context))))))
+    (is (= [:and [:min 1] [:max 1]]
+           (m/form (mcu/constraint [:and [:min 0] [:min 1] [:max 1] [:max 2]] (string-context))))))
   (testing "but properties are preserved"
     (is (= [:string {:and [[:and [:min 1] [:max 1]]]}]
            (m/form (m/schema [:string {:and [[:and [:min 1] [:max 1]]]}] (string-context))))))
@@ -89,7 +90,7 @@
          (errors (m/explain (mcu/constraint [:min 1] (string-context)) ""))))
   (is (= '({:path [], :in [], :schema [:max 1], :value "12" :type ::mc/count-limits})
          (errors (m/explain (mcu/constraint [:max 1] (string-context)) "12"))))
-  (is (= '({:path [], :in [], :schema [:count 1 1], :value "" :type ::mc/count-limits})
+  (is (= '({:path [], :in [], :schema [:and [:min 1] [:max 1]], :value "" :type ::mc/count-limits})
          (errors (m/explain (mcu/constraint [:and [:min 1] [:max 1]] (string-context)) ""))))
   (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:min 5], :value "", :type :malli.constraint/count-limits}]
          (errors
@@ -101,25 +102,27 @@
            (m/explain (m/schema [:string {:max 1}]
                                 (constraint-options))
                       "20"))))
-  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:count 5 10], :value "", :type :malli.constraint/count-limits}]
+  ;; TODO should be [:schema [:min 5]], :in [0]
+  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:and [:min 5] [:max 10]], :value "", :type :malli.constraint/count-limits}]
          (errors
            (m/explain (m/schema [:string {:min 5 :max 10}]
                                 (constraint-options))
                       ""))
          (errors
-           (m/explain (m/schema [:string {:and [[:max 10] [:min 5]]}]
+           (m/explain (m/schema [:string {:and [[:min 5] [:max 10]]}]
                                 (constraint-options))
                       ""))))
-  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:count 1 1], :value "", :type :malli.constraint/count-limits}]
+  ;; TODO should be [:schema [:min 1]], :in [0]
+  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:and [:min 1] [:max 1]], :value "", :type :malli.constraint/count-limits}]
          (errors
            (m/explain (m/schema [:string {:min 1 :max 1}]
                                 (constraint-options))
                       ""))
          (errors
-           (m/explain (m/schema [:string {:and [[:max 1] [:min 1]]}]
+           (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]
                                 (constraint-options))
                       ""))))
-  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:count 1 1], :value "", :type :malli.constraint/count-limits}]
+  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:and [:min 1] [:max 1]], :value "", :type :malli.constraint/count-limits}]
          (errors
            (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]
                                 (constraint-options))
@@ -132,18 +135,6 @@
          (me/humanize
            (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]
                                 (constraint-options))
-                      ""))
-         (me/humanize
-           (m/explain (m/schema [:string {:and [[:count 1 1]]}]
-                                (constraint-options))
-                      ""))
-         (me/humanize
-           (m/explain (m/schema [:string {:count [1 1]}]
-                                (constraint-options))
-                      ""))
-         (me/humanize
-           (m/explain (m/schema [:string {:count 1}]
-                                (constraint-options))
                       ""))))
   (is (= ["should have at most 1 character"]
          (me/humanize
@@ -152,13 +143,5 @@
                       "12"))
          (me/humanize
            (m/explain (m/schema [:string {:max 1}]
-                                (constraint-options))
-                      "12"))
-         (me/humanize
-           (m/explain (m/schema [:string {:count [0 1]}]
-                                (constraint-options))
-                      "12"))
-         (me/humanize
-           (m/explain (m/schema [:string {:and [[:count 0 1]]}]
                                 (constraint-options))
                       "12")))))
