@@ -527,7 +527,6 @@
 (defn -int-gen-constrained [schema solutions options]
   (do ;; side effect
       (-min-max schema options))
-  (prn solutions)
   (gen-one-of
     (mapv (fn [solution]
             (when-some [unsupported-keys (not-empty (disj (set (keys solution))

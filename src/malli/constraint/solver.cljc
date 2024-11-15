@@ -20,19 +20,18 @@
           [{maxk max-int}]
           [{}])))))
 
+(defn -number-constraints [all-sols mink maxk]
+  (let [the-max (some->> (seq (keep maxk all-sols)) (apply min))
+        the-min (some->> (seq (keep mink all-sols)) (apply max))]
+    (-int-solutions the-min the-max mink maxk)))
+
 (defn -conj-number-constraints [[sol1 & sols :as all-sols]]
   (if (empty? all-sols)
     [{}]
-    (let [max-count (some->> (seq (keep :max-count all-sols)) (apply min))
-          min-count (some->> (seq (keep :min-count all-sols)) (apply max))
-          max-range (some->> (seq (keep :max-range all-sols)) (apply min))
-          min-range (some->> (seq (keep :min-range all-sols)) (apply max))
-          count-solutions (-int-solutions min-count max-count :min-count :max-count)
-          range-solutions (-int-solutions min-range max-range :min-range :max-range)
-          all-solutions [count-solutions range-solutions]]
-      (lazy-seq
-        (->> (apply comb/cartesian-product all-solutions)
-             (map #(apply merge %)))))))
+    (lazy-seq
+      (->> (apply comb/cartesian-product [(-number-constraints all-sols :min-count :max-count)
+                                          (-number-constraints all-sols :min-range :max-range)])
+           (map #(apply merge %))))))
 
 (comment
  (map #(apply merge %) (comb/cartesian-product [{:< 1} {:> 2}] [{:max-count 1} {:min-count 3}]))
