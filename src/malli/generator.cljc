@@ -544,20 +544,52 @@
                          (m/-fail! ::missing-constraint {:type (m/type schema)
                                                          :schema schema}))
           solutions (-constraint-solutions constraint (m/type schema) options)]
-      ;(prn "solutions" solutions)
       (when (empty? solutions)
         (m/-fail! ::unsatisfiable-int-constraint {:schema schema
                                                   :constraint constraint}))
       (-int-gen-constrained schema solutions options))))
 
 (defmethod -schema-generator :int [schema options] (-int-gen schema options))
-(defmethod -schema-generator :double [schema options]
+
+(defn -double-gen-legacy [schema options]
   (gen/double* (merge (let [props (m/properties schema options)]
                         {:infinite? (get props :gen/infinite? false)
                          :NaN? (get props :gen/NaN? false)})
                       (-> (-min-max schema options)
                           (update :min #(some-> % double))
                           (update :max #(some-> % double))))))
+
+(defn -double-gen-constrained [schema solutions options]
+  (do ;; side effect
+      (-min-max schema options))
+  (gen-one-of
+    (mapv (fn [solution]
+            (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                          :min-range :max-range))]
+              (m/-fail! ::unsupported-double-constraint-solution {:schema schema :solution solution}))
+            (let [{min :min-range
+                   max :max-range} solution]
+              (gen/double* (merge (let [props (m/properties schema options)]
+                                    {:infinite? (get props :gen/infinite? false)
+                                     :NaN? (get props :gen/NaN? false)})
+                                  {:min (some-> min double)
+                                   :max (some-> max double)}))))
+          solutions)))
+
+(defn -double-schema-gen [schema options]
+  (if-not (mcp/-constrained-schema? schema)
+    (-double-gen-legacy schema options)
+    (let [constraint (or (mcp/-get-constraint schema)
+                         (m/-fail! ::missing-constraint {:type (m/type schema)
+                                                         :schema schema}))
+          solutions (-constraint-solutions constraint (m/type schema) options)]
+      (when (empty? solutions)
+        (m/-fail! ::unsatisfiable-double-constraint {:schema schema
+                                                     :constraint constraint}))
+      (-double-gen-constrained schema solutions options))))
+
+(defmethod -schema-generator :double [schema options] (-double-schema-gen schema options))
+
 (defmethod -schema-generator :float [schema options]
   (let [max-float #?(:clj Float/MAX_VALUE :cljs (.-MAX_VALUE js/Number))
         min-float (- max-float)

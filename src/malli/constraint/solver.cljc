@@ -7,19 +7,16 @@
             [malli.impl.util :as miu]))
 
 (defn -number-solutions [min-int max-int mink maxk]
-  (when (or min-int max-int)
-    (lazy-seq
-      (if (and min-int max-int)
-        (if (<= min-int max-int)
-          ;; TODO exact int
-          [{mink min-int
-            maxk max-int}]
-          [])
-        (if min-int
-          [{mink min-int}]
-          (if max-int
-            [{maxk max-int}]
-            [{}]))))))
+  (if (and min-int max-int)
+    (if (<= min-int max-int)
+      ;; TODO exact int
+      [{mink min-int
+        maxk max-int}]
+      [])
+    (if min-int
+      [{mink min-int}]
+      (when max-int
+        [{maxk max-int}]))))
 
 (defn -number-constraints [all-sols mink maxk]
   (let [the-max (some->> (seq (keep maxk all-sols)) (apply min))

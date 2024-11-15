@@ -25,10 +25,10 @@
               ;; unclear if we want to enforce (<= min-count max-count)
               ;; it's a perfectly well formed constraint that happens to satisfy no values
               _ (when-not (or (nil? min-count)
-                              (int? min-count))
+                              (number? min-count))
                   (-fail! ::mc/range-constraint-min {:min min-count}))
               _ (when-not (or (nil? max-count)
-                              (int? max-count))
+                              (number? max-count))
                   (-fail! ::mc/range-constraint-max {:max max-count}))
               this (volatile! nil)
               form (delay (mcu/-constraint-form @this options))
