@@ -49,26 +49,26 @@
       (is (validate [type {:min 1.0 :max 5.0}] 2.0))
       (is (validate [type {:min 4.0 :max 4.0}] 4.0))
       (is (not (validate [type {:min 1.0 :max 5.0}] "")))
-      (is (= ["should be at least 1.0"]
-             (me/humanize (explain [type {:min 1.0}] 0.0))
-             (me/humanize (explain [type {:min 1.0 :max 10.0}] 0.0))
-             (me/humanize (explain [type {:and [[:min 1.0]]}] 0.0))
-             (me/humanize (explain [type {:and [[:min 1.0] [:min -1.0]]}] 0.0))))
-      (is (= ["should be at least 2.0"]
-             (me/humanize (explain [type {:min 2.0}] 0.0))
-             (me/humanize (explain [type {:min 2.0 :max 10.0}] 0.0))
-             (me/humanize (explain [type {:and [[:min 2.0]]}] 0.0))
-             (me/humanize (explain [type {:and [[:min 0.0] [:min 2.0]]}] 0.0))))
-      (is (= ["should be at most 1.0"]
-             (me/humanize (explain [type {:max 1.0}] 2.0))
-             (me/humanize (explain [type {:max 1.0}] 2.0))
-             (me/humanize (explain [type {:min 0.0 :max 1.0}] 2.0))
-             (me/humanize (explain [type {:and [[:max 1.0] [:max 23.0]]}] 2.0))))
-      (is (= ["should be at most 2.0"]
-             (me/humanize (explain [type {:max 2.0}] 3.0))
-             (me/humanize (explain [type {:min 1.0 :max 2.0}] 3.0))
-             (me/humanize (explain [type {:and [[:max 23.0] [:max 2.0]]}] 3.0))))
-      (is (= ["should be 1.0"]
-             (me/humanize (explain [type {:min 1.0 :max 1.0}] 3.0))
-             (me/humanize (explain [type {:and [[:min 1.0] [:max 1.0]
-                                                [:min 0.0] [:max 2.0]]}] 3.0)))))))
+      (is (= ["should be at least 1.5"]
+             (me/humanize (explain [type {:min 1.5}] 0.5))
+             (me/humanize (explain [type {:min 1.5 :max 10.5}] 0.5))
+             (me/humanize (explain [type {:and [[:min 1.5]]}] 0.5))
+             (me/humanize (explain [type {:and [[:min 1.5] [:min -1.5]]}] 0.5))))
+      (is (= ["should be at least 2.5"]
+             (me/humanize (explain [type {:min 2.5}] 0.5))
+             (me/humanize (explain [type {:min 2.5 :max 10.5}] 0.5))
+             (me/humanize (explain [type {:and [[:min 2.5]]}] 0.5))
+             (me/humanize (explain [type {:and [[:min 0.5] [:min 2.5]]}] 0.5))))
+      (is (= ["should be at most 1.5"]
+             (me/humanize (explain [type {:max 1.5}] 2.5))
+             (me/humanize (explain [type {:max 1.5}] 2.5))
+             (me/humanize (explain [type {:min 0.5 :max 1.5}] 2.5))
+             (me/humanize (explain [type {:and [[:max 1.5] [:max 23.5]]}] 2.5))))
+      (is (= ["should be at most 2.5"]
+             (me/humanize (explain [type {:max 2.5}] 3.5))
+             (me/humanize (explain [type {:min 1.5 :max 2.5}] 3.5))
+             (me/humanize (explain [type {:and [[:max 23.5] [:max 2.5]]}] 3.5))))
+      (is (= ["should be 1.5"]
+             (me/humanize (explain [type {:min 1.5 :max 1.5}] 3.5))
+             (me/humanize (explain [type {:and [[:min 1.5] [:max 1.5]
+                                                [:min 0.5] [:max 2.5]]}] 3.5)))))))
