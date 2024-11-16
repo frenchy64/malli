@@ -170,3 +170,53 @@
           #?(:clj Exception, :cljs js/Error)
           #":malli\.generator/unsatisfiable-constraint"
           (mg/generate [:float {:min 10 :max 9}] (add-constraints {})))))))
+
+(deftest vector-constraint-generate-test
+  (testing ":and + :min + :max"
+    (is (= [[] [-1] [-1 -1] [0 1] [1] [-3 -2] [-9 8 19] [1 0] [0 112 1] [-213 0 -36 -4 -40]]
+           (mg/sample [:vector {} :int] {:seed 0})
+           (mg/sample [:vector {} :int] (add-constraints {:seed 0}))
+           (mg/sample [:vector {:and []} :int] (add-constraints {:seed 0}))))
+    (is (= [[0 -1 0 -1 -1 -1 0 0 0 0] [0 0 0 0 0 0 0 -1 -1 0 0]
+            [-1 0 -1 1 -1 0 1 1 0 -1 0 -1] [0 0 -4 1 -4 1 -1 -1 1 -2 0 1]
+            [-2 -1 -2 1 0 0 0 0 -1 0 0] [-3 0 -1 7 5 -7 0 0 15 -14 1 -6]
+            [-9 8 10 -1 1 -3 -1 -2 -2 1 -16 -1 -1] [1 -1 -1 -4 3 8 -1 -2 2 -8 3 -2]
+            [0 112 -22 -6 3 -47 8 -3 1 35 -7 7 0] [-213 0 -36 -4 -2 -3 -11 -8 -4 -18 -4 -1 -184 -15 -2]]
+           (mg/sample [:vector {:min 10} :int] {:seed 0})
+           (mg/sample [:vector {:min 10} :int] (add-constraints {:seed 0}))
+           #_ ;;WIP
+           (mg/sample [:vector {:and [[:min 10]]} :int] (add-constraints {:seed 0}))
+           #_ ;;WIP
+           (mg/sample [:vector {:and [[:min 10] [:min 5]]} :int] (add-constraints {:seed 0}))))
+   ; (is (= (mapv float [0.5 -2.0 -0.0 -3.0 3.0 -0.78125 1.75 1.0 1.10546875 -6.0])
+   ;        (mg/sample [:float {:max 10}] {:seed 0})
+   ;        (mg/sample [:float {:max 10}] (add-constraints {:seed 0}))
+   ;        (mg/sample [:float {:and [[:max 10]]}] (add-constraints {:seed 0}))
+   ;        (mg/sample [:float {:and [[:max 15] [:max 10]]}] (add-constraints {:seed 0}))))
+   ; (is (= (mapv float [4.0 4.0 4.0 6.0 4.0 4.0 4.0 4.0 5.5 5.375])
+   ;        (mg/sample [:float {:min 4 :max 6}] {:seed 0})
+   ;        (mg/sample [:float {:min 4 :max 6}] (add-constraints {:seed 0}))
+   ;        (mg/sample [:float {:and [[:min 4] [:max 6]]}] (add-constraints {:seed 0}))
+   ;        (mg/sample [:float {:and [[:min 4] [:max 6] [:min 3] [:max 7]]}] (add-constraints {:seed 0}))))
+   ; (is (= (mapv float [-7.999999999999998 -8.0 -8.0 -9.0 -8.0 -8.0 -8.0 -7.999999999999998 -9.25 -6.75])
+   ;        (mg/sample [:float {:min -10 :max -5}] {:seed 0})
+   ;        (mg/sample [:float {:min -10 :max -5}] (add-constraints {:seed 0}))
+   ;        (mg/sample [:float {:and [[:min -10] [:max -5]]}] (add-constraints {:seed 0}))
+   ;        (mg/sample [:float {:and [[:min -10] [:max -5] [:min -11] [:max -4]]}] (add-constraints {:seed 0}))))
+   ; (is (every? (every-pred pos? float?) (mg/sample [:float {:min 0.0000001}] {})))
+   ; (is (every? (every-pred pos? float?) (mg/sample [:float {:min 0.0000001}] (add-constraints {}))))
+   ; (is (every? (every-pred neg? float?) (mg/sample [:float {:max -0.0000001}] {})))
+   ; (is (every? (every-pred neg? float?) (mg/sample [:float {:max -0.0000001}] (add-constraints {}))))
+   ; #?(:clj (testing "without constraints properties are checked for satisfiability"
+   ;           (is (thrown-with-msg?
+   ;                 AssertionError
+   ;                 (-> "(or (nil? lower-bound) (nil? upper-bound) (<= lower-bound upper-bound))"
+   ;                     java.util.regex.Pattern/quote
+   ;                     re-pattern)
+   ;                 (mg/generate [:float {:min 10 :max 9}] {})))))
+   ; (testing "with constraints the solver signals unsatisfiability with zero solutions"
+   ;   (is (thrown-with-msg?
+   ;       #?(:clj Exception, :cljs js/Error)
+   ;       #":malli\.generator/unsatisfiable-constraint"
+   ;       (mg/generate [:float {:min 10 :max 9}] (add-constraints {})))))
+    ))
