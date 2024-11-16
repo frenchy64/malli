@@ -269,3 +269,45 @@
                #?(:clj Exception, :cljs js/Error)
                #":malli\.generator/unsatisfiable-constraint"
                (mg/generate [:seqable {:min 10 :max 9} :int] (add-constraints {}))))))))
+(deftest seqable-constraint-generate-test
+  (testing ":and + :min + :max"
+    (is (= [#{} #{0} #{0 -1} #{0 1} #{-1} #{-2 -17} #{-12 9 5} #{0 -1} #{4 -1 -3} #{0 -1 -8 237 6}]
+           (mg/sample [:set {} :int] {:seed 0})
+           (mg/sample [:set {} :int] (add-constraints {:seed 0}))
+           (mg/sample [:set {:and []} :int] (add-constraints {:seed 0}))))
+    (is (= [#{0 -32 -1 -8 13 -15 3 -63 5 42} #{0 -505 1 -20 -2 -1 -3 -957 23 5 -307} #{0 -12 7 1 -2 -1 21 -6 172 -3 26 8}
+            #{0 -4 1 -1 -6 201 17 3 2 -7 -115 -5} #{0 -4 -1 13 -23 -3 6 3 2 9 -9} #{0 1 -125 -2 4 -1 99 -3 -17 25 3 -13}
+            #{0 -12 -28 1 -2 6 12 9 5 45 -9 -5 49} #{0 -4 -32 1 39 4 -1 -23 2 107 -168 16}
+            #{0 -12 -4 4 -1 -6 33 13 -3 3 5 -29 -13} #{0 345 -1 15 -8 -3 237 -43 6 127 -235 -9 10 -5 1021}]
+           (mg/sample [:set {:min 10} :int] {:seed 0})
+           (mg/sample [:set {:min 10} :int] (add-constraints {:seed 0}))
+           (mg/sample [:set {:and [[:min 10]]} :int] (add-constraints {:seed 0}))
+           (mg/sample [:set {:and [[:min 10] [:min 5]]} :int] (add-constraints {:seed 0}))))
+    (is (= [#{0} #{0 1 -20 -2 -1} #{0 -12 7 1 -2 -1 21 -6 -3 8} #{0 1 -1 17 3 2 -7} #{0 -1 13 9}
+            #{-2 4 -17} #{-12 1 9 5} #{0 -1 -23} #{4 -1 -3} #{0 -1 -8 237 6}]
+           (mg/sample [:set {:max 10} :int] {:seed 0})
+           (mg/sample [:set {:max 10} :int] (add-constraints {:seed 0}))
+           (mg/sample [:set {:and [[:max 10]]} :int] (add-constraints {:seed 0}))
+           (mg/sample [:set {:and [[:max 15] [:max 10]]} :int] (add-constraints {:seed 0}))))
+    (is (= [#{0 -1 -15 5} #{0 1 -20 -2 -1} #{0 7 -2 -1 -6 -3} #{0 1 -1 3 2 -7} #{0 -1 13 6 9}
+            #{0 -2 4 -17 25} #{-12 1 9 5 -5} #{0 -1 -23 2} #{-4 4 -1 13 -3} #{0 -1 -8 237 6}]
+           (mg/sample [:set {:min 4 :max 6} :int] {:seed 0})
+           (mg/sample [:set {:min 4 :max 6} :int] (add-constraints {:seed 0}))
+           (mg/sample [:set {:and [[:min 4] [:max 6]]} :int] (add-constraints {:seed 0}))
+           (mg/sample [:set {:and [[:min 4] [:max 6] [:min 3] [:max 7]]} :int] (add-constraints {:seed 0}))))
+    (is (every? seq (mg/sample [:set {:min 1} :int] {})))
+    (is (every? seq (mg/sample [:set {:min 1} :int] (add-constraints {}))))
+    (is (every? empty? (mg/sample [:set {:max 0} :int] {})))
+    (is (every? empty? (mg/sample [:set {:max 0} :int] (add-constraints {}))))
+    #?(:clj (testing "without constraints properties are checked for satisfiability"
+              (is (thrown-with-msg?
+                    AssertionError
+                    (-> "(<= lower upper)"
+                        java.util.regex.Pattern/quote
+                        re-pattern)
+                    (mg/generate [:set {:min 10 :max 9} :int] {})))))
+    (testing "with constraints the solver signals unsatisfiability with zero solutions"
+      (is (thrown-with-msg?
+            #?(:clj Exception, :cljs js/Error)
+            #":malli\.generator/unsatisfiable-constraint"
+            (mg/generate [:set {:min 10 :max 9} :int] (add-constraints {})))))))
