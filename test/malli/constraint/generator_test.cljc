@@ -269,7 +269,8 @@
                #?(:clj Exception, :cljs js/Error)
                #":malli\.generator/unsatisfiable-constraint"
                (mg/generate [:seqable {:min 10 :max 9} :int] (add-constraints {}))))))))
-(deftest seqable-constraint-generate-test
+
+(deftest set-constraint-generate-test
   (testing ":and + :min + :max"
     (is (= [#{} #{0} #{0 -1} #{0 1} #{-1} #{-2 -17} #{-12 9 5} #{0 -1} #{4 -1 -3} #{0 -1 -8 237 6}]
            (mg/sample [:set {} :int] {:seed 0})
