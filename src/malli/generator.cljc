@@ -128,8 +128,8 @@
     max (gen/fmap str/join (gen/vector gen/char-alphanumeric 0 max))
     :else gen/string-alphanumeric))
 
-(defn -constrained-or-legacy-gen [constrained-gen legacy-gen schema options]
-  ((if (mcp/-constrained-schema? schema) constrained-gen legacy-gen) schema options))
+(defn -constrained-or-legacy-gen [constrained-gen legacy-gen schema & args]
+  (apply (if (mcp/-constrained-schema? schema) constrained-gen legacy-gen) schema args))
 
 (defn- -string-gen-legacy [schema options]
   (-string-gen* (-min-max schema options) options))
@@ -148,9 +148,8 @@
                                   options))
                   options))
 
-(defn- -coll-gen [schema f options]
-  (let [{:keys [min max]} (-min-max schema options)
-        child (-> schema m/children first)
+(defn- -coll-gen* [{:keys [min max]} schema f options]
+  (let [child (-> schema m/children first)
         gen (generator child options)]
     (if (-unreachable-gen? gen)
       (if (= 0 (or min 0))
@@ -162,6 +161,28 @@
                     min (gen-vector-min gen min options)
                     max (gen/vector gen 0 max)
                     :else (gen/vector gen))))))
+
+(defn- -coll-gen-legacy [schema f options]
+  (-coll-gen* (-min-max schema options) schema f options))
+
+(defn- -vector-gen-constrained [schema f options]
+  ;; preserve error message when :max < :gen/max. unclear if it's still a good idea
+  ;; to enforce with constraints, since multiple maxes are allowed and :max-count is the min of all of them.
+  {:pre [(-min-max schema options)]}
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-count :max-count))]
+                      (m/-fail! ::unsupported-constraint-solution {:schema schema :solution solution}))
+                    (-coll-gen* (set/rename-keys solution {:min-count :min
+                                                           :max-count :max})
+                                schema f options))
+                  options))
+
+(defn- -coll-gen [schema f options]
+  (if-not (mcp/-constrained-schema? schema)
+    (-coll-gen-legacy schema f options)
+    (-vector-gen-constrained schema f options)))
 
 (defn- -coll-distinct-gen [schema f options]
   (let [{:keys [min max]} (-min-max schema options)

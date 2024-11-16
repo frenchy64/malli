@@ -184,9 +184,7 @@
             [0 112 -22 -6 3 -47 8 -3 1 35 -7 7 0] [-213 0 -36 -4 -2 -3 -11 -8 -4 -18 -4 -1 -184 -15 -2]]
            (mg/sample [:vector {:min 10} :int] {:seed 0})
            (mg/sample [:vector {:min 10} :int] (add-constraints {:seed 0}))
-           #_ ;;WIP
            (mg/sample [:vector {:and [[:min 10]]} :int] (add-constraints {:seed 0}))
-           #_ ;;WIP
            (mg/sample [:vector {:and [[:min 10] [:min 5]]} :int] (add-constraints {:seed 0}))))
    ; (is (= (mapv float [0.5 -2.0 -0.0 -3.0 3.0 -0.78125 1.75 1.0 1.10546875 -6.0])
    ;        (mg/sample [:float {:max 10}] {:seed 0})
