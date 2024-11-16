@@ -1,5 +1,6 @@
 (ns malli.error
   (:require [clojure.string :as str]
+            [malli.constraint :as-alias mc]
             [malli.constraint.protocols :as mcp]
             [malli.core :as m]
             [malli.impl.util :as miu]
@@ -30,12 +31,12 @@
 (def default-errors
   {::unknown {:error/message {:en "unknown error"}}
    ::m/missing-key {:error/message {:en "missing required key"}}
-   :malli.constraint/count-limits {:error/fn {:en (fn [{:keys [schema value]} _]
-                                                    (let [[min max] (m/children schema)]
-                                                      (en-count-limits min max value)))}}
-   :malli.constraint/range-limits {:error/fn {:en (fn [{:keys [schema value]} _]
-                                                    (let [[min max] (m/children schema)]
-                                                      (en-range-min-max min max value)))}}
+   ::mc/count-limits {:error/fn {:en (fn [{:keys [schema value]} _]
+                                       (let [[min max] (m/children schema)]
+                                         (en-count-limits min max value)))}}
+   ::mc/range-limits {:error/fn {:en (fn [{:keys [schema value]} _]
+                                       (let [[min max] (m/children schema)]
+                                         (en-range-min-max min max value)))}}
    ::m/limits {:error/fn {:en (fn [{:keys [schema value]} _]
                                 (let [{:keys [min max]} (m/properties schema)]
                                   (en-count-limits min max value)))}}
