@@ -3,6 +3,7 @@
   #?(:cljs (:require-macros malli.core))
   (:require #?(:clj [clojure.walk :as walk])
             [clojure.core :as c]
+            [malli.constraint.extensions :refer [constraint-extensions]]
             [malli.constraint.protocols :as mcp]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
@@ -29,9 +30,9 @@
   (-into-schema [this properties children options] "creates a new schema instance"))
 
 (defprotocol Schema
-  (-validator [this] "returns a predicate function that checks if a value satisfies schema")
+  (-validator [this] "returns a predicate function that checks if the schema is valid")
   (-explainer [this path] "returns a function of `x in acc -> maybe errors` to explain the errors for invalid values")
-  (-parser [this] "return a function of `x -> parsed-x | ::m/invalid` to explain how x is does not satisfy schema.")
+  (-parser [this] "return a function of `x -> parsed-x | ::m/invalid` to explain how schema is valid.")
   (-unparser [this] "return the inverse (partial) function wrt. `-parser`; `parsed-x -> x | ::m/invalid`")
   (-transformer [this transformer method options]
     "returns a function to transform the value for the given schema and method.
@@ -103,8 +104,6 @@
 (defn -cached? [x] (#?(:clj instance?, :cljs implements?) malli.core.Cached x))
 (defn -ast? [x] (#?(:clj instance?, :cljs implements?) malli.core.AST x))
 (defn -transformer? [x] (#?(:clj instance?, :cljs implements?) malli.core.Transformer x))
-
-(defonce constraint-extensions (atom {}))
 
 (extend-type #?(:clj Object, :cljs default)
   FunctionSchema

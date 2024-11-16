@@ -1,6 +1,7 @@
 (ns malli.constraint.util
   (:require [clojure.core :as cc]
             [clojure.set :as set]
+            [malli.constraint.extensions :as mce]
             [malli.constraint.protocols :as mcp]
             [malli.core :as m]
             [malli.constraint :as-alias mc]
@@ -25,13 +26,13 @@
                                          (-fail! ::mc/missing-parse-constraint-options {:constraint ?constraint}))
                                  f (or (prs op)
                                        (-fail! ::mc/missing-constraint-parser {:op op
-                                                                            :constraint ?constraint}))]
+                                                                               :constraint ?constraint}))]
                              (m/schema (if (or (nil? ?p) (map? ?p))
                                          (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
                                          (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))
                                        options))
      :else (-fail! ::mc/invalid-constraint {:outer-schema (-> options ::m/constraint-context :type)
-                                         :constraint ?constraint}))))
+                                            :constraint ?constraint}))))
 
 (defn -constraint-from-properties [properties options]
   (let [{:keys [parse-properties]} (::m/constraint-context options)
@@ -61,7 +62,7 @@
                                           ;; enables constraints that contain schemas, e.g., [:string {:edn :int}]
                                           ::mc/schema-walker walker))))
           schema (cond-> schema
-                   ;; don't try and guess the 'unparsed' properties we don't need to.
+                   ;; don't try and guess the 'unparsed' properties when we don't need to.
                    (and (some? constraint')
                         (not (identical? constraint constraint')))
                    (m/-update-properties (fn [properties]
@@ -108,4 +109,4 @@
     (f constraint options)))
 
 (defn register-constraint-extensions! [extensions]
-  (swap! m/constraint-extensions #(merge-with into % extensions)))
+  (swap! mce/constraint-extensions #(merge-with into % extensions)))
