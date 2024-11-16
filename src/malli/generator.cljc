@@ -165,7 +165,7 @@
 (defn- -coll-gen-legacy [schema f options]
   (-coll-gen* (-min-max schema options) schema f options))
 
-(defn- -vector-gen-constrained [schema f options]
+(defn- -coll-gen-constrained [schema f options]
   ;; preserve error message when :max < :gen/max. unclear if it's still a good idea
   ;; to enforce with constraints, since multiple maxes are allowed and :max-count is the min of all of them.
   {:pre [(-min-max schema options)]}
@@ -180,13 +180,10 @@
                   options))
 
 (defn- -coll-gen [schema f options]
-  (if-not (mcp/-constrained-schema? schema)
-    (-coll-gen-legacy schema f options)
-    (-vector-gen-constrained schema f options)))
+  (-constrained-or-legacy-gen -coll-gen-constrained -coll-gen-legacy schema f options))
 
-(defn- -coll-distinct-gen [schema f options]
-  (let [{:keys [min max]} (-min-max schema options)
-        child (-> schema m/children first)
+(defn- -coll-distinct-gen* [{:keys [min max]} schema f options]
+  (let [child (-> schema m/children first)
         gen (generator child options)]
     (if (-unreachable-gen? gen)
       (if (= 0 (or min 0))
@@ -195,6 +192,24 @@
       (gen/fmap f (gen/vector-distinct gen {:min-elements min, :max-elements max, :max-tries 100
                                             :ex-fn #(m/-exception ::distinct-generator-failure
                                                                   (assoc % :schema schema))})))))
+
+(defn- -coll-distinct-legacy-gen [schema f options]
+  (-coll-distinct-gen* (-min-max schema options) schema f options))
+
+(defn -coll-distinct-gen-constrained [schema f options]
+  {:pre [(-min-max schema options)]}
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-count :max-count))]
+                      (m/-fail! ::unsupported-constraint-solution {:schema schema :solution solution}))
+                    (-coll-distinct-gen* (set/rename-keys solution {:min-count :min
+                                                                    :max-count :max})
+                                         schema f options))
+                  options))
+
+(defn- -coll-distinct-gen [schema f options]
+  (-constrained-or-legacy-gen -coll-distinct-gen-constrained -coll-distinct-legacy-gen schema f options))
 
 (defn -and-gen [schema options]
   (if-some [gen (-not-unreachable (-> schema (m/children options) first (generator options)))]
@@ -209,10 +224,13 @@
     (first gs)
     (gen/one-of gs)))
 
-(defn- -seqable-gen [schema options]
+(defn- -seqable-gen* [{:keys [min] :as props} schema options]
   (let [el (-> schema m/children first)]
     (gen-one-of
-     (-> [nil-gen]
+     (-> []
+         (cond->
+           (or (nil? min) (zero? min))
+           (conj nil-gen))
          (into (map #(-coll-gen schema % options))
                [identity vec eduction #(into-array #?(:clj Object) %)])
          (conj (-coll-distinct-gen schema set options))
@@ -220,7 +238,28 @@
            (and (= :tuple (m/type el))
                 (= 2 (count (m/children el))))
            (conj (let [[k v] (m/children el)]
-                   (generator [:map-of (or (m/properties schema) {}) k v] options))))))))
+                   (when-some [unsupported-keys (not-empty (disj (set (keys props))
+                                                                 :min :max))]
+                     (m/-fail! ::unsupported-map-of-props-forwarded-from-seqable
+                               {:schema schema :properties props}))
+                   (generator [:map-of (or props {}) k v] options))))))))
+
+(defn- -seqable-legacy-gen [schema options]
+  (-seqable-gen* (-min-max schema options) schema options))
+
+(defn- -seqable-gen-constrained [schema options]
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-count :max-count))]
+                      (m/-fail! ::unsupported-string-constraint-solution {:schema schema :solution solution}))
+                    (-seqable-gen* (set/rename-keys solution {:min-count :min
+                                                              :max-count :max})
+                                   schema options))
+                  options))
+
+(defn- -seqable-gen [schema options]
+  (-constrained-or-legacy-gen -seqable-gen-constrained -seqable-legacy-gen schema options))
 
 (defn -or-gen [schema options]
   (if-some [gs (not-empty
