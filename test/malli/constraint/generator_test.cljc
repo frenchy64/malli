@@ -233,10 +233,11 @@
               (massage-seqable-sample (mg/sample [:seqable {} :int] {:seed 0}))
               (massage-seqable-sample (mg/sample [:seqable {} :int] (add-constraints {:seed 0})))
               (massage-seqable-sample (mg/sample [:seqable {:and []} :int] (add-constraints {:seed 0})))))
-       (is (= [nil [::eduction [0 -1 0 -1 -1 -1 0 0 0 0 -1]] #{0 7 1 -2 4 -1 -6 -3 26 10}
+       (is (= [[-1 0 0 -1 -1 -1 0 0 0 -1] [::eduction [0 -1 0 -1 -1 -1 0 0 0 0 -1]] #{0 7 1 -2 4 -1 -6 -3 26 10}
                [::array [-2 -1 3 -2 1 0 -1 3 -3 -1 -1]] [-2 2 0 3 1 -2 -8 5 2 -3 3 -1 -2 -1]
-               [1 -1 0 5 -5 0 -1 -1 1 -2 1 1] [-1 6 -20 -1 4 -2 -4 1 -4 -1 2] [3 -49 -2 7 -2 25 5 12 25 3 9 1 31]
-               [-23 1 2 -51 -1 0 9 -2 -5 53 4 0 -4] [::eduction [126 -24 -236 0 -18 0 0 2 35 -105 -4 1 -1 -2 0 1 5 -37 -2]]]
+               [1 -1 0 5 -5 0 -1 -1 1 -2 1 1] [::eduction [-1 6 -20 -1 4 -2 -4 1 -4 -1 2]]
+               [3 -49 -2 7 -2 25 5 12 25 3 9 1 31] [-23 1 2 -51 -1 0 9 -2 -5 53 4 0 -4]
+               [::eduction [126 -24 -236 0 -18 0 0 2 35 -105 -4 1 -1 -2 0 1 5 -37 -2]]]
               (massage-seqable-sample (mg/sample [:seqable {:min 10} :int] {:seed 0}))
               (massage-seqable-sample (mg/sample [:seqable {:min 10} :int] (add-constraints {:seed 0})))
               (massage-seqable-sample (mg/sample [:seqable {:and [[:min 10]]} :int] (add-constraints {:seed 0})))
@@ -247,12 +248,13 @@
               (massage-seqable-sample (mg/sample [:seqable {:max 10} :int] (add-constraints {:seed 0})))
               (massage-seqable-sample (mg/sample [:seqable {:and [[:max 10]]} :int] (add-constraints {:seed 0})))
               (massage-seqable-sample (mg/sample [:seqable {:and [[:max 15] [:max 10]]} :int] (add-constraints {:seed 0})))))
-       (is (= [nil [::eduction [0 -1 0 -1 -1]] #{0 -2 -6 -3} [::array [-2 -1 3 1]] [-2 2 0 3 1 -6]
-               [1 -1 0 5 -1] [-1 6 -20 12] [3 -49 -2 7 8] [-23 1 2 -51 3] [::eduction [126 -24 -236 0 -18 13]]]
+       (is (= [[-1 0 0 -1 -1] [::eduction [0 -1 0 -1 -1]] #{0 -2 -6 -3} [::array [-2 -1 3 1]] [-2 2 0 3 1 -6]
+               [1 -1 0 5 -1] [::eduction [-1 6 -20 12]] [3 -49 -2 7 8] [-23 1 2 -51 3] [::eduction [126 -24 -236 0 -18 13]]]
               (massage-seqable-sample (mg/sample [:seqable {:min 4 :max 6} :int] {:seed 0}))
               (massage-seqable-sample (mg/sample [:seqable {:min 4 :max 6} :int] (add-constraints {:seed 0})))
               (massage-seqable-sample (mg/sample [:seqable {:and [[:min 4] [:max 6]]} :int] (add-constraints {:seed 0})))
-              (massage-seqable-sample (mg/sample [:seqable {:and [[:min 4] [:max 6] [:min 3] [:max 7]]} :int] (add-constraints {:seed 0})))))
+              (massage-seqable-sample (mg/sample [:seqable {:and [[:min 4] [:max 6] [:min 3] [:max 7]]} :int]
+                                                 (add-constraints {:seed 0})))))
        (is (every? seq (mg/sample [:seqable {:min 1} :int] {})))
        (is (every? seq (mg/sample [:seqable {:min 1} :int] (add-constraints {}))))
        (is (every? empty? (mg/sample [:seqable {:max 0} :int] {})))
