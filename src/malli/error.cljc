@@ -14,6 +14,7 @@
     (and min (< value min)) (str "should be at least " min)
     max (str "should be at most " max)))
 
+;; if constraints are enabled, this will be handled by ::mc/range-limits
 (defn -pred-min-max-error-fn [{:keys [pred message]}]
   (fn [{:keys [schema value]} _]
     (let [{:keys [min max]} (m/properties schema)]
@@ -115,7 +116,7 @@
    :string {:error/fn {:en (fn [{:keys [schema value]} _]
                              (if-not (string? value)
                                "should be a string"
-                               ;;if constraints are enabled these problems are reported via ::m/constraint-violation
+                               ;;if constraints are enabled these problems are reported via ::mc/count-limits
                                (when-not (mcp/-constrained-schema? schema)
                                  (let [{:keys [min max]} (m/properties schema)]
                                    (cond
@@ -125,6 +126,7 @@
                                      max (str "should be at most " max " character" (when (not= 1 max) "s")))))))}}
    :int {:error/fn {:en (-pred-min-max-error-fn {:pred int?, :message "should be an integer"})}}
    :double {:error/fn {:en (-pred-min-max-error-fn {:pred double?, :message "should be a double"})}}
+   :float {:error/fn {:en (-pred-min-max-error-fn {:pred float?, :message "should be a float"})}}
    :boolean {:error/message {:en "should be a boolean"}}
    :keyword {:error/message {:en "should be a keyword"}}
    :symbol {:error/message {:en "should be a symbol"}}
