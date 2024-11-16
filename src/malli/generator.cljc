@@ -1,12 +1,15 @@
 ;; See also `malli.generator-ast` for viewing generators as data
 (ns malli.generator
-  (:require [clojure.spec.gen.alpha :as ga]
+  (:require [clojure.set :as set]
+            [clojure.spec.gen.alpha :as ga]
             [clojure.string :as str]
             [clojure.test.check :as check]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojure.test.check.random :as random]
             [clojure.test.check.rose-tree :as rose]
+            [malli.constraint.protocols :as mcp]
+            [malli.constraint.solver :as solver]
             [malli.core :as m]
             [malli.registry :as mr]
             [malli.util :as mu]
@@ -95,14 +98,55 @@
                                           :generator gen
                                           :min min})))
 
-(defn- -string-gen [schema options]
-  (let [{:keys [min max]} (-min-max schema options)]
-    (cond
-      (and min (= min max)) (gen/fmap str/join (gen/vector gen/char-alphanumeric min))
-      (and min max) (gen/fmap str/join (gen/vector gen/char-alphanumeric min max))
-      min (gen/fmap str/join (gen-vector-min gen/char-alphanumeric min options))
-      max (gen/fmap str/join (gen/vector gen/char-alphanumeric 0 max))
-      :else gen/string-alphanumeric)))
+(declare gen-one-of)
+
+(defn- -constraint-solutions [constraint constraint-opts options]
+  (solver/-constraint-solutions
+    constraint constraint-opts (assoc options ::solver/mode :gen)))
+
+(defn- -solve-schema-constraints [schema options]
+  (let [constraint (or (mcp/-get-constraint schema)
+                       (m/-fail! ::missing-constraint {:type (m/type schema)
+                                                       :schema schema}))
+        solutions (-constraint-solutions constraint (m/type schema) options)]
+    (when (empty? solutions)
+      (m/-fail! ::unsatisfiable-constraint {:type (m/type schema)
+                                                   :schema schema
+                                                   :constraint constraint}))
+    solutions))
+
+(defn- -solutions-gen [schema solution->gen options]
+  (->> (-solve-schema-constraints schema options)
+       (mapv solution->gen)
+       gen-one-of))
+
+(defn -string-gen* [{:keys [min max]} options]
+  (cond
+    (and min (= min max)) (gen/fmap str/join (gen/vector gen/char-alphanumeric min))
+    (and min max) (gen/fmap str/join (gen/vector gen/char-alphanumeric min max))
+    min (gen/fmap str/join (gen-vector-min gen/char-alphanumeric min options))
+    max (gen/fmap str/join (gen/vector gen/char-alphanumeric 0 max))
+    :else gen/string-alphanumeric))
+
+(defn -constrained-or-legacy-gen [constrained-gen legacy-gen schema options]
+  ((if (mcp/-constrained-schema? schema) constrained-gen legacy-gen) schema options))
+
+(defn- -string-gen-legacy [schema options]
+  (-string-gen* (-min-max schema options) options))
+
+(defn- -string-gen-constrained [schema options]
+  ;; preserve error message when :max < :gen/max. unclear if it's still a good idea
+  ;; to enforce with constraints, since multiple maxes are allowed and :max-count is the min of all of them.
+  {:pre [(-min-max schema options)]}
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-count :max-count))]
+                      (m/-fail! ::unsupported-string-constraint-solution {:schema schema :solution solution}))
+                    (-string-gen* (set/rename-keys solution {:min-count :min
+                                                             :max-count :max})
+                                  options))
+                  options))
 
 (defn- -coll-gen [schema f options]
   (let [{:keys [min max]} (-min-max schema options)
@@ -474,30 +518,89 @@
 (defmethod -schema-generator :any [_ _] (ga/gen-for-pred any?))
 (defmethod -schema-generator :some [_ _] gen/any-printable)
 (defmethod -schema-generator :nil [_ _] nil-gen)
-(defmethod -schema-generator :string [schema options] (-string-gen schema options))
-(defmethod -schema-generator :int [schema options] (gen/large-integer* (-min-max schema options)))
-(defmethod -schema-generator :double [schema options]
-  (gen/double* (merge (let [props (m/properties schema options)]
-                        {:infinite? (get props :gen/infinite? false)
-                         :NaN? (get props :gen/NaN? false)})
-                      (-> (-min-max schema options)
+(defmethod -schema-generator :string [schema options]
+  (-constrained-or-legacy-gen -string-gen-constrained -string-gen-legacy schema options))
+
+(defn -int-gen* [min-max]
+  (gen/large-integer* min-max))
+
+(defn -int-gen-legacy [schema options]
+  (-int-gen* (-min-max schema options)))
+
+(defn -int-gen-constrained [schema options]
+  {:pre [(-min-max schema options)]}
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-range :max-range))]
+                      (m/-fail! ::unsupported-int-constraint-solution {:schema schema :solution solution}))
+                    (let [{min :min-range
+                           max :max-range} solution]
+                      (-int-gen* {:min min :max max})))
+                  options))
+
+(defmethod -schema-generator :int [schema options]
+  (-constrained-or-legacy-gen -int-gen-constrained -int-gen-legacy schema options))
+
+(defn -double-gen* [props min-max]
+  (gen/double* (merge {:infinite? (get props :gen/infinite? false)
+                       :NaN? (get props :gen/NaN? false)}
+                      (-> min-max
                           (update :min #(some-> % double))
                           (update :max #(some-> % double))))))
-(defmethod -schema-generator :float [schema options]
+
+(defn -double-gen-legacy [schema options]
+  (-double-gen* (m/properties schema options) (-min-max schema options)))
+
+(defn -double-gen-constrained [schema options]
+  {:pre [(-min-max schema options)]}
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-range :max-range))]
+                      (m/-fail! ::unsupported-double-constraint-solution {:schema schema :solution solution}))
+                    (let [{min :min-range
+                           max :max-range} solution]
+                      (-double-gen* (m/properties schema options)
+                                    (set/rename-keys solution {:min-range :min
+                                                               :max-range :max}))))
+                  options))
+
+(defmethod -schema-generator :double [schema options]
+  (-constrained-or-legacy-gen -double-gen-constrained -double-gen-legacy schema options))
+
+(defn -float-gen* [props min-max]
   (let [max-float #?(:clj Float/MAX_VALUE :cljs (.-MAX_VALUE js/Number))
         min-float (- max-float)
-        props (m/properties schema options)
-        min-max-props (-min-max schema options)
         infinite? #?(:clj false :cljs (get props :gen/infinite? false))]
     (->> (merge {:infinite? infinite?
                  :NaN? (get props :gen/NaN? false)}
-                (-> min-max-props
+                (-> min-max
                     (update :min #(or (some-> % float)
                                       #?(:clj min-float :cljs nil)))
                     (update :max #(or (some-> % float)
                                       #?(:clj max-float :cljs nil)))))
          (gen/double*)
          (gen/fmap float))))
+
+(defn -float-gen-legacy [schema options]
+  (-float-gen* (m/properties schema options) (-min-max schema options)))
+
+(defn -float-gen-constrained [schema options]
+  {:pre [(-min-max schema options)]}
+  (-solutions-gen schema
+                  (fn [solution]
+                    (when-some [unsupported-keys (not-empty (disj (set (keys solution))
+                                                                  :min-range :max-range))]
+                      (m/-fail! ::unsupported-double-constraint-solution {:schema schema :solution solution}))
+                    (-float-gen* (select-keys (m/properties schema options) [:gen/NaN? :gen/infinite?])
+                                 (set/rename-keys solution {:min-range :min
+                                                            :max-range :max})))
+                  options))
+
+(defmethod -schema-generator :float [schema options]
+  (-constrained-or-legacy-gen -float-gen-constrained -float-gen-legacy schema options))
+
 (defmethod -schema-generator :boolean [_ _] gen/boolean)
 (defmethod -schema-generator :keyword [_ _] gen/keyword)
 (defmethod -schema-generator :symbol [_ _] gen/symbol)
@@ -552,25 +655,23 @@
 (defn- -create-from-schema [props options]
   (some-> (:gen/schema props) (generator options)))
 
-(defn- -create-from-fmap [props schema options]
+(defn- -create-from-fmap [gen props schema options]
   (when-some [fmap (:gen/fmap props)]
     (gen/fmap (m/eval fmap (or options (m/options schema)))
-              (or (-create-from-return props)
-                  (-create-from-elements props)
-                  (-create-from-schema props options)
-                  (-create-from-gen props schema options)
-                  nil-gen))))
+              gen)))
 
 (defn- -create [schema options]
   (let [props (-merge (m/type-properties schema)
-                      (m/properties schema))]
-    (or (-create-from-fmap props schema options)
-        (-create-from-return props)
-        (-create-from-elements props)
-        (-create-from-schema props options)
-        (-create-from-gen props schema options)
-        (m/-fail! ::no-generator {:options options
-                                  :schema schema}))))
+                      (m/properties schema))
+        gen (or (-create-from-return props)
+                (-create-from-elements props)
+                (-create-from-schema props options)
+                (-create-from-gen props schema options)
+                (m/-fail! ::no-generator {:options options
+                                          :schema schema
+                                          :form (m/form schema)}))]
+    (or (-create-from-fmap gen props schema options)
+        gen)))
 
 ;;
 ;; public api
