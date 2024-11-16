@@ -4,6 +4,7 @@
             [malli.constraint.range :refer [-range-constraint]]
             [malli.constraint.ext.number :as number-ext]
             [malli.constraint.ext.string :as string-ext]
+            [malli.constraint.ext.collection :as collection-ext]
             [malli.constraint.protocols :as mcp]
             [malli.constraint.true :refer [-true-constraint]]
             [malli.constraint.util :as mcu]
@@ -11,15 +12,14 @@
 
 (defn base-constraint-extensions []
   (merge (number-ext/base-constraint-extensions)
-         (string-ext/base-constraint-extensions)))
+         (string-ext/base-constraint-extensions)
+         (collection-ext/base-constraint-extensions)))
 
 (defn base-constraints []
-  {
-   ::range-constraint (-range-constraint)
+  {::range-constraint (-range-constraint)
    ::count-constraint (-count-constraint)
    ::and (-and-constraint)
-   ::true-constraint (-true-constraint)
-   })
+   ::true-constraint (-true-constraint)})
 
 (let [base-ext! (delay (mcu/register-constraint-extensions! (base-constraint-extensions)))
       bc (delay (base-constraints))]

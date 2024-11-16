@@ -13,9 +13,10 @@
   ([?constraint options]
    (cond
      (mcp/-constraint? ?constraint) ?constraint
-     ;; reserving for now for "contains" constraints for :map. will be an extension per-schema.
-     (keyword? ?constraint) (-fail! ::mc/constraints-must-be-vectors {:outer-schema (-> options ::m/constraint-context :type)
-                                                                   :constraint ?constraint})
+     ;; reserving for now for special per-schema sugar, e.g., "contains" constraints for :map.
+     (keyword? ?constraint) (-fail! ::mc/constraints-must-be-vectors
+                                    {:outer-schema (-> options ::m/constraint-context :type)
+                                     :constraint ?constraint})
      (vector? ?constraint) (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
                                  n #?(:bb (count v) :clj (.count v), :cljs (count v))
                                  op #?(:clj (.nth v 0), :cljs (nth v 0))
@@ -61,7 +62,6 @@
                                           ::mc/schema-walker walker))))
           schema (cond-> schema
                    ;; don't try and guess the 'unparsed' properties we don't need to.
-                   ;; 
                    (and (some? constraint')
                         (not (identical? constraint constraint')))
                    (m/-update-properties (fn [properties]
@@ -93,6 +93,13 @@
 (defn default-constraint-form []
   {::mc/and (fn [c options] (into [:and] (map m/form) (m/children c)))
    ::mc/true-constraint (fn [c options] [:true])})
+
+(defn default-constraint-extensions []
+  {:constraint-from-properties -constraint-from-properties
+   :parse-constraint (default-parse-constraints)
+   :constraint-form (default-constraint-form)
+   :parse-properties (default-parse-properties)
+   :unparse-properties (default-unparse-properties)})
 
 (defn -constraint-form [constraint {{:keys [constraint-form]} ::m/constraint-context :as options}]
   (let [t (m/type constraint)

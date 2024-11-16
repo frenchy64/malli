@@ -9,7 +9,6 @@
 (defn -number-solutions [min-int max-int mink maxk]
   (if (and min-int max-int)
     (if (<= min-int max-int)
-      ;; TODO exact int
       [{mink min-int
         maxk max-int}]
       [])
@@ -33,15 +32,6 @@
       (->> (apply comb/cartesian-product sols)
            (map #(apply merge %))))
     [{}]))
-
-(comment
- (map #(apply merge %) (comb/cartesian-product [{:< 1} {:> 2}] [{:max-count 1} {:min-count 3}]))
- (assert (= (-conj-number-constraints [{:max-count 5 :> 3} {:min-count 4 :< 4}])
-            [{:> 3, :< 4, :min-count 4, :max-count 5}]))
- (assert (= (-conj-number-constraints [{:max-count 5 :> 3} {:min-count 4 :> 4}])
-            [{:> 4, :min-count 4, :max-count 5}]))
-
-)
 
 (defn -conj-solutions [& sols]
   (letfn [(rec [cart-sols]
@@ -110,18 +100,23 @@ collected."
     (-constraint-solutions* constraint constraint-opts options)))
 
 (defmethod -constraint-solutions* ::mc/true-constraint [constraint constraint-opts options] [{}])
+
 (defmethod -constraint-solutions* ::mc/and
   [constraint constraint-opts options]
   (apply -conj-solutions (map #(-constraint-solutions % constraint-opts options) (m/children constraint))))
+
 (defmethod -constraint-solutions* ::mc/count-constraint
   [constraint constraint-opts {::keys [mode] :as options}]
   (let [[min max] (m/children constraint)
         {gen-min :gen/min gen-max :gen/max} (when (= :gen mode) (m/properties constraint))]
     (assert (<= 0 min)) ;;should this be enforced?
     (-min-max min max gen-min gen-max :min-count :max-count)))
+
 (defmethod -constraint-solutions* ::mc/range-constraint
   [constraint constraint-opts {::keys [mode] :as options}]
   (let [[min max] (m/children constraint)
         {gen-min :gen/min gen-max :gen/max} (when (= :gen mode) (m/properties constraint))]
     (-min-max min max gen-min gen-max :min-range :max-range)))
-(defmethod -constraint-solutions* :default [constraint constraint-opts options] (miu/-fail! ::unknown-constraint {:constraint constraint}))
+
+(defmethod -constraint-solutions* :default [constraint constraint-opts options]
+  (miu/-fail! ::unknown-constraint {:constraint constraint}))

@@ -746,9 +746,6 @@
                         (cond->
                           pvalidator (conj pvalidator)
                           cvalidator (conj cvalidator))
-                        ;; [pred] must not be wrapped to catch malli.generator ga/gen-for-pred special case
-                        ;; possibly relied on mostly by predicate schemas.
-                        ;; relevant: https://github.com/metosin/malli/pull/1092/files
                         miu/-every-pred)))
                 (-explainer [this path]
                   (let [cexplainer (some-> @constraint (-explainer (conj path :malli.constraint/constraint)))
@@ -1302,8 +1299,6 @@
             (-check-children! type properties children 1 1)
             (let [[schema :as children] (-vmap #(schema % options) children)
                   form (delay (-simple-form parent properties children -form options))
-                  constraint-context (delay (-constraint-context type options))
-                  constraint (delay (some-> @constraint-context (-constraint-from-properties properties options)))
                   cache (-create-cache options)
                   bounded (when (:bounded props)
                             (when fempty
@@ -1312,6 +1307,9 @@
                   validate-limits (if bounded
                                     (-validate-bounded-limits (c/min bounded (or max bounded)) min max)
                                     (-validate-limits min max))
+                  constraint-context (delay (when-not bounded ;;TODO bounded-limits collections
+                                              (-constraint-context type options)))
+                  constraint (delay (some-> @constraint-context (-constraint-from-properties properties options)))
                   ->parser (fn [f g] (let [child-parser (f schema)]
                                        (fn [x]
                                          (cond
@@ -1345,26 +1343,32 @@
                 (-to-ast [this _] (-to-child-ast this))
                 Schema
                 (-validator [_]
-                  (let [validator (-validator schema)]
+                  (let [cvalidator (or (some-> @constraint -validator)
+                                       validate-limits)
+                        validator (-validator schema)]
                     (fn [x] (and (fpred x)
-                                 (validate-limits x)
+                                 (cvalidator x)
                                  (reduce (fn [acc v] (if (validator v) acc (reduced false))) true
                                          (cond->> x
                                            (and bounded (not (-safely-countable? x)))
                                            (eduction (take bounded))))))))
                 (-explainer [this path]
-                  (let [explainer (-explainer schema (conj path 0))]
+                  (let [cexplainer (some-> @constraint (-explainer (conj path :malli.constraint/constraint)))
+                        explainer (-explainer schema (conj path 0))]
                     (fn [x in acc]
-                      (cond
-                        (not (fpred x)) (conj acc (miu/-error path in this x ::invalid-type))
-                        (not (validate-limits x)) (conj acc (miu/-error path in this x ::limits))
-                        :else (let [size (when (and bounded (not (-safely-countable? x)))
-                                           bounded)]
-                                (loop [acc acc, i 0, [x & xs :as ne] (seq x)]
-                                  (if (and ne (or (not size) (< i #?(:cljs    ^number size
-                                                                     :default size))))
-                                    (cond-> (or (explainer x (conj in (fin i x)) acc) acc) xs (recur (inc i) xs))
-                                    acc)))))))
+                      (if-not (fpred x)
+                        (conj acc (miu/-error path in this x ::invalid-type))
+                        (or (if cexplainer
+                              (cexplainer x in acc)
+                              (when-not (validate-limits x)
+                                (conj acc (miu/-error path in this x ::limits))))
+                            (let [size (when (and bounded (not (-safely-countable? x)))
+                                         bounded)]
+                              (loop [acc acc, i 0, [x & xs :as ne] (seq x)]
+                                (if (and ne (or (not size) (< i #?(:cljs    ^number size
+                                                                   :default size))))
+                                  (cond-> (or (explainer x (conj in (fin i x)) acc) acc) xs (recur (inc i) xs))
+                                  acc))))))))
                 (-parser [_] (->parser (if bounded -validator -parser) (if bounded identity parse)))
                 (-unparser [_] (->parser (if bounded -validator -unparser) (if bounded identity unparse)))
                 (-transformer [this transformer method options]
@@ -1378,6 +1382,7 @@
                         ->child (-guard collection? ->child)]
                     (-intercepting this-transformer ->child)))
                 (-walk [this walker path options]
+                  ;;TODO constraint walking
                   (when (-accept walker this path options)
                     (-outer walker this path [(-inner walker schema (conj path ::in) options)] options)))
                 (-properties [_] properties)
