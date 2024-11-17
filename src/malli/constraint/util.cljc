@@ -1,7 +1,7 @@
 (ns malli.constraint.util
   (:require [clojure.core :as cc]
             [clojure.set :as set]
-            [malli.constraint.extensions :as mce]
+            [malli.constraint.extension :as mce]
             [malli.constraint.protocols :as mcp]
             [malli.core :as m]
             [malli.constraint :as-alias mc]
@@ -108,5 +108,3 @@
               (-fail! ::mc/no-constraint-form {:type t}))]
     (f constraint options)))
 
-(defn register-constraint-extensions! [extensions]
-  (swap! mce/constraint-extensions #(merge-with into % extensions)))

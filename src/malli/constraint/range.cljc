@@ -57,8 +57,8 @@
                           (let [[cmin cmax] (m/children c)
                                 c-properties (m/properties c)]
                             (cond-> into-properties
-                              ;; [:int {:max 4}] <= [::mc/range-constraint 0 4]
-                              ;; :int <= [::mc/range-constraint nil nil]
+                              ;; [:int {:max 4}] <= [::mc/range-constraint {} nil 4]
+                              ;; :int <= [::mc/range-constraint {} nil nil]
                               ;;FIXME what does ::mc/gen mean?
                               cmax (update (if (::mc/gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
                               ;; [:int {:min 5}] <= [::mc/range-constraint 5 nil]

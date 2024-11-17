@@ -3,7 +3,7 @@
   #?(:cljs (:require-macros malli.core))
   (:require #?(:clj [clojure.walk :as walk])
             [clojure.core :as c]
-            [malli.constraint.extensions :refer [constraint-extensions]]
+            [malli.constraint.extension :as mce]
             [malli.constraint.protocols :as mcp]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
@@ -371,7 +371,7 @@
   (-set-properties schema (not-empty (apply f (-properties schema) args))))
 
 (defn -set-constraint
-  ([schema constraint] (-set-constraint schema constraint (get @constraint-extensions (-type schema))))
+  ([schema constraint] (-set-constraint schema constraint (mce/get-constraint-extension (-type schema))))
   ([schema constraint {:keys [parse-properties unparse-properties] :as constraint-opts}]
    (-update-properties schema
                        (fn [properties]
@@ -694,7 +694,7 @@
 
 (defn -constraint-context [type options]
   (some-> (or (get (::constraint-options options) type)
-              (get @constraint-extensions type))
+              (mce/get-constraint-extension type))
           (assoc :type type)))
 
 (defn -constraint-from-properties [{:keys [constraint-from-properties] :as constraint-context} properties options]

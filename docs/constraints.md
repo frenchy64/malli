@@ -19,3 +19,18 @@ For example, `[:int {:max 41}]` is actually two schemas:
 - a constraint `[:max 41]`
 
 The rest of the document describes how schemas like these collaborate.
+
+## Activating Constraints
+
+Constraints are an opt-in Malli feature. 
+
+To activate constraints globally, call `(malli.constraint/activate-base-constraints!)`.
+Pass it a registry to upgrade an existing registry.
+
+Constraints are themselves schemas that also live in the registry.
+
+Behind the scenes, an atom `malli.constraint.extension/constraint-extensions`
+is used to configure constraints.
+
+## Constraint Extensions Registry
+

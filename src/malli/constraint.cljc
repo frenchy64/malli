@@ -1,11 +1,12 @@
 (ns malli.constraint
   (:require [malli.constraint.and :refer [-and-constraint]]
             [malli.constraint.count :refer [-count-constraint]]
-            [malli.constraint.range :refer [-range-constraint]]
+            [malli.constraint.ext.collection :as collection-ext]
             [malli.constraint.ext.number :as number-ext]
             [malli.constraint.ext.string :as string-ext]
-            [malli.constraint.ext.collection :as collection-ext]
+            [malli.constraint.extension :as mce]
             [malli.constraint.protocols :as mcp]
+            [malli.constraint.range :refer [-range-constraint]]
             [malli.constraint.true :refer [-true-constraint]]
             [malli.constraint.util :as mcu]
             [malli.registry :as mr]))
@@ -21,7 +22,7 @@
    ::and (-and-constraint)
    ::true-constraint (-true-constraint)})
 
-(let [base-ext! (delay (mcu/register-constraint-extensions! (base-constraint-extensions)))
+(let [base-ext! (delay (mce/register-constraint-extensions! (base-constraint-extensions)))
       bc (delay (base-constraints))]
   (defn activate-base-constraints!
     ([] (mr/swap-default-registry! activate-base-constraints!))
