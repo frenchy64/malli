@@ -9,6 +9,7 @@
             [malli.constraint.range :refer [-range-constraint]]
             [malli.constraint.true :refer [-true-constraint]]
             [malli.constraint.util :as mcu]
+            [malli.core :as-alias m]
             [malli.registry :as mr]))
 
 (defn base-constraint-extensions []
@@ -22,10 +23,16 @@
    ::and (-and-constraint)
    ::true-constraint (-true-constraint)})
 
-(let [base-ext! (delay (mce/register-constraint-extensions! (base-constraint-extensions)))
-      bc (delay (base-constraints))]
-  (defn activate-base-constraints!
-    ([] (mr/swap-default-registry! activate-base-constraints!))
-    ([?registry]
-     @base-ext! ;; hmm this will break the default registry if it doesn't also include (base-constraints)
-     (mr/composite-registry @bc ?registry))))
+(defn activate-base-constraints!
+  "Upgrade default registry with support for the base constraints."
+  []
+  (let [bc (base-constraints)
+        _ (mce/register-constraint-extensions! (base-constraint-extensions))]
+    (mr/swap-default-registry! #(mr/composite-registry bc %))))
+
+(defn with-base-constraints
+  "Upgrade options with support for base constraints."
+  [options]
+  (-> options
+      (update ::m/constraint-options #(merge-with into % (base-constraint-extensions)))
+      (update :registry #(mr/composite-registry (base-constraints) %))))

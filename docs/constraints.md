@@ -14,23 +14,52 @@ Constraints are intended to address this situation. A parent schema
 has other "constraint" schemas attached to them which may collaborate
 with the each other to yield reliable generators and lean validators.
 
-For example, `[:int {:max 41}]` is actually two schemas:
+For example, `[:int {:max 41}]` is actually two schemas (when constraints are enabled):
 - the parent schema `:int`
 - a constraint `[:max 41]`
 
-The rest of the document describes how schemas like these collaborate.
+## Reading this document
+
+This document assumes this has been evaluated in the current namespace:
+
+```clojure
+(require '[malli.core :as m]
+         '[malli.constraint.protocols :as mcp]
+         '[malli.constraint :as mc])
+
+(defn constraint-options []
+  (-> {:registry (m/default-schemas)}
+      mc/with-base-constraints))
+```
 
 ## Activating Constraints
 
 Constraints are an opt-in Malli feature. 
 
-To activate constraints globally, call `(malli.constraint/activate-base-constraints!)`.
-Pass it a registry to upgrade an existing registry.
+To activate constraints locally, use `mc/with-base-constraints` to upgrade
+your options map. You can see an example in `constraint-options` above.
 
-Constraints are themselves schemas that also live in the registry.
+To activate the base constraints globally, call `(malli.constraint/activate-base-constraints!)`.
+
+Constraints are themselves Schemas that also live in the registry.
 
 Behind the scenes, an atom `malli.constraint.extension/constraint-extensions`
-is used to configure constraints.
+is used to configure constraints. The entire atom is ignored if `::m/constraint-options`
+WIPWIPWIP
+
+
+## Constraint vs Schema
+
+A constraint implements the same protocols as a Schema, and additionally
+`malli.constraint.protocols/Constraint`.
+
+Schemas that support schemas also implement
+`malli.constraint.protocols/ConstrainedSchema`.
+
+Validators on schemas ensure they check preconditions
 
 ## Constraint Extensions Registry
 
+Constraints  schema represents
+
+Constraint extensions are described as a schema in `malli.dev.constraint/ConstraintExtension`.
