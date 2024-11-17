@@ -1,6 +1,5 @@
 (ns malli.constraint.ext.number
-  (:require [malli.core :as m]
-            [malli.constraint :as-alias mc]
+  (:require [malli.constraint :as-alias mc]
             [malli.constraint.range :as range]
             [malli.constraint.util :as mcu]))
 

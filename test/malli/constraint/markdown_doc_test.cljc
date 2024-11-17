@@ -7,9 +7,8 @@
             [malli.constraint.protocols :as mcp]))
 
 (defn constraint-options []
-  {::m/constraint-options (mc/base-constraint-extensions)
-   :registry (merge (mc/base-constraints)
-                    (m/default-schemas))})
+  (-> {:registry (m/default-schemas)}
+      mc/with-base-constraints))
 
 #?(:clj
    (deftest constraint-md-test

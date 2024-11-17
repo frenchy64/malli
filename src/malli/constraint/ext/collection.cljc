@@ -1,6 +1,5 @@
 (ns malli.constraint.ext.collection
-  (:require [malli.core :as m]
-            [malli.constraint :as-alias mc]
+  (:require [malli.constraint :as-alias mc]
             [malli.constraint.util :as mcu]
             [malli.constraint.count :as count]))
 

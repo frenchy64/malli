@@ -48,9 +48,10 @@
       1 (first cs)
       (constraint (into [:and] cs) options))))
 
-(defn -walk-leaf+constraints [schema walker path constraint {::m/keys [constraint-opts] :as options}]
+(defn -walk-leaf+constraints [schema walker path {::m/keys [constraint-opts] :as options}]
   (when (m/-accept walker schema path options)
-    (let [constraint' (when constraint
+    (let [constraint (mcp/-get-constraint schema)
+          constraint' (when constraint
                         (let [constraint-walker (or (::mc/constraint-walker options)
                                                     (reify m/Walker
                                                       (-accept [_ constraint _ _] constraint)

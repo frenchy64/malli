@@ -22,6 +22,13 @@
    ::and (-and-constraint)
    ::true-constraint (-true-constraint)})
 
+(defn with-base-constraints
+  "Upgrade options with support for base constraints."
+  [options]
+  (-> options
+      (update :malli.core/constraint-options #(merge-with into % (base-constraint-extensions)))
+      (update :registry #(mr/composite-registry (base-constraints) %))))
+
 (defn activate-base-constraints!
   "Upgrade default registry with support for the base constraints."
   []
@@ -29,9 +36,5 @@
         _ (mce/register-constraint-extensions! (base-constraint-extensions))]
     (mr/swap-default-registry! #(mr/composite-registry bc %))))
 
-(defn with-base-constraints
-  "Upgrade options with support for base constraints."
-  [options]
-  (-> options
-      (update :malli.core/constraint-options #(merge-with into % (base-constraint-extensions)))
-      (update :registry #(mr/composite-registry (base-constraints) %))))
+#_
+(activate-base-constraints!)
