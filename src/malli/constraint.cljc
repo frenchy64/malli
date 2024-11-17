@@ -9,7 +9,6 @@
             [malli.constraint.range :refer [-range-constraint]]
             [malli.constraint.true :refer [-true-constraint]]
             [malli.constraint.util :as mcu]
-            [malli.core :as-alias m]
             [malli.registry :as mr]))
 
 (defn base-constraint-extensions []
@@ -34,5 +33,5 @@
   "Upgrade options with support for base constraints."
   [options]
   (-> options
-      (update ::m/constraint-options #(merge-with into % (base-constraint-extensions)))
+      (update :malli.core/constraint-options #(merge-with into % (base-constraint-extensions)))
       (update :registry #(mr/composite-registry (base-constraints) %))))
