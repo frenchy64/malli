@@ -47,6 +47,8 @@ Behind the scenes, an atom `malli.constraint.extension/constraint-extensions`
 is used to configure constraints. The entire atom is ignored if `::m/constraint-options`
 WIPWIPWIP
 
+TODO rename constraint-options? or the atom? default-constraint-options?
+
 
 ## Constraint vs Schema
 
