@@ -379,9 +379,6 @@
                                      (-fail! ::unsupported-constraint {:schema schema :constraint constraint}))]
                            (f constraint (apply dissoc properties (keys parse-properties)) {::constraint-options constraint-opts}))))))
 
-(defn -update-constraint [schema f]
-  (-set-constraint schema (mcp/-get-constraint schema)))
-
 (defn -update-options [schema f]
   (-into-schema (-parent schema) (-properties schema) (-children schema) (f (-options schema))))
 
