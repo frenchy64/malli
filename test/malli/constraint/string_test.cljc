@@ -24,12 +24,12 @@
     (is (false? (-> [:string {:max 1}]
                     (m/schema (constraint-options))
                     (m/validate 1))))
-    (is (thrown-with-msg? Exception
-                          #"Don't know how to create ISeq from: java\.lang\.Long"
-                          (-> [:string {:max 1}]
-                              (m/schema (constraint-options))
-                              mcp/-get-constraint
-                              (m/validate 1)))))
+    #?(:clj (is (thrown-with-msg? Exception
+                                  #"Don't know how to create ISeq from: java\.lang\.Long"
+                                  (-> [:string {:max 1}]
+                                      (m/schema (constraint-options))
+                                      mcp/-get-constraint
+                                      (m/validate 1))))))
   (testing ":min/:max"
     (is (validate [:string {:min 1 :max 5}] "ab"))
     (is (validate [:string {:min 4 :max 4}] "🌉🜉"))
