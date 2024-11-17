@@ -1,8 +1,10 @@
 (ns malli.dev.constraint
   (:require [malli.core :as m]
+            [malli.util :as mu]
             ;; m/=> doesn't seem to support aliases
             malli.constraint
             malli.constraint.extension
+            malli.constraint.ext.collection
             malli.constraint.ext.string
             malli.constraint.ext.number
             malli.constraint.range
@@ -64,8 +66,8 @@
 (m/=> malli.constraint.extension/get-constraint-extension [:-> :any [:maybe ConstraintExtension]])
 (m/=> malli.constraint.extension/register-constraint-extensions! [:-> ConstraintExtensions ConstraintExtensions])
 (m/=> malli.constraint/base-constraint-extensions [:-> ConstraintExtensions])
-(m/=> malli.constraint/base-constraints [:-> ConstraintExtensions])
+(m/=> malli.constraint.ext.collection/base-constraint-extensions [:-> ConstraintExtensions])
 (m/=> malli.constraint.ext.string/base-constraint-extensions [:-> ConstraintExtensions])
 (m/=> malli.constraint.ext.number/base-constraint-extensions [:-> ConstraintExtensions])
-(m/=> malli.constraint.range/default-constraint-extensions [:-> ConstraintExtension])
-(m/=> malli.constraint.count/default-constraint-extensions [:-> ConstraintExtension])
+(m/=> malli.constraint.range/default-constraint-extensions [:-> (mu/optional-keys ConstraintExtension)])
+(m/=> malli.constraint.count/default-constraint-extensions [:-> (mu/optional-keys ConstraintExtension)])

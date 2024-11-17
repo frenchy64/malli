@@ -33,9 +33,9 @@
 
 (deftest constraint-test
   (testing "Constraints are returned as-is"
-    (is (= (m/type (mcu/constraint (m/schema (-true-constraint))))
-           (m/type (mcu/constraint (m/schema (-true-constraint)) nil))
-           ::mc/true-constraint)))
+    (is (= ::mc/true-constraint
+           (m/type (mcu/constraint (m/schema (-true-constraint))))
+           (m/type (mcu/constraint (m/schema (-true-constraint)) nil)))))
   (testing "IntoSchema's are not allowed in raw form"
     (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
@@ -48,8 +48,8 @@
           #":malli\.constraint/no-constraint-form"
           (m/form (mcu/constraint (m/schema (-true-constraint)))))))
   (testing ":parse-constraint desugars constraints"
-    (is (= (m/type (mcu/constraint [:min 1] count-constraint-options))
-           ::mc/count-constraint))
+    (is (= ::mc/count-constraint
+           (m/type (mcu/constraint [:min 1] count-constraint-options))))
     (is (= (m/children (mcu/constraint [:min 1] count-constraint-options))
            [1 nil]))
     (is (= (m/children (mcu/constraint [:max 1] count-constraint-options))
@@ -74,8 +74,18 @@
   (is (= ::mc/count-constraint (m/type (mcu/constraint [:max 1] (string-context)))))
   (is (= [:max 1] (m/form (mcu/constraint [:max 1] (string-context)))))
   (is (= [:true] (m/form (mcu/constraint [:true] (string-context)))))
-  ;;TODO
-  #_(is (= ::FIXME (m/ast (mcu/constraint [:max 1] (string-context)))))
+  ;;FIXME
+  #_
+  (is (= ::FIXME
+         (m/ast (mcu/constraint [:max 1] (string-context)))))
+  ;;FIXME
+  #_
+  (is (= ::FIXME
+         (m/ast (mcu/constraint [:min 1] (string-context)))))
+  ;;FIXME
+  #_
+  (is (= ::FIXME
+         (m/ast (mcu/constraint [:and [:min 1] [:max 2]] (string-context)))))
   (testing "constraints are simplified"
     (is (= [:and [:min 1] [:max 1]]
            (m/form (mcu/constraint [:and [:min 0] [:min 1] [:max 1] [:max 2]] (string-context))))))
