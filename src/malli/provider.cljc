@@ -1,5 +1,6 @@
 (ns malli.provider
   (:require [malli.core :as m]
+            [malli.constraint.protocols :as mcp]
             [malli.registry :as mr]))
 
 (def -preferences (-> [:int 'integer? :double :float 'number? :qualified-keyword :keyword :symbol :string :boolean :uuid 'inst?]
@@ -12,7 +13,8 @@
 (defn -value-hint [x] (if (instance? Hinted x) [(:value x) (:hint x)] [x (some-> x meta ::hint)]))
 
 (defn -inferrer [options]
-  (let [schemas (->> options (m/-registry) (mr/-schemas) (vals) (filter #(-safe? m/schema %)))
+  (let [schemas (->> options (m/-registry) (mr/-schemas) (vals) (filter #(when-let [s (-safe? m/schema %)]
+                                                                           (not (mcp/-constraint? s)))))
         form->validator (into {} (mapv (juxt m/form m/validator) schemas))
         infer-value (fn [x] (-> (reduce-kv (fn [acc f v] (cond-> acc (-safe? v x) (assoc f 1))) {} form->validator)))
         entry-inferrer (fn [infer] (fn [acc k v] (update acc :keys update k infer v)))

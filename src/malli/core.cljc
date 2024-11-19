@@ -1349,22 +1349,21 @@
                                            (and bounded (not (-safely-countable? x)))
                                            (eduction (take bounded))))))))
                 (-explainer [this path]
-                  (let [cexplainer (some-> @constraint (-explainer (conj path :malli.constraint/constraint)))
+                  (let [cvalidator (some-> @constraint -validator)
+                        cexplainer (some-> @constraint (-explainer (conj path :malli.constraint/constraint)))
                         explainer (-explainer schema (conj path 0))]
                     (fn [x in acc]
-                      (if-not (fpred x)
-                        (conj acc (miu/-error path in this x ::invalid-type))
-                        (or (if cexplainer
-                              (cexplainer x in acc)
-                              (when-not (validate-limits x)
-                                (conj acc (miu/-error path in this x ::limits))))
-                            (let [size (when (and bounded (not (-safely-countable? x)))
-                                         bounded)]
-                              (loop [acc acc, i 0, [x & xs :as ne] (seq x)]
-                                (if (and ne (or (not size) (< i #?(:cljs    ^number size
-                                                                   :default size))))
-                                  (cond-> (or (explainer x (conj in (fin i x)) acc) acc) xs (recur (inc i) xs))
-                                  acc))))))))
+                      (cond
+                        (not (fpred x)) (conj acc (miu/-error path in this x ::invalid-type))
+                        (and (not cvalidator) (not (validate-limits x))) (conj acc (miu/-error path in this x ::limits))
+                        (and cvalidator (not (cvalidator x))) (cexplainer x in acc)
+                        :else (let [size (when (and bounded (not (-safely-countable? x)))
+                                           bounded)]
+                                (loop [acc acc, i 0, [x & xs :as ne] (seq x)]
+                                  (if (and ne (or (not size) (< i #?(:cljs    ^number size
+                                                                     :default size))))
+                                    (cond-> (or (explainer x (conj in (fin i x)) acc) acc) xs (recur (inc i) xs))
+                                    acc)))))))
                 (-parser [_] (->parser (if bounded -validator -parser) (if bounded identity parse)))
                 (-unparser [_] (->parser (if bounded -validator -unparser) (if bounded identity unparse)))
                 (-transformer [this transformer method options]

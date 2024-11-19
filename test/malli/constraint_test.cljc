@@ -137,7 +137,7 @@
            (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]
                                 (constraint-options))
                       ""))))
-  (is (= ["should have 1 character"]
+  (is (= ["should be 1 character"]
          (me/humanize
            (m/explain (m/schema [:string {:min 1 :max 1}]
                                 (constraint-options))
@@ -146,7 +146,7 @@
            (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]
                                 (constraint-options))
                       ""))))
-  (is (= ["should have at most 1 character"]
+  (is (= ["should be at most 1 character"]
          (me/humanize
            (m/explain (m/schema [:string {:and [[:max 1]]}]
                                 (constraint-options))

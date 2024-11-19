@@ -26,11 +26,24 @@
                                          (-fail! ::mc/missing-parse-constraint-options {:constraint ?constraint}))
                                  f (or (prs op)
                                        (-fail! ::mc/missing-constraint-parser {:op op
-                                                                               :constraint ?constraint}))]
-                             (m/schema (if (or (nil? ?p) (map? ?p))
-                                         (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
-                                         (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))
-                                       options))
+                                                                               :constraint ?constraint}))
+                                 ?constraint (if (or (nil? ?p) (map? ?p))
+                                               (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
+                                               (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))]
+                             (cond
+                               (mcp/-constraint? ?constraint) ?constraint
+                               (vector? ?constraint) (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
+                                                           t #?(:clj (.nth v 0), :cljs (nth v 0))
+                                                           t (if (m/into-schema? t)
+                                                               t
+                                                               (or (mce/get-constraint t)
+                                                                   (-fail! ::unknown-constraint {:type t})))
+                                                           n #?(:bb (count v) :clj (.count v), :cljs (count v))
+                                                           ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))]
+                                                       (if (or (nil? ?p) (map? ?p))
+                                                         (m/into-schema t ?p (when (< 2 n) (subvec ?constraint 2 n)) options)
+                                                         (m/into-schema t nil (when (< 1 n) (subvec ?constraint 1 n)) options)))
+                               :else (-fail! ::unknown-constraint {:constraint ?constraint})))
      :else (-fail! ::mc/invalid-constraint {:outer-schema (-> options ::m/constraint-context :type)
                                             :constraint ?constraint}))))
 

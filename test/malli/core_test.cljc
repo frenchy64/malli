@@ -4,6 +4,8 @@
             [clojure.test.check.generators :as gen]
             [clojure.walk :as walk]
             [malli.core :as m]
+            [malli.constraint :as mc]
+            [malli.constraint.protocols :as mcp]
             [malli.edn :as edn]
             [malli.generator :as mg]
             [malli.error :as me]
@@ -1452,7 +1454,8 @@
           [:age 31])))
 
     (testing "explain"
-      (let [expectations {"vector" (let [schema [:vector {:min 2, :max 3} int?]]
+      (let [expectations {"vector" (let [schema [:vector {:min 2, :max 3} int?]
+                                         constraint (-> schema m/schema mcp/-get-constraint)]
 
                                      [[schema [1 2]
                                        nil]
@@ -1465,19 +1468,20 @@
                                       [schema [1]
                                        {:schema schema
                                         :value [1]
-                                        :errors [{:path [], :in [], :type ::m/limits, :schema schema, :value [1]}]}]
+                                        :errors [{:path [::mc/constraint], :in [], :type ::mc/count-limits, :schema constraint, :value [1]}]}]
 
                                       [schema [1 2 3 4]
                                        {:schema schema
                                         :value [1 2 3 4]
-                                        :errors [{:path [], :in [], :type ::m/limits, :schema schema, :value [1 2 3 4]}]}]
+                                        :errors [{:path [::mc/constraint], :in [], :type ::mc/count-limits, :schema constraint, :value [1 2 3 4]}]}]
 
                                       [schema [1 2 "3"]
                                        {:schema schema
                                         :value [1 2 "3"]
                                         :errors [{:path [0], :in [2], :schema int?, :value "3"}]}]])
 
-                          "sequential" (let [schema [:sequential {:min 2, :max 3} int?]]
+                          "sequential" (let [schema [:sequential {:min 2, :max 3} int?]
+                                             constraint (-> schema m/schema mcp/-get-constraint)]
 
                                          [[schema '(1 2)
                                            nil]
@@ -1490,19 +1494,20 @@
                                           [schema '(1)
                                            {:schema schema
                                             :value '(1)
-                                            :errors [{:path [], :in [], :type ::m/limits, :schema schema, :value '(1)}]}]
+                                            :errors [{:path [::mc/constraint], :in [], :type ::mc/count-limits, :schema constraint, :value '(1)}]}]
 
                                           [schema '(1 2 3 4)
                                            {:schema schema
                                             :value '(1 2 3 4)
-                                            :errors [{:path [], :in [], :type ::m/limits, :schema schema, :value '(1 2 3 4)}]}]
+                                            :errors [{:path [::mc/constraint], :in [], :type ::mc/count-limits, :schema constraint, :value '(1 2 3 4)}]}]
 
                                           [schema '(1 2 "3")
                                            {:schema schema
                                             :value '(1 2 "3")
                                             :errors [{:path [0], :in [2], :schema int?, :value "3"}]}]])
 
-                          "set" (let [schema [:set {:min 2, :max 3} int?]]
+                          "set" (let [schema [:set {:min 2, :max 3} int?]
+                                      constraint (-> schema m/schema mcp/-get-constraint)]
 
                                   [[schema #{1 2}
                                     nil]
@@ -1515,12 +1520,12 @@
                                    [schema #{1}
                                     {:schema schema
                                      :value #{1}
-                                     :errors [{:path [], :in [], :type ::m/limits, :schema schema, :value #{1}}]}]
+                                     :errors [{:path [::mc/constraint], :in [], :type ::mc/count-limits, :schema constraint, :value #{1}}]}]
 
                                    [schema #{1 2 3 4}
                                     {:schema schema
                                      :value #{1 2 3 4}
-                                     :errors [{:path [], :in [], :type ::m/limits, :schema schema, :value #{1 2 3 4}}]}]
+                                     :errors [{:path [::mc/constraint], :in [], :type ::mc/count-limits, :schema constraint, :value #{1 2 3 4}}]}]
 
                                    [schema #{1 2 "3"}
                                     {:schema schema

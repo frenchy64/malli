@@ -1,5 +1,6 @@
 (ns malli.constraint
-  (:require [malli.constraint.and :refer [-and-constraint]]
+  (:require [malli.core :as m]
+            [malli.constraint.and :refer [-and-constraint]]
             [malli.constraint.count :refer [-count-constraint]]
             [malli.constraint.ext.collection :as collection-ext]
             [malli.constraint.ext.number :as number-ext]
@@ -26,15 +27,12 @@
   "Upgrade options with support for base constraints."
   [options]
   (-> options
-      (update :malli.core/constraint-options #(merge-with into % (base-constraint-extensions)))
-      (update :registry #(mr/composite-registry (base-constraints) %))))
+      (update :malli.core/constraint-options #(merge-with into % (base-constraint-extensions)))))
 
 (defn activate-base-constraints!
   "Upgrade default registry with support for the base constraints."
   []
-  (let [bc (base-constraints)
-        _ (mce/register-constraint-extensions! (base-constraint-extensions))]
-    (mr/swap-default-registry! #(mr/composite-registry bc %))))
+  (mce/register-constraints (base-constraints))
+  (mce/register-constraint-extensions! (base-constraint-extensions)))
 
-#_
 (activate-base-constraints!)
