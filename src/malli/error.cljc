@@ -23,11 +23,12 @@
         (en-range-min-max min max value)))))
 
 (defn- en-count-limits [min max value]
-  (let [elements #(str " " (if (string? value) "character" "element") (when-not (= 1 %) "s"))]
+  (let [should (if (string? value) "should be " "should have ")
+        elements #(str " " (if (string? value) "character" "element") (when-not (= 1 %) "s"))]
     (cond
-      (and min (= min max)) (str "should have " min (elements min))
-      (and min (< (miu/-safe-count value) min)) (str "should have at least " min (elements min))
-      max (str "should have at most " max (elements max)))))
+      (and min (= min max)) (str should min (elements min))
+      (and min (< (miu/-safe-count value) min)) (str should "at least " min (elements min))
+      max (str should "at most " max (elements max)))))
 
 (def default-errors
   {::unknown {:error/message {:en "unknown error"}}

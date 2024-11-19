@@ -35,23 +35,23 @@
     (is (validate [:string {:min 4 :max 4}] "🌉🜉"))
     (is (not (validate [:string {:min 1 :max 5}] "")))
     (is (nil? (me/humanize (explain :string ""))))
-    (is (= ["should have at least 1 character"]
+    (is (= ["should be at least 1 character"]
            (me/humanize (explain [:string {:min 1}] ""))
            (me/humanize (explain [:string {:min 1 :max 10}] ""))
            (me/humanize (explain [:string {:and [[:min 1]]}] ""))))
-    (is (= ["should have at least 2 characters"]
+    (is (= ["should be at least 2 characters"]
            (me/humanize (explain [:string {:min 2}] ""))
            (me/humanize (explain [:string {:min 2 :max 10}] ""))
            (me/humanize (explain [:string {:and [[:min 2]]}] ""))))
-    (is (= ["should have at most 1 character"]
+    (is (= ["should be at most 1 character"]
            (me/humanize (explain [:string {:max 1}] "🌉"))
            (me/humanize (explain [:string {:max 1}] "12"))
            (me/humanize (explain [:string {:min 0 :max 1}] "12"))
            (me/humanize (explain [:string {:and [[:max 1]]}] "12"))))
-    (is (= ["should have at most 2 characters"]
+    (is (= ["should be at most 2 characters"]
            (me/humanize (explain [:string {:max 2}] "123"))
            (me/humanize (explain [:string {:min 1 :max 2}] "123"))
            (me/humanize (explain [:string {:and [[:max 2]]}] "123"))))
-    (is (= ["should have 1 character"]
+    (is (= ["should be 1 character"]
            (me/humanize (explain [:string {:min 1 :max 1}] "123"))
            (me/humanize (explain [:string {:and [[:min 1] [:max 1]]}] "123"))))))
