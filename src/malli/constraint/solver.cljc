@@ -38,7 +38,8 @@
               (when-some [[[sol1 & sols :as all-sols]] (seq cart-sols)]
                 (when-some [unsupported-keys (not-empty
                                                (disj (into #{} (mapcat keys) all-sols)
-                                                     :max-count :min-count))]
+                                                     :max-count :min-count
+                                                     :max-range :min-range))]
                   (miu/-fail! ::unsupported-conj-solution {:unsupported-keys unsupported-keys}))
                 (let [number-solutions (-conj-number-constraints all-sols)
                       combined-sols (comb/cartesian-product
