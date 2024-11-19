@@ -21,6 +21,13 @@
     (is (validate [:int {:min 4 :max 4}] 4))
     (is (not (m/validate [:int {:min 1 :max 5}] "")))
     (is (not (validate [:int {:min 1 :max 5}] "")))
+    (is (= ["should be an integer"] (me/humanize (explain :int "2"))))
+    (is (= [nil ["should be an integer"]]
+           (me/humanize (explain [:tuple :int :int :int] [1 "2" 3]))))
+    (is (false? (validate [:map [:tuple :int :int :int]] [1 "2" 3])))
+    (is (= {:x [nil ["should be an integer"]]}
+           (me/humanize (explain [:map [:x [:tuple :int :int :int]]] {:x [1 "2" 3]}))))
+    (is (false? (validate [:map [:x [:tuple :int :int :int]]] {:x [1 "2" 3]})))
     (is (= ["should be at least 1"]
            (me/humanize (m/explain [:int {:min 1}] 0))
            (me/humanize (explain [:int {:min 1}] 0))
