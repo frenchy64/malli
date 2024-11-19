@@ -6,7 +6,6 @@
             [clojure.test.check.properties :refer [for-all]]
             [malli.core :as m]
             [malli.generator :as mg]
-            [malli.constraint :as mc]
             [malli.json-schema-test :as json-schema-test]
             [malli.util :as mu]
             #?(:clj  [malli.test-macros :refer [when-env]]
@@ -1013,16 +1012,10 @@
   {:pre [(string? s)]}
   (every? alphanumeric-char? s))
 
-(defn add-constraints [options]
-  (-> options
-      (assoc ::m/constraint-options (mc/base-constraint-extensions))
-      (update :registry #(merge (or % (m/default-schemas)) (mc/base-constraints)))))
-
 (deftest string-gen-alphanumeric-test
   (doseq [seed (range 100)
-          [constraints-mode options] {:constraints-on (add-constraints {:seed seed})
-                                      :constraints-off {:seed seed}}]
-    (testing (pr-str [seed constraints-mode])
+          :let [options {:seed seed}]]
+    (testing (pr-str seed)
       (testing "(and min (= min max))"
         (is (alphanumeric-string?
              (mg/generate [:string {:min 10, :max 10}]

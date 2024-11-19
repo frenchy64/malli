@@ -8,7 +8,7 @@
             [clojure.test.check.properties :as prop]
             [clojure.test.check.random :as random]
             [clojure.test.check.rose-tree :as rose]
-            [malli.constraint.protocols :as mcp]
+            [malli.constraint :as mc]
             [malli.constraint.solver :as solver]
             [malli.core :as m]
             [malli.registry :as mr]
@@ -105,7 +105,7 @@
     constraint constraint-opts (assoc options ::solver/mode :gen)))
 
 (defn- -solve-schema-constraints [schema options]
-  (let [constraint (or (mcp/-get-constraint schema)
+  (let [constraint (or (mc/-get-constraint schema)
                        (m/-fail! ::missing-constraint {:type (m/type schema)
                                                        :schema schema}))
         solutions (-constraint-solutions constraint (m/type schema) options)]
@@ -140,7 +140,7 @@
     :else gen/string-alphanumeric))
 
 (defn -constrained-or-legacy-gen [constrained-gen legacy-gen schema & args]
-  (apply (if (mcp/-constrained-schema? schema) constrained-gen legacy-gen) schema args))
+  (apply (if (mc/-constrained-schema? schema) constrained-gen legacy-gen) schema args))
 
 (defn- -string-gen-legacy [schema options]
   (-string-gen* (-min-max schema options) options))

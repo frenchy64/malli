@@ -1,7 +1,6 @@
 (ns malli.error
   (:require [clojure.string :as str]
-            [malli.constraint :as-alias mc]
-            [malli.constraint.protocols :as mcp]
+            [malli.constraint :as mc]
             [malli.core :as m]
             [malli.impl.util :as miu]
             [malli.util :as mu]))
@@ -14,7 +13,7 @@
     (and min (< value min)) (str "should be at least " min)
     max (str "should be at most " max)))
 
-;; if constraints are enabled, this will be handled by ::mc/range-limits
+;; if constraints are enabled, this will be handled by ::m/range-limits
 (defn -pred-min-max-error-fn [{:keys [pred message]}]
   (fn [{:keys [schema value]} _]
     (let [{:keys [min max]} (m/properties schema)]
@@ -33,12 +32,12 @@
 (def default-errors
   {::unknown {:error/message {:en "unknown error"}}
    ::m/missing-key {:error/message {:en "missing required key"}}
-   ::mc/count-limits {:error/fn {:en (fn [{:keys [schema value]} _]
+   ::m/count-limits {:error/fn {:en (fn [{:keys [schema value]} _]
                                        (let [[min max] (m/children schema)]
                                          (en-count-limits min max value)))}}
-   ::mc/range-limits {:error/fn {:en (fn [{:keys [schema value]} _]
-                                       (let [[min max] (m/children schema)]
-                                         (en-range-min-max min max value)))}}
+   ::m/range-limits {:error/fn {:en (fn [{:keys [schema value]} _]
+                                      (let [[min max] (m/children schema)]
+                                        (en-range-min-max min max value)))}}
    ::m/limits {:error/fn {:en (fn [{:keys [schema value]} _]
                                 (let [{:keys [min max]} (m/properties schema)]
                                   (en-count-limits min max value)))}}
@@ -117,8 +116,8 @@
    :string {:error/fn {:en (fn [{:keys [schema value]} _]
                              (if-not (string? value)
                                "should be a string"
-                               ;;if constraints are enabled these problems are reported via ::mc/count-limits
-                               (when-not (mcp/-constrained-schema? schema)
+                               ;;if constraints are enabled these problems are reported via ::m/count-limits
+                               (when-not (mc/-constrained-schema? schema)
                                  (let [{:keys [min max]} (m/properties schema)]
                                    (cond
                                      (and min (= min max)) (str "should be " min " character" (when (not= 1 min) "s"))

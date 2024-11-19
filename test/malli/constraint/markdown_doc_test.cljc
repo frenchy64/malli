@@ -3,22 +3,17 @@
             [clojure.test.check.generators :as gen]
             [malli.constraint :as mc]
             [malli.core :as m]
-            [malli.error :as me]
-            [malli.constraint.protocols :as mcp]))
-
-(defn constraint-options []
-  (-> {:registry (m/default-schemas)}
-      mc/with-base-constraints))
+            [malli.error :as me]))
 
 #?(:clj
-   (deftest constraint-md-test
+   (deftest ^:constraints constraint-md-test
      (testing "constraint validators don't have preconditions"
        (is (false? (-> [:string {:max 1}]
-                       (m/schema (constraint-options))
+                       m/schema
                        (m/validate 1))))
        (is (thrown-with-msg? Exception
                              #"Don't know how to create ISeq from: java\.lang\.Long"
                              (-> [:string {:max 1}]
-                                 (m/schema (constraint-options))
-                                 mcp/-get-constraint
+                                 m/schema
+                                 mc/-get-constraint
                                  (m/validate 1)))))))

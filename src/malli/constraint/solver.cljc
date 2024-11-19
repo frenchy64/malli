@@ -3,7 +3,6 @@
             [clojure.set :as set]
             [malli.core :as m]
             [malli.constraint :as mc]
-            [malli.constraint.protocols :as mcp]
             [malli.impl.util :as miu]))
 
 (defn -number-solutions [min-int max-int mink maxk]
@@ -95,24 +94,24 @@ collected."
 
 (defn -constraint-solutions [constraint constraint-opts options]
   {:post [(every? map? %)]}
-  (assert (mcp/-constraint? constraint) (pr-str (#?(:cljs type :default class) constraint)))
+  (assert (mc/-constraint? constraint) (pr-str (#?(:cljs type :default class) constraint)))
   (lazy-seq
     (-constraint-solutions* constraint constraint-opts options)))
 
-(defmethod -constraint-solutions* ::mc/true-constraint [constraint constraint-opts options] [{}])
+(defmethod -constraint-solutions* ::m/true-constraint [constraint constraint-opts options] [{}])
 
-(defmethod -constraint-solutions* ::mc/and
+(defmethod -constraint-solutions* ::m/and
   [constraint constraint-opts options]
   (apply -conj-solutions (map #(-constraint-solutions % constraint-opts options) (m/children constraint))))
 
-(defmethod -constraint-solutions* ::mc/count-constraint
+(defmethod -constraint-solutions* ::m/count-constraint
   [constraint constraint-opts {::keys [mode] :as options}]
   (let [[min max] (m/children constraint)
         {gen-min :gen/min gen-max :gen/max} (when (= :gen mode) (m/properties constraint))]
     (assert (<= 0 min)) ;;should this be enforced?
     (-min-max min max gen-min gen-max :min-count :max-count)))
 
-(defmethod -constraint-solutions* ::mc/range-constraint
+(defmethod -constraint-solutions* ::m/range-constraint
   [constraint constraint-opts {::keys [mode] :as options}]
   (let [[min max] (m/children constraint)
         {gen-min :gen/min gen-max :gen/max} (when (= :gen mode) (m/properties constraint))]

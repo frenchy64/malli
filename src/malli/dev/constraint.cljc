@@ -3,12 +3,7 @@
             [malli.util :as mu]
             ;; m/=> doesn't seem to support aliases
             malli.constraint
-            malli.constraint.extension
-            malli.constraint.ext.collection
-            malli.constraint.ext.string
-            malli.constraint.ext.number
-            malli.constraint.range
-            malli.constraint.count))
+            malli.constraint.extension))
 
 (def Schema :any)
 (def Properties :any)
@@ -23,12 +18,12 @@
 (def ConstraintExtension
   [:map
    ;; a function taking a Schema's properties and returning a Constraint.
-   ;; e.g., [:string {:max 1}] => [::mc/count-constraint 0 1]
+   ;; e.g., [:string {:max 1}] => [::m/count-constraint 0 1]
    [:constraint-from-properties
     [:-> Properties Options Constraint]]
    ;; a function taking surface-syntax for a constraint and returning a Constraint.
-   ;; e.g., :string's [:max 5] => [::mc/count-constraint 0 5]
-   ;; e.g., :int's [:max 5] => [::mc/range-constraint {} nil 5]
+   ;; e.g., :string's [:max 5] => [::m/count-constraint 0 5]
+   ;; e.g., :int's [:max 5] => [::m/range-constraint {} nil 5]
    [:parse-constraint
     {:optional true}
     [:map-of :any [:->
@@ -41,8 +36,8 @@
                    Options
                    ?Constraint]]]
    ;; a function to return the form of a constraint under the current schema.
-   ;; e.g., :string's [:max 5] <= [::mc/count-constraint 0 5]
-   ;; e.g., :int's [:max 5] <= [::mc/range-constraint {} nil 5]
+   ;; e.g., :string's [:max 5] <= [::m/count-constraint 0 5]
+   ;; e.g., :int's [:max 5] <= [::m/range-constraint {} nil 5]
    [:constraint-form
     {:optional true}
     [:map-of Type [:-> Constraint Options Form]]]
@@ -52,8 +47,8 @@
    [:parse-properties
     [:map-of :any [:-> :any Options ContextualConstraintForm]]]
    ;; a function to convert a Constraint back to the properties of its schema.
-   ;; e.g., [:string {:max 4}] <= [::mc/count-constraint 0 4]
-   ;; e.g., [:int {:max 4}] <= [::mc/range-constraint 0 4]
+   ;; e.g., [:string {:max 4}] <= [::m/count-constraint 0 4]
+   ;; e.g., [:int {:max 4}] <= [::m/range-constraint 0 4]
    [:unparse-properties
     [:-> Constraint Properties Options Properties]]
    ;; a custom walking function to walk both schema and its constraints.
@@ -65,9 +60,5 @@
 
 (m/=> malli.constraint.extension/get-constraint-extension [:-> :any [:maybe ConstraintExtension]])
 (m/=> malli.constraint.extension/register-constraint-extensions! [:-> ConstraintExtensions ConstraintExtensions])
-(m/=> malli.constraint/base-constraint-extensions [:-> ConstraintExtensions])
-(m/=> malli.constraint.ext.collection/base-constraint-extensions [:-> ConstraintExtensions])
-(m/=> malli.constraint.ext.string/base-constraint-extensions [:-> ConstraintExtensions])
-(m/=> malli.constraint.ext.number/base-constraint-extensions [:-> ConstraintExtensions])
-(m/=> malli.constraint.range/default-constraint-extensions [:-> (mu/optional-keys ConstraintExtension)])
-(m/=> malli.constraint.count/default-constraint-extensions [:-> (mu/optional-keys ConstraintExtension)])
+(m/=> malli.core/base-constraint-extensions [:-> ConstraintExtensions])
+(m/=> malli.core/default-constraint-extensions [:-> (mu/optional-keys ConstraintExtension)])

@@ -3,8 +3,8 @@
   #?(:cljs (:require-macros malli.core))
   (:require #?(:clj [clojure.walk :as walk])
             [clojure.core :as c]
+            [malli.constraint :as mc]
             [malli.constraint.extension :as mce]
-            [malli.constraint.protocols :as mcp]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
@@ -32,12 +32,12 @@
 (defprotocol Schema
   (-validator [this] "returns a predicate function that checks if the schema is valid")
   (-explainer [this path] "returns a function of `x in acc -> maybe errors` to explain the errors for invalid values")
-  (-parser [this] "return a function of `x -> parsed-x | ::m/invalid` to explain how schema is valid.")
-  (-unparser [this] "return the inverse (partial) function wrt. `-parser`; `parsed-x -> x | ::m/invalid`")
+  (-parser [this] "return a function of `x -> parsed-x | ::invalid` to explain how schema is valid.")
+  (-unparser [this] "return the inverse (partial) function wrt. `-parser`; `parsed-x -> x | ::invalid`")
   (-transformer [this transformer method options]
     "returns a function to transform the value for the given schema and method.
     Can also return nil instead of `identity` so that more no-op transforms can be elided.")
-  (-walk [this walker path options] "walks the schema and it's children, ::m/walk-entry-vals, ::m/walk-refs, ::m/walk-schema-refs options effect how walking is done.")
+  (-walk [this walker path options] "walks the schema and it's children, ::walk-entry-vals, ::walk-refs, ::walk-schema-refs options effect how walking is done.")
   (-properties [this] "returns original schema properties")
   (-options [this] "returns original options")
   (-children [this] "returns schema children")
@@ -700,6 +700,12 @@
     (-fail! ::cannot-parse-constraint-from-properties {:properties properties
                                                        :schema-type (:type constraint-context)})))
 
+(defn -constraint-form [constraint {{:keys [constraint-form]} ::constraint-context :as options}]
+  (let [t (type constraint)
+        f (or (get constraint-form t)
+              (-fail! ::no-constraint-form {:type t}))]
+    (f constraint options)))
+
 (defn -simple-schema [props]
   (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile]
          :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props]
@@ -726,7 +732,7 @@
               (-check-children! type properties children min max)
               ^{:type ::schema}
               (reify
-                mcp/ConstrainedSchema
+                mc/ConstrainedSchema
                 (-constrained-schema? [this] (boolean @constraint-context))
                 (-get-constraint [this] @constraint)
                 (-set-constraint [this c] (-set-constraint this c @constraint-context))
@@ -1331,7 +1337,7 @@
                                                        :else x')))))))]
               ^{:type ::schema}
               (reify
-                mcp/ConstrainedSchema
+                mc/ConstrainedSchema
                 (-constrained-schema? [this] (boolean @constraint-context))
                 (-get-constraint [this] @constraint)
                 (-set-constraint [this c] (-set-constraint this c @constraint-context))
@@ -2543,7 +2549,7 @@
      (when (-entry-schema? schema) (-entries schema)))))
 
 (defn explicit-keys
-  "Returns a vector of explicit (not ::m/default) keys from EntrySchema"
+  "Returns a vector of explicit (not ::default) keys from EntrySchema"
   ([?schema] (explicit-keys ?schema nil))
   ([?schema options]
    (let [schema (schema ?schema options)]
@@ -2553,7 +2559,7 @@
         [] (-entries schema))))))
 
 (defn default-schema
-  "Returns the default (::m/default) schema from EntrySchema"
+  "Returns the default (::default) schema from EntrySchema"
   ([?schema] (default-schema ?schema nil))
   ([?schema options]
    (let [schema (schema ?schema options)]
@@ -2868,3 +2874,570 @@
          s (-> props :schema (schema options))]
      (or (-instrument-f s props f options)
          (-fail! ::instrument-requires-function-schema {:schema s})))))
+
+;;
+;; constraints
+;;
+
+(defn constraint
+  ([?constraint] (constraint ?constraint nil))
+  ([?constraint options]
+   (cond
+     (mc/-constraint? ?constraint) ?constraint
+     ;; reserving for now for special per-schema sugar, e.g., "contains" constraints for :map.
+     (keyword? ?constraint) (-fail! ::constraints-must-be-vectors
+                                    {:outer-schema (-> options ::constraint-context :type)
+                                     :constraint ?constraint})
+     (vector? ?constraint) (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
+                                 n #?(:bb (count v) :clj (.count v), :cljs (count v))
+                                 op #?(:clj (.nth v 0), :cljs (nth v 0))
+                                 ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
+                                 prs (or (-> options ::constraint-context :parse-constraint)
+                                         (-fail! ::missing-parse-constraint-options {:constraint ?constraint}))
+                                 f (or (prs op)
+                                       (-fail! ::missing-constraint-parser {:op op
+                                                                               :constraint ?constraint}))
+                                 ?constraint (if (or (nil? ?p) (map? ?p))
+                                               (f {:properties ?p :children (when (< 2 n) (subvec ?constraint 2 n))} options)
+                                               (f {:children (when (< 1 n) (subvec ?constraint 1 n))} options))]
+                             (cond
+                               (mc/-constraint? ?constraint) ?constraint
+                               (vector? ?constraint) (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
+                                                           t #?(:clj (.nth v 0), :cljs (nth v 0))
+                                                           t (if (into-schema? t)
+                                                               t
+                                                               (or (mce/get-constraint t)
+                                                                   (-fail! ::unknown-constraint {:type t})))
+                                                           n #?(:bb (count v) :clj (.count v), :cljs (count v))
+                                                           ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))]
+                                                       (if (or (nil? ?p) (map? ?p))
+                                                         (into-schema t ?p (when (< 2 n) (subvec ?constraint 2 n)) options)
+                                                         (into-schema t nil (when (< 1 n) (subvec ?constraint 1 n)) options)))
+                               :else (-fail! ::unknown-constraint {:constraint ?constraint})))
+     :else (-fail! ::invalid-constraint {:outer-schema (-> options ::constraint-context :type)
+                                            :constraint ?constraint}))))
+
+(defn -default-constraint-from-properties [properties options]
+  (let [{:keys [parse-properties]} (::constraint-context options)
+        ;; important for deterministic explain ordering
+        ks (-> parse-properties keys sort)
+        cs (-> []
+               (into (keep #(when-some [[_ v] (find properties %)]
+                              (constraint ((get parse-properties %) v options) options)))
+                     ks)
+               not-empty)]
+    (case (count cs)
+      0 (constraint [:true] options)
+      1 (first cs)
+      (constraint (into [:and] cs) options))))
+
+(defn default-parse-constraints []
+  {:and (fn [{:keys [properties children]} opts]
+          (into [::and nil] children))
+   :true (fn [{:keys [properties children]} opts]
+           (-check-children! :true properties children 0 0)
+           [::true-constraint])})
+
+(defn default-parse-properties []
+  {:and (fn [v _] (into [:and] v))})
+
+(defn default-unparse-properties []
+  {::and
+   (fn [c into-properties {{:keys [unparse-properties]} ::constraint-context :as opts}]
+     (reduce (fn [into-properties c]
+               (unparse-properties c into-properties opts))
+             into-properties (children c)))
+   ::true (fn [_ into-properties _] into-properties)})
+
+(defn default-constraint-form []
+  {::and (fn [c options] (into [:and] (map form) (children c)))
+   ::true-constraint (fn [c options] [:true])})
+
+(defn default-constraint-extensions []
+  {:constraint-from-properties -default-constraint-from-properties
+   :parse-constraint (default-parse-constraints)
+   :constraint-form (default-constraint-form)
+   :parse-properties (default-parse-properties)
+   :unparse-properties (default-unparse-properties)})
+
+(defn -true-constraint []
+  (let [type ::true-constraint]
+    ^{:type ::into-schema}
+    (reify
+      AST
+      (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
+      IntoSchema
+      (-type [_] type)
+      (-type-properties [_])
+      (-properties-schema [_ _])
+      (-children-schema [_ _])
+      (-into-schema [parent properties children options]
+        (-check-children! type properties children 0 0)
+        (let [this (volatile! nil)
+              form (delay (-constraint-form @this options))
+              cache (-create-cache options)]
+          (vreset!
+            this
+            ^{:type ::schema}
+            (reify
+              mc/Constraint
+              (-constraint? [_] true)
+              (-intersect [this that options] (when (= type that) this))
+              AST
+              (-to-ast [this _] (throw (ex-info "TODO" {})))
+              Schema
+              (-validator [_] any?)
+              ;;TODO unit test
+              (-explainer [this path] (fn [x in acc] acc))
+              (-parser [this] identity)
+              (-unparser [this] identity)
+              (-transformer [this transformer method options]
+                (-intercepting (-value-transformer transformer this method options)))
+              (-walk [this walker path options] (-walk-leaf this walker path options))
+              (-properties [_] properties)
+              (-options [_] options)
+              (-children [_] children)
+              (-parent [_] parent)
+              (-form [_] @form)
+              Cached
+              (-cache [_] cache)
+              LensSchema
+              (-keep [_])
+              (-get [_ _ default] default)
+              (-set [this key _] (-fail! ::non-associative-constraint {:schema this, :key key})))))))))
+
+(defn -default-range-constraint-extensions []
+  {:parse-constraint {;; [:max 5] => [::range-constraint nil 5]
+                      :max (fn [{:keys [properties children]} opts]
+                             (-check-children! :max properties children 1 1)
+                             [::range-constraint nil nil (first children)])
+                      ;; [:min 5] => [::range-constraint 5 nil]
+                      :min (fn [{:keys [properties children]} opts]
+                             (-check-children! :min properties children 1 1)
+                             [::range-constraint nil (first children) nil])
+                      ;; [:gen/max 5] => [::range-constraint {:gen/max 5} 0 nil]
+                      :gen/max (fn [{:keys [properties children]} opts]
+                                 (-check-children! :gen/max properties children 1 1)
+                                 [::range-constraint {:gen/max (first children)} nil nil])
+                      ;; [:gen/min 5] => [::range-constraint {:gen/min 5} 0 nil]
+                      :gen/min (fn [{:keys [properties children]} opts]
+                                 (-check-children! :gen/min properties children 1 1)
+                                 [::range-constraint {:gen/min (first children)} nil nil])}
+   :constraint-form {::range-constraint (fn [c options]
+                                             (let [[min-range max-range] (children c)
+                                                   {gen-min :gen/min gen-max :gen/max} (properties c)
+                                                   frms (cond-> []
+                                                          min-range (conj [:min min-range])
+                                                          max-range (conj [:max max-range])
+                                                          gen-min (conj [:gen/min gen-min])
+                                                          gen-max (conj [:gen/max gen-max]))]
+                                               (case (count frms)
+                                                 ;; [:int {:and [:true]} <= [::range-constraint 0 nil]
+                                                 0 [:true]
+                                                 ;; [:int {:and [:min 5]} <= [::range-constraint 5 nil]
+                                                 ;; [:int {:and [:max 4]} <= [::range-constraint nil 4]
+                                                 ;; [:int {:and [:gen/min 5]}] <= [::range-constraint {:gen/min 5} nil nil]
+                                                 ;; [:int {:and [:gen/max 4]}] <= [::range-constraint {:gen/max 4} nil nil]
+                                                 1 (first frms)
+                                                 ;; [:int {:and [:range {:gen/min 1 :gen/max 2} 3 4]}] <= [::range-constraint {:gen/min 1 :gen/max 2} 3 4]
+                                                 (into [:and] frms))))}
+   :parse-properties {;; (-get-constraint [:int {:max 5}]) => [:max 5]
+                      :max (fn [v opts] [:max v])
+                      ;; (-get-constraint [:int {:min 5}]) => [:min 5]
+                      :min (fn [v opts] [:min v])
+                      ;; (-get-constraint [:int {:gen/max 5}]) => [:gen/max 5]
+                      :gen/max (fn [v opts] [:gen/max v])
+                      ;; (-get-constraint [:int {:gen/min 5}]) => [:gen/min 5]
+                      :gen/min (fn [v opts] [:gen/min v])}
+   :unparse-properties {::range-constraint
+                        (fn [c into-properties _]
+                          (let [[cmin cmax] (children c)
+                                c-properties (properties c)]
+                            (cond-> into-properties
+                              ;; [:int {:max 4}] <= [::range-constraint {} nil 4]
+                              ;; :int <= [::range-constraint {} nil nil]
+                              ;;FIXME what does ::gen mean?
+                              cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
+                              ;; [:int {:min 5}] <= [::range-constraint 5 nil]
+                              ;; :int <= [::range-constraint nil nil]
+                              ;;FIXME
+                              (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))}})
+
+(defn -walk-leaf+constraints [schema walker path {::keys [constraint-opts] :as options}]
+  (when (-accept walker schema path options)
+    (let [constraint (mc/-get-constraint schema)
+          constraint' (when constraint
+                        (let [constraint-walker (or (::constraint-walker options)
+                                                    (reify Walker
+                                                      (-accept [_ constraint _ _] constraint)
+                                                      (-inner [this constraint path options] (-walk constraint this path options))
+                                                      (-outer [_ constraint _ children _] (-set-children constraint children))))]
+                          (-walk constraint constraint-walker (conj path ::constraint)
+                                   (assoc options
+                                          ::constraint-walker constraint-walker
+                                          ;; enables constraints that contain schemas, e.g., [:string {:edn :int}]
+                                          ::schema-walker walker))))
+          schema (cond-> schema
+                   ;; don't try and guess the 'unparsed' properties when we don't need to.
+                   (and (some? constraint')
+                        (not (identical? constraint constraint')))
+                   (-update-properties (fn [properties]
+                                           (let [{:keys [unparse-properties]} constraint-opts
+                                                 f (or (get unparse-properties (type constraint'))
+                                                       (-fail! ::cannot-unparse-constraint-into-properties
+                                                               {:constraint constraint'}))]
+                                             (f constraint' properties options)))))]
+      (-outer walker schema path (-children schema) options))))
+
+(defn -base-number-constraint-extension []
+  (-> (default-constraint-extensions)
+      (assoc :-walk -walk-leaf+constraints)
+      (as-> $ (merge-with into $ (-default-range-constraint-extensions)))))
+
+(defn base-number-constraint-extensions []
+  (let [ext (-base-number-constraint-extension)]
+    {:int ext :double ext :float ext}))
+
+(defn -range-constraint []
+  (let [type ::range-constraint]
+    ^{:type ::into-schema}
+    (reify
+      AST
+      (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
+      IntoSchema
+      (-type [_] type)
+      (-type-properties [_])
+      (-properties-schema [_ _])
+      (-children-schema [_ _])
+      (-into-schema [parent properties children options]
+        (-check-children! type properties children 2 2)
+        (let [[min-range max-range] children
+              ;; unclear if we want to enforce (<= min-range max-range)
+              ;; it's a perfectly well formed constraint that happens to satisfy no values
+              _ (when-not (or (nil? min-range)
+                              (number? min-range))
+                  (-fail! ::range-constraint-min {:min min-range}))
+              _ (when-not (or (nil? max-range)
+                              (number? max-range))
+                  (-fail! ::range-constraint-max {:max max-range}))
+              this (volatile! nil)
+              form (delay (-constraint-form @this options))
+              cache (-create-cache options)]
+          (vreset!
+            this
+            ^{:type ::schema}
+            (reify
+              mc/Constraint
+              (-constraint? [_] true)
+              (-intersect [_ that options']
+                (when (= type (type that))
+                  (let [{gen-min :gen/min gen-max :gen/max} properties
+                        [min-range' max-range'] (children that)
+                        {gen-min' :gen/min gen-max' :gen/max} (properties that)
+                        gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
+                        gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
+                    (-into-schema parent
+                                    (cond-> {}
+                                      gen-min (assoc :gen/min gen-min)
+                                      gen-max (assoc :gen/max gen-max))
+                                    [(or (when (and min-range min-range') (c/max min-range min-range')) min-range min-range')
+                                     (or (when (and max-range max-range') (c/min max-range max-range')) max-range max-range')]
+                                    options))))
+              AST
+              (-to-ast [this _] (-to-value-ast this))
+              Schema
+              (-validator [_]
+                (cond
+                  (and min-range max-range) (if (= min-range max-range)
+                                              #(= min-range %)
+                                              (if (<= min-range max-range)
+                                                #(and (<= min-range %)
+                                                      (<= % max-range))
+                                                (fn [_] false)))
+                  min-range #(<= min-range %)
+                  max-range #(<= % max-range)
+                  :else any?))
+              (-explainer [this path]
+                (let [pred (-validator this)]
+                  (fn [x in acc]
+                    (cond-> acc
+                      (not (pred x))
+                      (conj (miu/-error path in this x ::range-limits))))))
+              (-parser [this]
+                (let [validator (-validator this)]
+                  (fn [x] (if (validator x) x ::invalid))))
+              (-unparser [this] (-parser this))
+              (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
+              (-walk [this walker path options] (-walk-leaf this walker path options))
+              (-properties [_] properties)
+              (-options [_] options)
+              (-children [_] children)
+              (-parent [_] parent)
+              (-form [_] @form)
+              Cached
+              (-cache [_] cache)
+              LensSchema
+              (-keep [_] (throw (ex-info "TODO" {})))
+              (-get [_ _ default] (throw (ex-info "TODO" {})))
+              (-set [this key _] (throw (ex-info "TODO" {}))))))))))
+
+(defn default-count-constraint-extensions []
+  {:parse-constraint {;; [:max 5] => [::count-constraint 0 5]
+                      :max (fn [{:keys [properties children]} opts]
+                             (-check-children! :max properties children 1 1)
+                             [::count-constraint 0 (first children)])
+                      ;; [:min 5] => [::count-constraint 5 nil]
+                      :min (fn [{:keys [properties children]} opts]
+                             (-check-children! :min properties children 1 1)
+                             [::count-constraint (first children) nil])
+                      ;; [:gen/max 5] => [::count-constraint {:gen/max 5} 0 nil]
+                      :gen/max (fn [{:keys [properties children]} opts]
+                                 (-check-children! :gen/max properties children 1 1)
+                                 [::count-constraint {:gen/max (first children)} 0 nil])
+                      ;; [:gen/min 5] => [::count-constraint {:gen/min 5} 0 nil]
+                      :gen/min (fn [{:keys [properties children]} opts]
+                                 (-check-children! :gen/min properties children 1 1)
+                                 [::count-constraint {:gen/min (first children)} 0 nil])}
+   :constraint-form {::count-constraint (fn [c options]
+                                             (let [[min-count max-count] (children c)
+                                                   {gen-min :gen/min gen-max :gen/max} (properties c)
+                                                   frms (cond-> []
+                                                          (pos? min-count) (conj [:min min-count])
+                                                          max-count (conj [:max max-count])
+                                                          (some-> gen-min pos?) (conj [:gen/min gen-min])
+                                                          gen-max (conj [:gen/max gen-max]))]
+                                               (case (count frms)
+                                                 ;; [:string {:and [[:true]]}] <= [::count-constraint 0 nil]
+                                                 0 [:true]
+                                                 ;; [:string {:and [[:min 5]]}] <= [::count-constraint 5 nil]
+                                                 ;; [:string {:and [[:max 4]]}] <= [::count-constraint 0 4]
+                                                 ;; [:string {:and [[:gen/min 5]]}] <= [::count-constraint {:gen/min 5} 0 nil]
+                                                 ;; [:string {:and [[:gen/max 4]]}] <= [::count-constraint {:gen/max 4} 0 nil]
+                                                 1 (first frms)
+                                                 ;; [:string {:and [[:min 3] [:max 4] [:gen/min 1] [:gen/max 2]]]}]
+                                                 ;; <= [::count-constraint {:gen/min 1 :gen/max 2} 3 4]
+                                                 (into [:and] frms))))}
+   :parse-properties {;; (-get-constraint [:string {:max 5}]) => [:max 5]
+                      :max (fn [v opts] [:max v])
+                      ;; (-get-constraint [:string {:min 5}]) => [:min 5]
+                      :min (fn [v opts] [:min v])
+                      ;; (-get-constraint [:string {:gen/max 5}]) => [:gen/max 5]
+                      :gen/max (fn [v opts] [:gen/max v])
+                      ;; (-get-constraint [:string {:gen/min 5}]) => [:gen/min 5]
+                      :gen/min (fn [v opts] [:gen/min v])}
+   :unparse-properties {::count-constraint
+                        (fn [c into-properties _]
+                          (let [[cmin cmax] (children c)
+                                c-properties (properties c)]
+                            (cond-> into-properties
+                              ;; [:string {:max 4}] <= [::count-constraint 0 4]
+                              ;; :string <= [::count-constraint 0 nil]
+                              ;;FIXME what does ::gen mean?
+                              cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
+                              ;; [:string {:min 5}] <= [::count-constraint 5 nil]
+                              ;; :string <= [::count-constraint 0 nil]
+                              (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))}})
+
+(defn -count-constraint []
+  (let [type ::count-constraint]
+    ^{:type ::into-schema}
+    (reify
+      AST
+      (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
+      IntoSchema
+      (-type [_] type)
+      (-type-properties [_])
+      (-properties-schema [_ _])
+      (-children-schema [_ _])
+      (-into-schema [parent properties children options]
+        (-check-children! type properties children 2 2)
+        (let [[min-count max-count] children
+              ;; unclear if we want to enforce (<= min-count max-count)
+              ;; it's a perfectly well formed constraint that happens to satisfy no values
+              _ (when-not (nat-int? min-count)
+                  (-fail! ::count-constraint-min {:min min-count}))
+              _ (when-not (or (nil? max-count)
+                              (nat-int? max-count))
+                  (-fail! ::count-constraint-max {:max max-count}))
+              this (volatile! nil)
+              form (delay (-constraint-form @this options))
+              cache (-create-cache options)]
+          (vreset!
+            this
+            ^{:type ::schema}
+            (reify
+              mc/Constraint
+              (-constraint? [_] true)
+              (-intersect [_ that options']
+                (when (= type (type that))
+                  (let [{gen-min :gen/min gen-max :gen/max} properties
+                        [min-count' max-count'] (children that)
+                        {gen-min' :gen/min gen-max' :gen/max} (properties that)
+                        gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
+                        gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
+                    (-into-schema parent
+                                    (cond-> {}
+                                      gen-min (assoc :gen/min gen-min)
+                                      gen-max (assoc :gen/max gen-max))
+                                    [(c/max min-count min-count')
+                                     (or (when (and max-count max-count') (c/min max-count max-count')) max-count max-count')]
+                                    options))))
+              AST
+              (-to-ast [this _] (-to-value-ast this))
+              Schema
+              ;;TODO bounded counts
+              ;; idea: [:string {:or [[:min 0] [:min 5]]}] could just count once somehow
+              ;; as opposed to [:or [:string {:min 1}] [:string {:min 5}]] which would be more difficult?
+              (-validator [_]
+                (cond
+                  (and min-count max-count) (if (= min-count max-count)
+                                              #(= min-count (miu/-safe-count %))
+                                              (if (<= min-count max-count)
+                                                #(let [size (miu/-safe-count %)]
+                                                   (and (<= min-count size)
+                                                        (<= size max-count)))
+                                                (fn [_] false)))
+                  (pos? min-count) #(<= min-count (miu/-safe-count %))
+                  max-count #(<= (miu/-safe-count %) max-count)
+                  :else any?))
+              (-explainer [this path]
+                (let [pred (-validator this)]
+                  (fn [x in acc]
+                    (cond-> acc
+                      (not (pred x))
+                      (conj (miu/-error path in this x ::count-limits))))))
+              ;; potentially useful for :orn, :xorn, :impliesn constraints?
+              ;; [:string {:orn [[:small [:max 5]] [:large [:min 6]]]}]
+              ;; => [:small "12345"]
+              ;; => [:large "123456"]
+              ;; [:string {:impliesn [[:at-least-5 [:max 5]] [:at-least-6 [:max 6]]]}]
+              ;; => [:at-least-5 "12345"]
+              ;; => [[:not :at-least-5] "123456"]
+              ;; [:string {:iffn [[:max-5-left [:max 5]] [:max-5-right [:max 5]]]}]
+              ;; => [:P "12345"]
+              ;; => [:not-P "123456"]
+              (-parser [this]
+                (let [validator (-validator this)]
+                  (fn [x] (if (validator x) x ::invalid))))
+              (-unparser [this] (-parser this))
+              (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
+              (-walk [this walker path options] (-walk-leaf this walker path options))
+              (-properties [_] properties)
+              (-options [_] options)
+              (-children [_] children)
+              (-parent [_] parent)
+              (-form [_] @form)
+              Cached
+              (-cache [_] cache)
+              LensSchema
+              (-keep [_] (throw (ex-info "TODO" {})))
+              (-get [_ _ default] (throw (ex-info "TODO" {})))
+              (-set [this key _] (throw (ex-info "TODO" {}))))))))))
+
+(defn base-string-constraint-extensions []
+  {:string (-> (default-constraint-extensions)
+               (assoc :-walk -walk-leaf+constraints)
+               (as-> $ (merge-with into $ (default-count-constraint-extensions))))})
+
+(defn- -flatten-and [cs]
+  (eduction (mapcat #(if (= ::and (type %))
+                       (children %)
+                       [%]))
+            cs))
+
+(defn- -intersect-common-constraints [cs]
+  (->> cs
+       (group-by type)
+       (sort-by key)
+       (into [] (mapcat (fn [[_ v]]
+                          (case (count v)
+                            1 (subvec v 0 1)
+                            (let [[l r & nxt] v]
+                              ;; if the first two intersect successfully, assume the rest do too
+                              (if-some [in (mc/-intersect l r nil)]
+                                [(if nxt
+                                   (reduce #(mc/-intersect %1 %2 nil) in nxt)
+                                   in)]
+                                v))))))))
+
+(defn -and-constraint []
+  ^{:type ::into-schema}
+  (let [type ::and]
+    (reify IntoSchema
+      (-type [_] type)
+      (-type-properties [_])
+      (-properties-schema [_ _])
+      (-children-schema [_ _])
+      (-into-schema [parent properties children options]
+        (let [children (-vmap #(constraint % options) children)
+              ichildren (-> children -flatten-and -intersect-common-constraints)]
+          (case (count ichildren)
+            1 (first ichildren)
+            (let [children ichildren
+                  this (volatile! nil)
+                  ;;FIXME use pretty constraint form
+                  form (delay (-constraint-form @this options))
+                  cache (-create-cache options)
+                  ->parser (fn [f m] (let [parsers (m (-vmap f children))]
+                                       #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
+              (vreset!
+                this
+                ^{:type ::schema}
+                (reify
+                  mc/Constraint
+                  (-constraint? [_] true)
+                  (-intersect [_ that options]
+                    (when (= type (type that))
+                      (-into-schema parent properties (into children (children that)) options)))
+                  Schema
+                  (-validator [_]
+                    (let [validators (-vmap -validator children)] (miu/-every-pred validators)))
+                  (-explainer [_ path]
+                    (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
+                      (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
+                  (-parser [_] (->parser -parser seq))
+                  (-unparser [_] (->parser -unparser rseq))
+                  (-transformer [this transformer method options]
+                    (-parent-children-transformer this children transformer method options))
+                  (-walk [this walker path options] (-walk-indexed this walker path options))
+                  (-properties [_] properties)
+                  (-options [_] options)
+                  (-children [_] children)
+                  (-parent [_] parent)
+                  (-form [_] @form)
+                  Cached
+                  (-cache [_] cache)
+                  LensSchema
+                  (-keep [_])
+                  (-get [_ key default] (get children key default))
+                  (-set [this key value] (-set-assoc-children this key value)))))))))))
+
+(defn -base-collection-constraint-extension []
+  (-> (default-constraint-extensions)
+      ;TODO
+      ;(assoc :-walk -walk-leaf+constraints)
+      (as-> $ (merge-with into $ (default-count-constraint-extensions)))))
+
+(defn base-collection-constraint-extensions []
+  (let [ext (-base-collection-constraint-extension)]
+    {:vector ext :sequential ext :seqable ext :set ext
+     ;;TODO :every (bounded)
+     }))
+
+(defn base-constraints []
+  {::range-constraint (-range-constraint)
+   ::count-constraint (-count-constraint)
+   ::and (-and-constraint)
+   ::true-constraint (-true-constraint)})
+
+(defn base-constraint-extensions []
+  (merge (base-number-constraint-extensions)
+         (base-string-constraint-extensions)
+         (base-collection-constraint-extensions)))
+
+(defn- activate-base-constraints! []
+  (mce/register-constraints (base-constraints))
+  (mce/register-constraint-extensions! (base-constraint-extensions)))
+
+(when (identical? mc/mode "on")
+  (activate-base-constraints!))
