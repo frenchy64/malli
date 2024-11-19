@@ -34,6 +34,7 @@
     (is (validate [:string {:min 1 :max 5}] "ab"))
     (is (validate [:string {:min 4 :max 4}] "🌉🜉"))
     (is (not (validate [:string {:min 1 :max 5}] "")))
+    (is (nil? (me/humanize (explain :string ""))))
     (is (= ["should have at least 1 character"]
            (me/humanize (explain [:string {:min 1}] ""))
            (me/humanize (explain [:string {:min 1 :max 10}] ""))

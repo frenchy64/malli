@@ -35,8 +35,7 @@
               (-to-ast [this _] (throw (ex-info "TODO" {})))
               m/Schema
               (-validator [_] any?)
-              ;;TODO make explainer and hook it up to humanizer
-              (-explainer [this path] (fn [x in acc] acc))
+              (-explainer [this path] (fn [x in acc]))
               (-parser [this] identity)
               (-unparser [this] identity)
               (-transformer [this transformer method options]
