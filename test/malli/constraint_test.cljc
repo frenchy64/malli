@@ -23,10 +23,6 @@
                                                      [::m/count-constraint 0 (first children)])}}
    :registry {::m/count-constraint (m/-count-constraint)}})
 
-(def true-constraint-options
-  {::m/constraint-context {::m/true-constraint (fn [c opts] :true)}
-   :registry {::m/true-constraint (m/-true-constraint)}})
-
 (deftest constraint-test
   (testing "Constraints are returned as-is"
     (is (= ::m/true-constraint
@@ -35,7 +31,7 @@
   (testing "IntoSchema's are not allowed in raw form"
     (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
-          #":malli\.constraint/missing-parse-constraint-options"
+          #":malli\.core/missing-parse-constraint-options"
           (m/constraint [::m/true-constraint]
                         {:registry {::m/true-constraint (m/-true-constraint)}}))))
   (testing "m/form requires a constraint context"

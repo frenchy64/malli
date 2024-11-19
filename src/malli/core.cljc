@@ -2946,11 +2946,11 @@
    (fn [c into-properties {{:keys [unparse-properties]} ::constraint-context :as opts}]
      (reduce (fn [into-properties c]
                (unparse-properties c into-properties opts))
-             into-properties (children c)))
+             into-properties (-children c)))
    ::true (fn [_ into-properties _] into-properties)})
 
 (defn default-constraint-form []
-  {::and (fn [c options] (into [:and] (map form) (children c)))
+  {::and (fn [c options] (into [:and] (map form) (-children c)))
    ::true-constraint (fn [c options] [:true])})
 
 (defn default-constraint-extensions []
@@ -2982,7 +2982,7 @@
             (reify
               mc/Constraint
               (-constraint? [_] true)
-              (-intersect [this that options] (when (= type that) this))
+              (-intersect [this that options] (when (= type (-type that)) this))
               AST
               (-to-ast [this _] (throw (ex-info "TODO" {})))
               Schema
@@ -3024,7 +3024,7 @@
                                  (-check-children! :gen/min properties children 1 1)
                                  [::range-constraint {:gen/min (first children)} nil nil])}
    :constraint-form {::range-constraint (fn [c options]
-                                             (let [[min-range max-range] (children c)
+                                             (let [[min-range max-range] (-children c)
                                                    {gen-min :gen/min gen-max :gen/max} (properties c)
                                                    frms (cond-> []
                                                           min-range (conj [:min min-range])
@@ -3051,7 +3051,7 @@
                       :gen/min (fn [v opts] [:gen/min v])}
    :unparse-properties {::range-constraint
                         (fn [c into-properties _]
-                          (let [[cmin cmax] (children c)
+                          (let [[cmin cmax] (-children c)
                                 c-properties (properties c)]
                             (cond-> into-properties
                               ;; [:int {:max 4}] <= [::range-constraint {} nil 4]
@@ -3083,7 +3083,7 @@
                         (not (identical? constraint constraint')))
                    (-update-properties (fn [properties]
                                            (let [{:keys [unparse-properties]} constraint-opts
-                                                 f (or (get unparse-properties (type constraint'))
+                                                 f (or (get unparse-properties (-type constraint'))
                                                        (-fail! ::cannot-unparse-constraint-into-properties
                                                                {:constraint constraint'}))]
                                              (f constraint' properties options)))))]
@@ -3130,9 +3130,9 @@
               mc/Constraint
               (-constraint? [_] true)
               (-intersect [_ that options']
-                (when (= type (type that))
+                (when (= type (-type that))
                   (let [{gen-min :gen/min gen-max :gen/max} properties
-                        [min-range' max-range'] (children that)
+                        [min-range' max-range'] (-children that)
                         {gen-min' :gen/min gen-max' :gen/max} (properties that)
                         gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
                         gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
@@ -3199,7 +3199,7 @@
                                  (-check-children! :gen/min properties children 1 1)
                                  [::count-constraint {:gen/min (first children)} 0 nil])}
    :constraint-form {::count-constraint (fn [c options]
-                                             (let [[min-count max-count] (children c)
+                                             (let [[min-count max-count] (-children c)
                                                    {gen-min :gen/min gen-max :gen/max} (properties c)
                                                    frms (cond-> []
                                                           (pos? min-count) (conj [:min min-count])
@@ -3227,7 +3227,7 @@
                       :gen/min (fn [v opts] [:gen/min v])}
    :unparse-properties {::count-constraint
                         (fn [c into-properties _]
-                          (let [[cmin cmax] (children c)
+                          (let [[cmin cmax] (-children c)
                                 c-properties (properties c)]
                             (cond-> into-properties
                               ;; [:string {:max 4}] <= [::count-constraint 0 4]
@@ -3269,9 +3269,9 @@
               mc/Constraint
               (-constraint? [_] true)
               (-intersect [_ that options']
-                (when (= type (type that))
+                (when (= type (-type that))
                   (let [{gen-min :gen/min gen-max :gen/max} properties
-                        [min-count' max-count'] (children that)
+                        [min-count' max-count'] (-children that)
                         {gen-min' :gen/min gen-max' :gen/max} (properties that)
                         gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
                         gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
@@ -3340,14 +3340,14 @@
                (as-> $ (merge-with into $ (default-count-constraint-extensions))))})
 
 (defn- -flatten-and [cs]
-  (eduction (mapcat #(if (= ::and (type %))
-                       (children %)
+  (eduction (mapcat #(if (= ::and (-type %))
+                       (-children %)
                        [%]))
             cs))
 
 (defn- -intersect-common-constraints [cs]
   (->> cs
-       (group-by type)
+       (group-by -type)
        (sort-by key)
        (into [] (mapcat (fn [[_ v]]
                           (case (count v)
@@ -3387,8 +3387,8 @@
                   mc/Constraint
                   (-constraint? [_] true)
                   (-intersect [_ that options]
-                    (when (= type (type that))
-                      (-into-schema parent properties (into children (children that)) options)))
+                    (when (= type (-type that))
+                      (-into-schema parent properties (into children (-children that)) options)))
                   Schema
                   (-validator [_]
                     (let [validators (-vmap -validator children)] (miu/-every-pred validators)))
