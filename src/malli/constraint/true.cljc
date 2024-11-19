@@ -35,7 +35,8 @@
               (-to-ast [this _] (throw (ex-info "TODO" {})))
               m/Schema
               (-validator [_] any?)
-              (-explainer [this path] (fn [x in acc]))
+              ;;TODO unit test
+              (-explainer [this path] (fn [x in acc] acc))
               (-parser [this] identity)
               (-unparser [this] identity)
               (-transformer [this transformer method options]
