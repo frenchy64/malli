@@ -36,6 +36,7 @@
              (me/humanize (m/explain [type {:min 1 :max 2} :int] (coerce [0 1 2])))
              (me/humanize (m/explain [type {:min 1 :max 2} :int] (coerce [0 1 2])))
              (me/humanize (m/explain [type {:and [[:max 2]]} :int] (coerce [0 1 2])))))
-      (is (= ["should have 1 element"]
+      ;; TODO introduce syntax for exact count: "should have 1 element"
+      (is (= ["should have at most 1 element"]
              (me/humanize (m/explain [type {:min 1 :max 1} :int] (coerce [0 1 2])))
              (me/humanize (m/explain [type {:and [[:min 1] [:max 1]]} :int] (coerce [0 1 2]))))))))
