@@ -24,6 +24,8 @@
     (is (= ["should be an integer"] (me/humanize (explain :int "2"))))
     (is (= [nil ["should be an integer"]]
            (me/humanize (explain [:tuple :int :int :int] [1 "2" 3]))))
+    (is (some? (explain [:sequential :int] [1 "2"])))
+    (is (not (validate [:sequential :int] [1 "2"])))
     (is (false? (validate [:map [:tuple :int :int :int]] [1 "2" 3])))
     (is (= {:x [nil ["should be an integer"]]}
            (me/humanize (explain [:map [:x [:tuple :int :int :int]]] {:x [1 "2" 3]}))))
