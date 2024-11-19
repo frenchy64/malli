@@ -1,28 +1,47 @@
 (ns malli.error
   (:require [clojure.string :as str]
+            [malli.constraint :as-alias mc]
+            [malli.constraint.protocols :as mcp]
             [malli.core :as m]
+            [malli.impl.util :as miu]
             [malli.util :as mu]))
 
 (defn -pr-str [v] #?(:clj (pr-str v), :cljs (str v)))
 
+(defn en-range-min-max [min max value]
+  (cond
+    (and min (= min max)) (str "should be " min)
+    (and min (< value min)) (str "should be at least " min)
+    max (str "should be at most " max)))
+
+;; if constraints are enabled, this will be handled by ::mc/range-limits
 (defn -pred-min-max-error-fn [{:keys [pred message]}]
   (fn [{:keys [schema value]} _]
     (let [{:keys [min max]} (m/properties schema)]
-      (cond
-        (not (pred value)) message
-        (and min (= min max)) (str "should be " min)
-        (and min (< value min)) (str "should be at least " min)
-        max (str "should be at most " max)))))
+      (if (not (pred value))
+        message
+        (en-range-min-max min max value)))))
+
+(defn- en-count-limits [min max value]
+  (let [should (if (string? value) "should be " "should have ")
+        elements #(str " " (if (string? value) "character" "element") (when-not (= 1 %) "s"))]
+    (cond
+      (and min (= min max)) (str should min (elements min))
+      (and min (< (miu/-safe-count value) min)) (str should "at least " min (elements min))
+      max (str should "at most " max (elements max)))))
 
 (def default-errors
   {::unknown {:error/message {:en "unknown error"}}
    ::m/missing-key {:error/message {:en "missing required key"}}
+   ::mc/count-limits {:error/fn {:en (fn [{:keys [schema value]} _]
+                                       (let [[min max] (m/children schema)]
+                                         (en-count-limits min max value)))}}
+   ::mc/range-limits {:error/fn {:en (fn [{:keys [schema value]} _]
+                                       (let [[min max] (m/children schema)]
+                                         (en-range-min-max min max value)))}}
    ::m/limits {:error/fn {:en (fn [{:keys [schema value]} _]
                                 (let [{:keys [min max]} (m/properties schema)]
-                                  (cond
-                                    (and min (= min max)) (str "should have " min " elements")
-                                    (and min (< (count value) min)) (str "should have at least " min " elements")
-                                    max (str "should have at most " max " elements"))))}}
+                                  (en-count-limits min max value)))}}
    ::m/tuple-size {:error/fn {:en (fn [{:keys [schema value]} _]
                                     (let [size (count (m/children schema))]
                                       (str "invalid tuple size " (count value) ", expected " size)))}}
@@ -96,15 +115,19 @@
    :any {:error/message {:en "should be any"}}
    :nil {:error/message {:en "should be nil"}}
    :string {:error/fn {:en (fn [{:keys [schema value]} _]
-                             (let [{:keys [min max]} (m/properties schema)]
-                               (cond
-                                 (not (string? value)) "should be a string"
-                                 (and min (= min max)) (str "should be " min " character" (when (not= 1 min) "s"))
-                                 (and min (< (count value) min)) (str "should be at least " min " character"
-                                                                      (when (not= 1 min) "s"))
-                                 max (str "should be at most " max " character" (when (not= 1 max) "s")))))}}
+                             (if-not (string? value)
+                               "should be a string"
+                               ;;if constraints are enabled these problems are reported via ::mc/count-limits
+                               (when-not (mcp/-constrained-schema? schema)
+                                 (let [{:keys [min max]} (m/properties schema)]
+                                   (cond
+                                     (and min (= min max)) (str "should be " min " character" (when (not= 1 min) "s"))
+                                     (and min (< (count value) min)) (str "should be at least " min " character"
+                                                                          (when (not= 1 min) "s"))
+                                     max (str "should be at most " max " character" (when (not= 1 max) "s")))))))}}
    :int {:error/fn {:en (-pred-min-max-error-fn {:pred int?, :message "should be an integer"})}}
    :double {:error/fn {:en (-pred-min-max-error-fn {:pred double?, :message "should be a double"})}}
+   :float {:error/fn {:en (-pred-min-max-error-fn {:pred float?, :message "should be a float"})}}
    :boolean {:error/message {:en "should be a boolean"}}
    :keyword {:error/message {:en "should be a keyword"}}
    :symbol {:error/message {:en "should be a symbol"}}

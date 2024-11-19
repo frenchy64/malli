@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [malli.core :as m]
             [malli.core-test]
+            malli.constraint
             [malli.swagger :as swagger]
             [malli.util :as mu]))
 
