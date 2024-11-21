@@ -3446,6 +3446,6 @@
   (mce/register-constraints (base-constraints))
   (mce/register-constraint-extensions! (base-constraint-extensions)))
 
-(when #?(:bb (= mc/mode "on")
-         :default (identical? mc/mode "on"))
+(when #?(:cljs (identical? mc/mode "on")
+         :default (= mc/mode "on"))
   (activate-base-constraints!))

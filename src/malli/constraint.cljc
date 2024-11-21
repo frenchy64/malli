@@ -1,7 +1,7 @@
 (ns malli.constraint)
 
 #?(:cljs (goog-define mode "on")
-   :clj  (def mode (as-> (or (System/getProperty "malli.constraint/mode") "on") $ (.intern $))))
+   :clj  (def mode (or (System/getProperty "malli.constraint/mode") "on")))
 
 (defprotocol Constraint
   (-constraint? [this])
