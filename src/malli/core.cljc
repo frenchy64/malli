@@ -3028,13 +3028,12 @@
                                             [this-type {k (first children)}])]))
                              ks)
      :constraint-form {this-type (fn [c options]
-                                   (let [{min-range :min max-range :max
-                                          gen-min :gen/min gen-max :gen/max} (-properties c)
-                                         frms (cond-> []
-                                                min-range (conj [:min min-range])
-                                                max-range (conj [:max max-range])
-                                                gen-min (conj [:gen/min gen-min])
-                                                gen-max (conj [:gen/max gen-max]))]
+                                   (let [p (-properties c)
+                                         frms (reduce (fn [frms k]
+                                                        (if-some [v (k p)]
+                                                          (conj frms [k v])
+                                                          frms))
+                                                      [] ks)]
                                      (case (count frms)
                                        ;; [:int {:and [:true]} <= [this-type {:min 0}]
                                        0 [:true]
