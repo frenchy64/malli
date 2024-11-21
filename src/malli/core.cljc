@@ -3150,7 +3150,7 @@
                                           (cond-> acc
                                             (not (pred x))
                                             (conj (miu/-error path in this x ::range-limits))))))
-                         :intersect (fn [this that options]
+                         :intersect (fn [this that _]
                                       (when (= this-type (type that))
                                         (let [{min-range :min max-range :max gen-min :gen/min gen-max :gen/max} (-properties this)
                                               {min-range' :min max-range' :max gen-min' :gen/min gen-max' :gen/max} (-properties that)
@@ -3165,7 +3165,7 @@
                                                           gen-min (assoc :gen/min gen-min)
                                                           gen-max (assoc :gen/max gen-max))
                                                         []
-                                                        options))))})))
+                                                        (-options this)))))})))
 
 (defn default-count-constraint-extensions [] (-default-number-min-max-constraint-extensions ::count-constraint))
 
@@ -3205,7 +3205,7 @@
                                           (cond-> acc
                                             (not (pred x))
                                             (conj (miu/-error path in this x ::count-limits))))))
-                         :intersect (fn [this that options']
+                         :intersect (fn [this that _]
                                       (when (= this-type (type that))
                                         (let [{min-count :min max-count :max gen-min :gen/min gen-max :gen/max} (-properties this)
                                               {min-count' :min max-count' :max gen-min' :gen/min gen-max' :gen/max} (-properties that)
@@ -3220,7 +3220,7 @@
                                                           gen-min (assoc :gen/min gen-min)
                                                           gen-max (assoc :gen/max gen-max))
                                                         []
-                                                        options))))})))
+                                                        (-options this)))))})))
 
 (defn base-string-constraint-extensions []
   {:string (-> (default-constraint-extensions)

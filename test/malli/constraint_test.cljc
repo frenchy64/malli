@@ -69,6 +69,9 @@
   #_
   (is (= ::FIXME
          (m/ast (m/constraint [:and [:min 1] [:max 2]] (string-context)))))
+  ;;TODO have a separate -constraint-form for pretty printing
+  ;; use -form for independent printing
+  ;; don't store constraint context in constraint
   (testing "constraints are simplified"
     (is (= [:and [:min 1] [:max 1]]
            (m/form (m/constraint [:and [:min 0] [:min 1] [:max 1] [:max 2]] (string-context))))))
