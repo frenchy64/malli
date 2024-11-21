@@ -99,6 +99,7 @@ collected."
     (-constraint-solutions* constraint constraint-opts options)))
 
 (defmethod -constraint-solutions* ::m/true-constraint [constraint constraint-opts options] [{}])
+(defmethod -constraint-solutions* ::m/false-constraint [constraint constraint-opts options] [])
 
 (defmethod -constraint-solutions* ::m/and
   [constraint constraint-opts options]
