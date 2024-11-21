@@ -16,7 +16,8 @@
 
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
-         parser unparser ast from-ast -instrument ^:private -safely-countable? validator validate explain)
+         parser unparser ast from-ast -instrument ^:private -safely-countable?
+         -set-constraint -constraint-context -constraint-from-properties -constraint-form)
 
 ;;
 ;; protocols and records
@@ -32,12 +33,12 @@
 (defprotocol Schema
   (-validator [this] "returns a predicate function that checks if the schema is valid")
   (-explainer [this path] "returns a function of `x in acc -> maybe errors` to explain the errors for invalid values")
-  (-parser [this] "return a function of `x -> parsed-x | ::invalid` to explain how schema is valid.")
-  (-unparser [this] "return the inverse (partial) function wrt. `-parser`; `parsed-x -> x | ::invalid`")
+  (-parser [this] "return a function of `x -> parsed-x | ::m/invalid` to explain how schema is valid.")
+  (-unparser [this] "return the inverse (partial) function wrt. `-parser`; `parsed-x -> x | ::m/invalid`")
   (-transformer [this transformer method options]
     "returns a function to transform the value for the given schema and method.
     Can also return nil instead of `identity` so that more no-op transforms can be elided.")
-  (-walk [this walker path options] "walks the schema and it's children, ::walk-entry-vals, ::walk-refs, ::walk-schema-refs options effect how walking is done.")
+  (-walk [this walker path options] "walks the schema and it's children, ::m/walk-entry-vals, ::m/walk-refs, ::m/walk-schema-refs options effect how walking is done.")
   (-properties [this] "returns original schema properties")
   (-options [this] "returns original options")
   (-children [this] "returns schema children")
@@ -156,11 +157,11 @@
 
 (defn -deprecated! [x] (println "DEPRECATED:" x))
 
-(defn -exception [type data] (miu/-exception type data))
+(defn -exception [type data] (ex-info (str type) {:type type, :message type, :data data}))
 
 (defn -fail!
-  ([type] (miu/-fail! type))
-  ([type data] (miu/-fail! type data)))
+  ([type] (-fail! type nil))
+  ([type data] (throw (-exception type data))))
 
 (defn -safe-pred [f] #(try (boolean (f %)) (catch #?(:clj Exception, :cljs js/Error) _ false)))
 
@@ -369,15 +370,6 @@
 
 (defn -update-properties [schema f & args]
   (-set-properties schema (not-empty (apply f (-properties schema) args))))
-
-(defn -set-constraint
-  ([schema constraint] (-set-constraint schema constraint (mce/get-constraint-extension (-type schema))))
-  ([schema constraint {:keys [parse-properties unparse-properties] :as constraint-opts}]
-   (-update-properties schema
-                       (fn [properties]
-                         (let [f (or (get unparse-properties (-type constraint))
-                                     (-fail! ::unsupported-constraint {:schema schema :constraint constraint}))]
-                           (f constraint (apply dissoc properties (keys parse-properties)) {::constraint-options constraint-opts}))))))
 
 (defn -update-options [schema f]
   (-into-schema (-parent schema) (-properties schema) (-children schema) (f (-options schema))))
@@ -671,7 +663,13 @@
       (and max f) (fn [x] (<= (f x) max))
       max (fn [x] (<= x max)))))
 
-(defn -validate-limits [min max] (or ((-min-max-pred miu/-safe-count) {:min min :max max}) (constantly true)))
+;;TODO move to miu
+(defn -safe-count [x]
+  (if (-safely-countable? x)
+    (count x)
+    (reduce (fn [cnt _] (inc cnt)) 0 x)))
+
+(defn -validate-limits [min max] (or ((-min-max-pred -safe-count) {:min min :max max}) (constantly true)))
 
 (defn -needed-bounded-checks [min max options]
   (c/max (or (some-> max inc) 0)
@@ -688,23 +686,6 @@
 ;;
 ;; Schemas
 ;;
-
-(defn -constraint-context [type options]
-  (some-> (or (get (::constraint-options options) type)
-              (mce/get-constraint-extension type))
-          (assoc :type type)))
-
-(defn -constraint-from-properties [{:keys [constraint-from-properties] :as constraint-context} properties options]
-  (if constraint-from-properties
-    (constraint-from-properties properties (assoc options ::constraint-context constraint-context))
-    (-fail! ::cannot-parse-constraint-from-properties {:properties properties
-                                                       :schema-type (:type constraint-context)})))
-
-(defn -constraint-form [constraint {{:keys [constraint-form]} ::constraint-context :as options}]
-  (let [t (type constraint)
-        f (or (get constraint-form t)
-              (-fail! ::no-constraint-form {:type t}))]
-    (f constraint options)))
 
 (defn -simple-schema [props]
   (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile]
@@ -2549,7 +2530,7 @@
      (when (-entry-schema? schema) (-entries schema)))))
 
 (defn explicit-keys
-  "Returns a vector of explicit (not ::default) keys from EntrySchema"
+  "Returns a vector of explicit (not ::m/default) keys from EntrySchema"
   ([?schema] (explicit-keys ?schema nil))
   ([?schema options]
    (let [schema (schema ?schema options)]
@@ -2559,7 +2540,7 @@
         [] (-entries schema))))))
 
 (defn default-schema
-  "Returns the default (::default) schema from EntrySchema"
+  "Returns the default (::m/default) schema from EntrySchema"
   ([?schema] (default-schema ?schema nil))
   ([?schema options]
    (let [schema (schema ?schema options)]
@@ -2878,6 +2859,32 @@
 ;;
 ;; constraints
 ;;
+
+(defn -set-constraint
+  ([schema constraint] (-set-constraint schema constraint (mce/get-constraint-extension (-type schema))))
+  ([schema constraint {:keys [parse-properties unparse-properties] :as constraint-opts}]
+   (-update-properties schema
+                       (fn [properties]
+                         (let [f (or (get unparse-properties (-type constraint))
+                                     (-fail! ::unsupported-constraint {:schema schema :constraint constraint}))]
+                           (f constraint (apply dissoc properties (keys parse-properties)) {::constraint-options constraint-opts}))))))
+
+(defn -constraint-context [type options]
+  (some-> (or (get (::constraint-options options) type)
+              (mce/get-constraint-extension type))
+          (assoc :type type)))
+
+(defn -constraint-from-properties [{:keys [constraint-from-properties] :as constraint-context} properties options]
+  (if constraint-from-properties
+    (constraint-from-properties properties (assoc options ::constraint-context constraint-context))
+    (-fail! ::cannot-parse-constraint-from-properties {:properties properties
+                                                       :schema-type (:type constraint-context)})))
+
+(defn -constraint-form [constraint {{:keys [constraint-form]} ::constraint-context :as options}]
+  (let [t (type constraint)
+        f (or (get constraint-form t)
+              (-fail! ::no-constraint-form {:type t}))]
+    (f constraint options)))
 
 (defn constraint
   ([?constraint] (constraint ?constraint nil))
@@ -3291,14 +3298,14 @@
               (-validator [_]
                 (cond
                   (and min-count max-count) (if (= min-count max-count)
-                                              #(= min-count (miu/-safe-count %))
+                                              #(= min-count (-safe-count %))
                                               (if (<= min-count max-count)
-                                                #(let [size (miu/-safe-count %)]
+                                                #(let [size (-safe-count %)]
                                                    (and (<= min-count size)
                                                         (<= size max-count)))
                                                 (fn [_] false)))
-                  (pos? min-count) #(<= min-count (miu/-safe-count %))
-                  max-count #(<= (miu/-safe-count %) max-count)
+                  (pos? min-count) #(<= min-count (-safe-count %))
+                  max-count #(<= (-safe-count %) max-count)
                   :else any?))
               (-explainer [this path]
                 (let [pred (-validator this)]

@@ -2,7 +2,6 @@
   (:require [clojure.string :as str]
             [malli.constraint :as mc]
             [malli.core :as m]
-            [malli.impl.util :as miu]
             [malli.util :as mu]))
 
 (defn -pr-str [v] #?(:clj (pr-str v), :cljs (str v)))
@@ -26,7 +25,7 @@
         elements #(str " " (if (string? value) "character" "element") (when-not (= 1 %) "s"))]
     (cond
       (and min (= min max)) (str should min (elements min))
-      (and min (< (miu/-safe-count value) min)) (str should "at least " min (elements min))
+      (and min (< (m/-safe-count value) min)) (str should "at least " min (elements min))
       max (str should "at most " max (elements max)))))
 
 (def default-errors

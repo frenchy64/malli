@@ -2,8 +2,7 @@
   (:require [clojure.math.combinatorics :as comb]
             [clojure.set :as set]
             [malli.core :as m]
-            [malli.constraint :as mc]
-            [malli.impl.util :as miu]))
+            [malli.constraint :as mc]))
 
 (defn -number-solutions [min-int max-int mink maxk]
   (if (and min-int max-int)
@@ -40,7 +39,7 @@
                                                (disj (into #{} (mapcat keys) all-sols)
                                                      :max-count :min-count
                                                      :max-range :min-range))]
-                  (miu/-fail! ::unsupported-conj-solution {:unsupported-keys unsupported-keys}))
+                  (m/-fail! ::unsupported-conj-solution {:unsupported-keys unsupported-keys}))
                 (let [number-solutions (-conj-number-constraints all-sols)
                       combined-sols (comb/cartesian-product
                                       number-solutions)]
@@ -119,4 +118,4 @@ collected."
     (-min-max min max gen-min gen-max :min-range :max-range)))
 
 (defmethod -constraint-solutions* :default [constraint constraint-opts options]
-  (miu/-fail! ::unknown-constraint {:constraint constraint}))
+  (m/-fail! ::unknown-constraint {:constraint constraint}))
