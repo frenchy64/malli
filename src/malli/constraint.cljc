@@ -5,6 +5,7 @@
 
 (defprotocol Constraint
   (-constraint? [this])
+  (-constraint-form [this])
   (-intersect [this that options]))
 
 (defprotocol ConstrainedSchema
@@ -26,6 +27,7 @@
   Constraint
   (-constraint? [_] false)
   (-intersect [_ _ _])
+  (-constraint-form [_ _ _])
 
   ConstrainedSchema
   (-constrained-schema? [this] false)

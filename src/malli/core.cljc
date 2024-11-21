@@ -687,6 +687,10 @@
 ;; Schemas
 ;;
 
+(defn -simple-parser [this]
+  (let [validator (-validator this)]
+    (fn [x] (if (validator x) x ::invalid))))
+
 (defn -simple-schema [props]
   (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile]
          :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props]
@@ -742,9 +746,7 @@
                           (cond-> acc
                             (and pvalidator (not (pvalidator x)))
                             (conj (miu/-error path in this x))))))))
-                (-parser [this]
-                  (let [validator (-validator this)]
-                    (fn [x] (if (validator x) x ::invalid))))
+                (-parser [this] (-simple-parser this))
                 (-unparser [this] (-parser this))
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
@@ -947,9 +949,7 @@
             (let [validator (-validator this)]
               (fn explain [x in acc]
                 (if-not (validator x) (conj acc (miu/-error (conj path 0) in this x)) acc))))
-          (-parser [this]
-            (let [validator (-validator this)]
-              (fn [x] (if (validator x) x ::invalid))))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
@@ -1529,9 +1529,7 @@
                   (conj acc (miu/-error path in this x (:type (ex-data e))))))))
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
-          (-parser [this]
-            (let [valid? (-validator this)]
-              (fn [x] (if (valid? x) x ::invalid))))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           (-walk [this walker path options] (-walk-leaf this walker path options))
           (-properties [_] properties)
@@ -1574,9 +1572,7 @@
                   acc)
                 (catch #?(:clj Exception, :cljs js/Error) e
                   (conj acc (miu/-error path in this x (:type (ex-data e))))))))
-          (-parser [this]
-            (let [validator (-validator this)]
-              (fn [x] (if (validator x) x ::invalid))))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
@@ -1921,9 +1917,7 @@
               (let [validator (-validator this)]
                 (fn explain [x in acc]
                   (if-not (validator x) (conj acc (miu/-error path in this x)) acc)))))
-          (-parser [this]
-            (let [validator (-validator this)]
-              (fn [x] (if (validator x) x ::invalid))))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           (-transformer [_ _ _ _])
           (-walk [this walker path options] (-walk-indexed this walker path options))
@@ -2003,9 +1997,7 @@
               (let [validator (-validator this)]
                 (fn explain [x in acc]
                   (if-not (validator x) (conj acc (miu/-error path in this x)) acc)))))
-          (-parser [this]
-            (let [validator (-validator this)]
-              (fn [x] (if (validator x) x ::invalid))))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           (-transformer [_ _ _ _])
           (-walk [this walker path options] (-walk-indexed this walker path options))
@@ -2996,9 +2988,7 @@
             Schema
             (-validator [this] (validator this))
             (-explainer [this path] (explainer this path))
-            (-parser [this]
-              (let [validator (-validator this)]
-                (fn [x] (if (validator x) x ::invalid))))
+            (-parser [this] (-simple-parser this))
             (-unparser [this] (-parser this))
             (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
             (-walk [this walker path options] (-walk-leaf this walker path options))
@@ -3023,63 +3013,50 @@
                          :intersect (fn [this that _] (when (= this-type (type that)) this))})))
 
 (defn- -default-number-min-max-constraint-extensions [this-type]
-  {:parse-constraint {;; [:max 5] => [this-type {:max 5}]
-                      :max (fn [{:keys [properties children]} opts]
-                             (-check-children! :max properties children 1 1)
-                             [this-type {:max (first children)}])
-                      ;; [:min 5] => [this-type {:min 5}]
-                      :min (fn [{:keys [properties children]} opts]
-                             (-check-children! :min properties children 1 1)
-                             [this-type {:min (first children)}])
-                      ;; [:gen/max 5] => [this-type {:gen/max 5}]
-                      :gen/max (fn [{:keys [properties children]} opts]
-                                 (-check-children! :gen/max properties children 1 1)
-                                 [this-type {:gen/max (first children)}])
-                      ;; [:gen/min 5] => [this-type {:gen/min 5}]
-                      :gen/min (fn [{:keys [properties children]} opts]
-                                 (-check-children! :gen/min properties children 1 1)
-                                 [this-type {:gen/min (first children)}])}
-   :constraint-form {this-type (fn [c options]
-                                 (let [{min-range :min max-range :max
-                                        gen-min :gen/min gen-max :gen/max} (-properties c)
-                                       frms (cond-> []
-                                              min-range (conj [:min min-range])
-                                              max-range (conj [:max max-range])
-                                              gen-min (conj [:gen/min gen-min])
-                                              gen-max (conj [:gen/max gen-max]))]
-                                   (case (count frms)
-                                     ;; [:int {:and [:true]} <= [this-type {:min 0}]
-                                     0 [:true]
-                                     ;; [:int {:and [:min 5]} <= [this-type {:min 5}]
-                                     ;; [:int {:and [:max 4]} <= [this-type {:max 4}]
-                                     ;; [:int {:and [:gen/min 5]}] <= [this-type {:gen/min 5}]
-                                     ;; [:int {:and [:gen/max 4]}] <= [this-type {:gen/max 4}]
-                                     1 (first frms)
-                                     ;; [:int {:and [:range {:min 3 :max 4 :gen/min 1 :gen/max 2}]}] <= [this-type {:min 3 :max 4 :gen/min 1 :gen/max 2}]
-                                     (into [:and] frms))))}
-   :parse-properties {;; (-get-constraint [:int {:max 5}]) => [:max 5]
-                      :max (fn [v opts] [:max v])
-                      ;; (-get-constraint [:int {:min 5}]) => [:min 5]
-                      :min (fn [v opts] [:min v])
-                      ;; (-get-constraint [:int {:gen/max 5}]) => [:gen/max 5]
-                      :gen/max (fn [v opts] [:gen/max v])
-                      ;; (-get-constraint [:int {:gen/min 5}]) => [:gen/min 5]
-                      :gen/min (fn [v opts] [:gen/min v])}
-   :unparse-properties {this-type
-                        (fn [c into-properties _]
-                          (let [{cmin :min cmax :max :as c-properties} (-properties c)]
-                            (cond-> into-properties
-                              ;; [:int {:max 4}] <= [this-type {:max 4}]
-                              ;; :int <= [this-type {}]
-                              ;;FIXME what does ::gen mean?
-                              cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
-                              ;; [:int {:min 5}] <= [this-type {:min 5}]
-                              ;; :int <= [this-type]
-                              ;;FIXME
-                              (case this-type
-                                ::range-constraint cmin
-                                ::count-constraint (pos? cmin))
-                              (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))}})
+  (let [ks [:min :max :gen/min :gen/max]]
+    {;; [:max 5] => [::range-constraint {:max 5}] etc
+     :parse-constraint (into {} (map (fn [k]
+                                       [k (fn [{:keys [properties children]} opts]
+                                            (-check-children! k properties children 1 1)
+                                            [this-type {k (first children)}])]))
+                             ks)
+     :constraint-form {this-type (fn [c options]
+                                   (let [{min-range :min max-range :max
+                                          gen-min :gen/min gen-max :gen/max} (-properties c)
+                                         frms (cond-> []
+                                                min-range (conj [:min min-range])
+                                                max-range (conj [:max max-range])
+                                                gen-min (conj [:gen/min gen-min])
+                                                gen-max (conj [:gen/max gen-max]))]
+                                     (case (count frms)
+                                       ;; [:int {:and [:true]} <= [this-type {:min 0}]
+                                       0 [:true]
+                                       ;; [:int {:and [:min 5]} <= [this-type {:min 5}]
+                                       ;; [:int {:and [:max 4]} <= [this-type {:max 4}]
+                                       ;; [:int {:and [:gen/min 5]}] <= [this-type {:gen/min 5}]
+                                       ;; [:int {:and [:gen/max 4]}] <= [this-type {:gen/max 4}]
+                                       1 (first frms)
+                                       ;; [:int {:and [:range {:min 3 :max 4 :gen/min 1 :gen/max 2}]}] <= [this-type {:min 3 :max 4 :gen/min 1 :gen/max 2}]
+                                       (into [:and] frms))))}
+
+     ;; (-get-constraint [:int {:min 5}]) => [:min 5] etc
+     :parse-properties (into {} (map (fn [k] [k (fn [v opts] [k v])])) ks)
+     ;; FIXME this seems wrong
+     :unparse-properties {this-type
+                          (fn [c into-properties _]
+                            (let [{cmin :min cmax :max :as c-properties} (-properties c)]
+                              (cond-> into-properties
+                                ;; [:int {:max 4}] <= [this-type {:max 4}]
+                                ;; :int <= [this-type {}]
+                                ;;FIXME what does ::gen mean?
+                                cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
+                                ;; [:int {:min 5}] <= [this-type {:min 5}]
+                                ;; :int <= [this-type]
+                                ;;FIXME
+                                (case this-type
+                                  ::range-constraint cmin
+                                  ::count-constraint (pos? cmin))
+                                (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))}}))
 
 (defn -default-range-constraint-extensions [] (-default-number-min-max-constraint-extensions ::range-constraint))
 
@@ -3118,6 +3095,17 @@
   (let [ext (-base-number-constraint-extension)]
     {:int ext :double ext :float ext}))
 
+(defn- -intersect-min-max [this that _]
+  (when (= (type this) (type that))
+    (let [p (-properties this)
+          p' (-properties that)]
+      (-set-properties this
+                       (reduce-kv (fn [m k f]
+                                    (if-some [v (let [l (k p) r (k p')] (if (and l r) (f l r) (or l r)))]
+                                      (assoc m k v)
+                                      m))
+                                  nil {:min c/max :max c/min :gen/min c/max :gen/max c/min})))))
+
 (defn -range-constraint []
   (let [this-type ::range-constraint]
     (-simple-constraint {:type this-type
@@ -3150,22 +3138,7 @@
                                           (cond-> acc
                                             (not (pred x))
                                             (conj (miu/-error path in this x ::range-limits))))))
-                         :intersect (fn [this that _]
-                                      (when (= this-type (type that))
-                                        (let [{min-range :min max-range :max gen-min :gen/min gen-max :gen/max} (-properties this)
-                                              {min-range' :min max-range' :max gen-min' :gen/min gen-max' :gen/max} (-properties that)
-                                              min (or (when (and min-range min-range') (c/max min-range min-range')) min-range min-range')
-                                              max (or (when (and max-range max-range') (c/min max-range max-range')) max-range max-range')
-                                              gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
-                                              gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
-                                          (-into-schema (-parent this)
-                                                        (cond-> {}
-                                                          min (assoc :min min)
-                                                          max (assoc :max max)
-                                                          gen-min (assoc :gen/min gen-min)
-                                                          gen-max (assoc :gen/max gen-max))
-                                                        []
-                                                        (-options this)))))})))
+                         :intersect -intersect-min-max})))
 
 (defn default-count-constraint-extensions [] (-default-number-min-max-constraint-extensions ::count-constraint))
 
@@ -3205,22 +3178,7 @@
                                           (cond-> acc
                                             (not (pred x))
                                             (conj (miu/-error path in this x ::count-limits))))))
-                         :intersect (fn [this that _]
-                                      (when (= this-type (type that))
-                                        (let [{min-count :min max-count :max gen-min :gen/min gen-max :gen/max} (-properties this)
-                                              {min-count' :min max-count' :max gen-min' :gen/min gen-max' :gen/max} (-properties that)
-                                              min (or (when (and min-count min-count') (c/max min-count min-count')) min-count min-count')
-                                              max (or (when (and max-count max-count') (c/min max-count max-count')) max-count max-count')
-                                              gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
-                                              gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
-                                          (-into-schema (-parent this)
-                                                        (cond-> {}
-                                                          min (assoc :min min)
-                                                          max (assoc :max max)
-                                                          gen-min (assoc :gen/min gen-min)
-                                                          gen-max (assoc :gen/max gen-max))
-                                                        []
-                                                        (-options this)))))})))
+                         :intersect -intersect-min-max})))
 
 (defn base-string-constraint-extensions []
   {:string (-> (default-constraint-extensions)
