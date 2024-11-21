@@ -3048,22 +3048,7 @@
 
      ;; (-get-constraint [:int {:min 5}]) => [:min 5] etc
      :parse-properties (into {} (map (fn [k] [k (fn [v opts] [k v])])) ks)
-     ;; FIXME this seems wrong
-     :unparse-properties {this-type
-                          (fn [c into-properties _]
-                            (let [{cmin :min cmax :max :as c-properties} (-properties c)]
-                              (cond-> into-properties
-                                ;; [:int {:max 4}] <= [this-type {:max 4}]
-                                ;; :int <= [this-type {}]
-                                ;;FIXME what does ::gen mean?
-                                cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
-                                ;; [:int {:min 5}] <= [this-type {:min 5}]
-                                ;; :int <= [this-type]
-                                ;;FIXME
-                                (case this-type
-                                  ::range-constraint cmin
-                                  ::count-constraint (pos? cmin))
-                                (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))}}))
+     :unparse-properties {this-type (fn [c into-properties _] (into into-properties (-properties c)))}}))
 
 (defn -default-range-constraint-extensions [] (-default-number-min-max-constraint-extensions ::range-constraint))
 
