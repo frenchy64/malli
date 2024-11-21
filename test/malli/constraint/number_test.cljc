@@ -28,11 +28,9 @@
            (me/humanize (m/explain [:int {:max 2}] 3))
            (me/humanize (m/explain [:int {:min 1 :max 2}] 3))
            (me/humanize (m/explain [:int {:and [[:max 23] [:max 2]]}] 3))))
-    ;;TODO exact number constraint? (or maybe just encourage :enum)
-    (is (= ["should be at most 1"]
+    (is (= ["should be 1"]
            (me/humanize (m/explain [:int {:min 1 :max 1}] 3))
            (me/humanize (m/explain [:int {:and [[:min 1] [:max 1]]}] 3))
-           ;;FIXME
            (me/humanize (m/explain [:int {:and [[:min 1] [:max 1]
                                                 [:min 0] [:max 2]]}] 3))))))
 

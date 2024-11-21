@@ -37,7 +37,7 @@
   (testing "m/form requires a constraint context"
     (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
-          #":malli\.constraint/no-constraint-form"
+          #":malli\.core/no-constraint-form"
           (m/form (m/constraint (m/schema (m/-true-constraint)))))))
   (testing ":parse-constraint desugars constraints"
     (is (= ::m/count-constraint
