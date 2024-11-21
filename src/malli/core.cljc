@@ -714,7 +714,8 @@
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [form (delay (-simple-form parent properties children identity options))
                   constraint-context (delay (-constraint-context type options))
-                  constraint (delay (some-> @constraint-context (-constraint-from-properties properties options)))
+                  constraint (delay (when @constraint-context
+                                      (-constraint-from-properties properties (assoc options ::constraint-context @constraint-context))))
                   cache (-create-cache options)]
               (-check-children! type properties children min max)
               ^{:type ::schema}
@@ -1294,7 +1295,8 @@
                                     (-validate-limits min max))
                   constraint-context (delay (when-not bounded ;;TODO bounded-limits collections
                                               (-constraint-context type options)))
-                  constraint (delay (some-> @constraint-context (-constraint-from-properties properties options)))
+                  constraint (delay (when @constraint-context
+                                      (-constraint-from-properties properties (assoc options ::constraint-context @constraint-context))))
                   ->parser (fn [f g] (let [child-parser (f schema)]
                                        (fn [x]
                                          (cond
@@ -2868,12 +2870,6 @@
               (mce/get-constraint-extension type))
           (assoc :type type)))
 
-(defn -constraint-from-properties [{:keys [constraint-from-properties] :as constraint-context} properties options]
-  (if constraint-from-properties
-    (constraint-from-properties properties (assoc options ::constraint-context constraint-context))
-    (-fail! ::cannot-parse-constraint-from-properties {:properties properties
-                                                       :schema-type (:type constraint-context)})))
-
 (defn -constraint-form [constraint {{:keys [constraint-form]} ::constraint-context :as options}]
   (let [t (type constraint)
         f (or (get constraint-form t)
@@ -2918,7 +2914,7 @@
      :else (-fail! ::invalid-constraint {:outer-schema (-> options ::constraint-context :type)
                                          :constraint ?constraint}))))
 
-(defn -default-constraint-from-properties [properties options]
+(defn -constraint-from-properties [properties options]
   (let [{:keys [parse-properties]} (::constraint-context options)
         ;; important for deterministic explain ordering
         ks (-> parse-properties keys sort)
@@ -2932,9 +2928,9 @@
       1 (first cs)
       (constraint (into [:and] cs) options))))
 
+
 (defn default-constraint-extensions []
-  {:constraint-from-properties -default-constraint-from-properties
-   :parse-constraint {:and (fn [{:keys [properties children]} opts]
+  {:parse-constraint {:and (fn [{:keys [properties children]} opts]
                              (into [::and nil] children))
                       :true (fn [{:keys [properties children]} opts]
                               (-check-children! :true properties children 0 0)

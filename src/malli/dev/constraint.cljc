@@ -17,10 +17,6 @@
 (def Options [:maybe map?])
 (def ConstraintExtension
   [:map
-   ;; a function taking a Schema's properties and returning a Constraint.
-   ;; e.g., [:string {:max 1}] => [::m/count-constraint {:min 0 :max 1}]
-   [:constraint-from-properties
-    [:-> Properties Options Constraint]]
    ;; a function taking surface-syntax for a constraint and returning a Constraint.
    ;; e.g., :string's [:max 5] => [::m/count-constraint {:min 0 :max 5}]
    ;; e.g., :int's [:max 5] => [::m/range-constraint {:max 5}]
