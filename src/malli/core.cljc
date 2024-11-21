@@ -2922,7 +2922,7 @@
                                                          (into-schema t nil (when (< 1 n) (subvec ?constraint 1 n)) options)))
                                :else (-fail! ::unknown-constraint {:constraint ?constraint})))
      :else (-fail! ::invalid-constraint {:outer-schema (-> options ::constraint-context :type)
-                                            :constraint ?constraint}))))
+                                         :constraint ?constraint}))))
 
 (defn -default-constraint-from-properties [properties options]
   (let [{:keys [parse-properties]} (::constraint-context options)
@@ -3013,62 +3013,78 @@
               (-get [_ _ default] default)
               (-set [this key _] (-fail! ::non-associative-constraint {:schema this, :key key})))))))))
 
-(defn -default-range-constraint-extensions []
-  {:parse-constraint {;; [:max 5] => [::range-constraint nil 5]
-                      :max (fn [{:keys [properties children]} opts]
-                             (-check-children! :max properties children 1 1)
-                             [::range-constraint nil nil (first children)])
-                      ;; [:min 5] => [::range-constraint 5 nil]
-                      :min (fn [{:keys [properties children]} opts]
-                             (-check-children! :min properties children 1 1)
-                             [::range-constraint nil (first children) nil])
-                      ;; [:gen/max 5] => [::range-constraint {:gen/max 5} 0 nil]
-                      :gen/max (fn [{:keys [properties children]} opts]
-                                 (-check-children! :gen/max properties children 1 1)
-                                 [::range-constraint {:gen/max (first children)} nil nil])
-                      ;; [:gen/min 5] => [::range-constraint {:gen/min 5} 0 nil]
-                      :gen/min (fn [{:keys [properties children]} opts]
-                                 (-check-children! :gen/min properties children 1 1)
-                                 [::range-constraint {:gen/min (first children)} nil nil])}
-   :constraint-form {::range-constraint (fn [c options]
-                                             (let [[min-range max-range] (-children c)
-                                                   {gen-min :gen/min gen-max :gen/max} (-properties c)
-                                                   frms (cond-> []
-                                                          min-range (conj [:min min-range])
-                                                          max-range (conj [:max max-range])
-                                                          gen-min (conj [:gen/min gen-min])
-                                                          gen-max (conj [:gen/max gen-max]))]
-                                               (case (count frms)
-                                                 ;; [:int {:and [:true]} <= [::range-constraint 0 nil]
-                                                 0 [:true]
-                                                 ;; [:int {:and [:min 5]} <= [::range-constraint 5 nil]
-                                                 ;; [:int {:and [:max 4]} <= [::range-constraint nil 4]
-                                                 ;; [:int {:and [:gen/min 5]}] <= [::range-constraint {:gen/min 5} nil nil]
-                                                 ;; [:int {:and [:gen/max 4]}] <= [::range-constraint {:gen/max 4} nil nil]
-                                                 1 (first frms)
-                                                 ;; [:int {:and [:range {:gen/min 1 :gen/max 2} 3 4]}] <= [::range-constraint {:gen/min 1 :gen/max 2} 3 4]
-                                                 (into [:and] frms))))}
-   :parse-properties {;; (-get-constraint [:int {:max 5}]) => [:max 5]
-                      :max (fn [v opts] [:max v])
-                      ;; (-get-constraint [:int {:min 5}]) => [:min 5]
-                      :min (fn [v opts] [:min v])
-                      ;; (-get-constraint [:int {:gen/max 5}]) => [:gen/max 5]
-                      :gen/max (fn [v opts] [:gen/max v])
-                      ;; (-get-constraint [:int {:gen/min 5}]) => [:gen/min 5]
-                      :gen/min (fn [v opts] [:gen/min v])}
-   :unparse-properties {::range-constraint
-                        (fn [c into-properties _]
-                          (let [[cmin cmax] (-children c)
-                                c-properties (-properties c)]
-                            (cond-> into-properties
-                              ;; [:int {:max 4}] <= [::range-constraint {} nil 4]
-                              ;; :int <= [::range-constraint {} nil nil]
-                              ;;FIXME what does ::gen mean?
-                              cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
-                              ;; [:int {:min 5}] <= [::range-constraint 5 nil]
-                              ;; :int <= [::range-constraint nil nil]
-                              ;;FIXME
-                              (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))}})
+(defn- -default-number-min-max-constraint-extensions [this-type]
+  (let [no-min (case this-type
+                 ::range-constraint nil
+                 ::count-constraint 0)]
+    {:parse-constraint {;; [:max 5] => [this-type nil 5]
+                        :max (fn [{:keys [properties children]} opts]
+                               (-check-children! :max properties children 1 1)
+                               [this-type nil no-min (first children)])
+                        ;; [:min 5] => [this-type 5 nil]
+                        :min (fn [{:keys [properties children]} opts]
+                               (-check-children! :min properties children 1 1)
+                               [this-type nil (first children) nil])
+                        ;; [:gen/max 5] => [this-type {:gen/max 5} 0 nil]
+                        :gen/max (fn [{:keys [properties children]} opts]
+                                   (-check-children! :gen/max properties children 1 1)
+                                   [this-type {:gen/max (first children)} no-min nil])
+                        ;; [:gen/min 5] => [this-type {:gen/min 5} 0 nil]
+                        :gen/min (fn [{:keys [properties children]} opts]
+                                   (-check-children! :gen/min properties children 1 1)
+                                   [this-type {:gen/min (first children)} no-min nil])}
+     :constraint-form {this-type (fn [c options]
+                                   (let [[min-range max-range] (-children c)
+                                         {gen-min :gen/min gen-max :gen/max} (-properties c)
+                                         frms (cond-> []
+                                                (case this-type
+                                                  ::range-constraint min-range
+                                                  ::count-constraint (pos? min-range))
+                                                (conj [:min min-range])
+
+                                                max-range (conj [:max max-range])
+                                                (case this-type
+                                                  ::range-constraint gen-min
+                                                  ::count-constraint (some-> gen-min pos?))
+                                                (conj [:gen/min gen-min])
+
+                                                gen-max (conj [:gen/max gen-max]))]
+                                     (case (count frms)
+                                       ;; [:int {:and [:true]} <= [this-type 0 nil]
+                                       0 [:true]
+                                       ;; [:int {:and [:min 5]} <= [this-type 5 nil]
+                                       ;; [:int {:and [:max 4]} <= [this-type nil 4]
+                                       ;; [:int {:and [:gen/min 5]}] <= [this-type {:gen/min 5} nil nil]
+                                       ;; [:int {:and [:gen/max 4]}] <= [this-type {:gen/max 4} nil nil]
+                                       1 (first frms)
+                                       ;; [:int {:and [:range {:gen/min 1 :gen/max 2} 3 4]}] <= [this-type {:gen/min 1 :gen/max 2} 3 4]
+                                       (into [:and] frms))))}
+     :parse-properties {;; (-get-constraint [:int {:max 5}]) => [:max 5]
+                        :max (fn [v opts] [:max v])
+                        ;; (-get-constraint [:int {:min 5}]) => [:min 5]
+                        :min (fn [v opts] [:min v])
+                        ;; (-get-constraint [:int {:gen/max 5}]) => [:gen/max 5]
+                        :gen/max (fn [v opts] [:gen/max v])
+                        ;; (-get-constraint [:int {:gen/min 5}]) => [:gen/min 5]
+                        :gen/min (fn [v opts] [:gen/min v])}
+     :unparse-properties {this-type
+                          (fn [c into-properties _]
+                            (let [[cmin cmax] (-children c)
+                                  c-properties (-properties c)]
+                              (cond-> into-properties
+                                ;; [:int {:max 4}] <= [this-type {} nil 4]
+                                ;; :int <= [this-type {} nil nil]
+                                ;;FIXME what does ::gen mean?
+                                cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
+                                ;; [:int {:min 5}] <= [this-type 5 nil]
+                                ;; :int <= [this-type nil nil]
+                                ;;FIXME
+                                (case this-type
+                                  ::range-constraint cmin
+                                  ::count-constraint (pos? cmin))
+                                (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))}}))
+
+(defn -default-range-constraint-extensions [] (-default-number-min-max-constraint-extensions ::range-constraint))
 
 (defn -walk-leaf+constraints [schema walker path {::keys [constraint-opts] :as options}]
   (when (-accept walker schema path options)
@@ -3080,20 +3096,20 @@
                                                       (-inner [this constraint path options] (-walk constraint this path options))
                                                       (-outer [_ constraint _ children _] (-set-children constraint children))))]
                           (-walk constraint constraint-walker (conj path ::constraint)
-                                   (assoc options
-                                          ::constraint-walker constraint-walker
-                                          ;; enables constraints that contain schemas, e.g., [:string {:edn :int}]
-                                          ::schema-walker walker))))
+                                 (assoc options
+                                        ::constraint-walker constraint-walker
+                                        ;; enables constraints that contain schemas, e.g., [:string {:edn :int}]
+                                        ::schema-walker walker))))
           schema (cond-> schema
                    ;; don't try and guess the 'unparsed' properties when we don't need to.
                    (and (some? constraint')
                         (not (identical? constraint constraint')))
                    (-update-properties (fn [properties]
-                                           (let [{:keys [unparse-properties]} constraint-opts
-                                                 f (or (get unparse-properties (type constraint'))
-                                                       (-fail! ::cannot-unparse-constraint-into-properties
-                                                               {:constraint constraint'}))]
-                                             (f constraint' properties options)))))]
+                                         (let [{:keys [unparse-properties]} constraint-opts
+                                               f (or (get unparse-properties (type constraint'))
+                                                     (-fail! ::cannot-unparse-constraint-into-properties
+                                                             {:constraint constraint'}))]
+                                           (f constraint' properties options)))))]
       (-outer walker schema path (-children schema) options))))
 
 (defn -base-number-constraint-extension []
@@ -3144,12 +3160,12 @@
                         gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
                         gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
                     (-into-schema parent
-                                    (cond-> {}
-                                      gen-min (assoc :gen/min gen-min)
-                                      gen-max (assoc :gen/max gen-max))
-                                    [(or (when (and min-range min-range') (c/max min-range min-range')) min-range min-range')
-                                     (or (when (and max-range max-range') (c/min max-range max-range')) max-range max-range')]
-                                    options))))
+                                  (cond-> {}
+                                    gen-min (assoc :gen/min gen-min)
+                                    gen-max (assoc :gen/max gen-max))
+                                  [(or (when (and min-range min-range') (c/max min-range min-range')) min-range min-range')
+                                   (or (when (and max-range max-range') (c/min max-range max-range')) max-range max-range')]
+                                  options))))
               AST
               (-to-ast [this _] (-to-value-ast this))
               Schema
@@ -3188,62 +3204,7 @@
               (-get [_ _ default] (throw (ex-info "TODO" {})))
               (-set [this key _] (throw (ex-info "TODO" {}))))))))))
 
-(defn default-count-constraint-extensions []
-  {:parse-constraint {;; [:max 5] => [::count-constraint 0 5]
-                      :max (fn [{:keys [properties children]} opts]
-                             (-check-children! :max properties children 1 1)
-                             [::count-constraint 0 (first children)])
-                      ;; [:min 5] => [::count-constraint 5 nil]
-                      :min (fn [{:keys [properties children]} opts]
-                             (-check-children! :min properties children 1 1)
-                             [::count-constraint (first children) nil])
-                      ;; [:gen/max 5] => [::count-constraint {:gen/max 5} 0 nil]
-                      :gen/max (fn [{:keys [properties children]} opts]
-                                 (-check-children! :gen/max properties children 1 1)
-                                 [::count-constraint {:gen/max (first children)} 0 nil])
-                      ;; [:gen/min 5] => [::count-constraint {:gen/min 5} 0 nil]
-                      :gen/min (fn [{:keys [properties children]} opts]
-                                 (-check-children! :gen/min properties children 1 1)
-                                 [::count-constraint {:gen/min (first children)} 0 nil])}
-   :constraint-form {::count-constraint (fn [c options]
-                                          (let [[min-count max-count] (-children c)
-                                                {gen-min :gen/min gen-max :gen/max} (-properties c)
-                                                frms (cond-> []
-                                                       (pos? min-count) (conj [:min min-count])
-                                                       max-count (conj [:max max-count])
-                                                       (some-> gen-min pos?) (conj [:gen/min gen-min])
-                                                       gen-max (conj [:gen/max gen-max]))]
-                                            (case (count frms)
-                                              ;; [:string {:and [[:true]]}] <= [::count-constraint 0 nil]
-                                              0 [:true]
-                                              ;; [:string {:and [[:min 5]]}] <= [::count-constraint 5 nil]
-                                              ;; [:string {:and [[:max 4]]}] <= [::count-constraint 0 4]
-                                              ;; [:string {:and [[:gen/min 5]]}] <= [::count-constraint {:gen/min 5} 0 nil]
-                                              ;; [:string {:and [[:gen/max 4]]}] <= [::count-constraint {:gen/max 4} 0 nil]
-                                              1 (first frms)
-                                              ;; [:string {:and [[:min 3] [:max 4] [:gen/min 1] [:gen/max 2]]]}]
-                                              ;; <= [::count-constraint {:gen/min 1 :gen/max 2} 3 4]
-                                              (into [:and] frms))))}
-   :parse-properties {;; (-get-constraint [:string {:max 5}]) => [:max 5]
-                      :max (fn [v opts] [:max v])
-                      ;; (-get-constraint [:string {:min 5}]) => [:min 5]
-                      :min (fn [v opts] [:min v])
-                      ;; (-get-constraint [:string {:gen/max 5}]) => [:gen/max 5]
-                      :gen/max (fn [v opts] [:gen/max v])
-                      ;; (-get-constraint [:string {:gen/min 5}]) => [:gen/min 5]
-                      :gen/min (fn [v opts] [:gen/min v])}
-   :unparse-properties {::count-constraint
-                        (fn [c into-properties _]
-                          (let [[cmin cmax] (-children c)
-                                c-properties (-properties c)]
-                            (cond-> into-properties
-                              ;; [:string {:max 4}] <= [::count-constraint 0 4]
-                              ;; :string <= [::count-constraint 0 nil]
-                              ;;FIXME what does ::gen mean?
-                              cmax (update (if (::gen c-properties) :gen/max :max) #(if % (min % cmax) cmax))
-                              ;; [:string {:min 5}] <= [::count-constraint 5 nil]
-                              ;; :string <= [::count-constraint 0 nil]
-                              (pos? cmin) (update (if (::gen c-properties) :gen/min :min) #(if % (max % cmin) cmin)))))}})
+(defn default-count-constraint-extensions [] (-default-number-min-max-constraint-extensions ::count-constraint))
 
 (defn -count-constraint []
   (let [this-type ::count-constraint]
