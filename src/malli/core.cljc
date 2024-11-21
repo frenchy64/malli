@@ -338,8 +338,13 @@
 (defn -inner-indexed [walker path children options]
   (-vmap (fn [[i c]] (-inner walker c (conj path i) options)) (map-indexed vector children)))
 
-(defn -inner-entries [walker path entries options]
-  (-vmap (fn [[k s]] [k (-properties s) (-inner walker s (conj path k) options)]) entries))
+(defn -inner-entries [walker path entries {::keys [walk-entry-vals] :as  options}]
+  (-vmap (fn [[k s]]
+           (let [s' (-inner walker s (conj path k) options)]
+             (if (and walk-entry-vals (= ::val (type s')))
+               [k (-properties s') (-deref s')]
+               [k (-properties s) s'])))
+         entries))
 
 (defn -walk-entries [schema walker path options]
   (when (-accept walker schema path options)
@@ -363,7 +368,13 @@
 
 (defn -set-properties [schema properties]
   (if (-equals properties (-properties schema))
-    schema (-into-schema (-parent schema) properties (or (and (-entry-schema? schema) (-entry-parser schema)) (-children schema)) (-options schema))))
+    schema
+    (-into-schema (-parent schema)
+                  properties
+                  (or (and (-entry-schema? schema) (-entry-parser schema))
+                      (-children schema))
+                  ;;FIXME update registry
+                  (-options schema))))
 
 (defn -update-properties [schema f & args]
   (-set-properties schema (not-empty (apply f (-properties schema) args))))
@@ -940,7 +951,7 @@
 
 (defn -val-schema
   ([schema properties]
-   (-into-schema (-val-schema) properties (list schema) (-options schema)))
+   (-into-schema (-val-schema) properties [schema] (-options schema)))
   ([]
    ^{:type ::into-schema}
    (reify
@@ -975,7 +986,7 @@
                (-walk schema walker path options)))
            (-properties [_] properties)
            (-options [_] (-options schema))
-           (-children [_] [schema])
+           (-children [_] children)
            (-parent [_] parent)
            (-form [_] @form)
            Cached
@@ -1681,22 +1692,25 @@
    (-ref-schema nil))
   ([{:keys [lazy type-properties]}]
    ^{:type ::into-schema}
+   (let [type (if lazy :reference :ref)]
    (reify
      AST
      (-from-ast [parent ast options] (-from-value-ast parent ast options))
      IntoSchema
-     (-type [_] :ref)
+     (-type [_] type)
      (-type-properties [_] type-properties)
      (-into-schema [parent properties [ref :as children] {::keys [allow-invalid-refs] :as options}]
-       (-check-children! :ref properties children 1 1)
+       (-check-children! type properties children 1 1)
        (when-not (-reference? ref)
          (-fail! ::invalid-ref {:ref ref}))
        (let [rf (or (and lazy (-memoize (fn [] (schema (mr/-schema (-registry options) ref) options))))
                     (when-let [s (mr/-schema (-registry options) ref)] (-memoize (fn [] (schema s options))))
                     (when-not allow-invalid-refs
-                      (-fail! ::invalid-ref {:type :ref, :ref ref})))
+                      (-fail! ::invalid-ref {:type type, :ref ref})))
              children (vec children)
-             form (delay (-simple-form parent properties children identity options))
+             form (delay (if (and lazy (empty? properties))
+                           ref
+                           (-simple-form parent properties children identity options)))
              cache (-create-cache options)
              ->parser (fn [f] (let [parser (-memoize (fn [] (f (rf))))]
                                 (fn [x] ((parser) x))))]
@@ -1747,7 +1761,7 @@
            (-regex-parser [this] (-fail! ::potentially-recursive-seqex this))
            (-regex-unparser [this] (-fail! ::potentially-recursive-seqex this))
            (-regex-transformer [this _ _ _] (-fail! ::potentially-recursive-seqex this))
-           (-regex-min-max [this _] (-fail! ::potentially-recursive-seqex this))))))))
+           (-regex-min-max [this _] (-fail! ::potentially-recursive-seqex this)))))))))
 
 (defn -schema-schema [{:keys [id raw]}]
   ^{:type ::into-schema}
@@ -2259,7 +2273,7 @@
                            (into-schema t ?p (when (< 2 n) (subvec ?schema 2 n)) options)
                            (into-schema t nil (when (< 1 n) (subvec ?schema 1 n)) options)))
      :else (if-let [?schema' (and (-reference? ?schema) (-lookup ?schema options))]
-             (-pointer ?schema (schema ?schema' options) options)
+             (-lazy ?schema options)
              (-> ?schema (-lookup! ?schema nil false options) (recur options))))))
 
 (defn form
@@ -2300,9 +2314,12 @@
    (-parent (schema ?schema options))))
 
 (defn walk
-  "Postwalks recursively over the Schema and it's children.
-   The walker callback is a arity4 function with the following
-   arguments: schema, path, (walked) children and options."
+  "Postwalks recursively over the Schema and its children.
+   The walker callback is an arity4 function with the following
+   arguments: (unwalked) schema, path, (walked) children and options.
+
+   To automatically set the schema's children to the walked children
+   either wrap f with [[schema-walker]] or prefer [[malli.util/walk-schema]]."
   ([?schema f]
    (walk ?schema f nil))
   ([?schema f options]
@@ -2593,7 +2610,10 @@
 ;; schema walker
 ;;
 
-(defn schema-walker [f]
+(defn schema-walker
+  "Converts a function taking and returning a Schema to one
+  compatible with [[walk]]"
+  [f]
   (fn [schema _ children _]
     (f (-set-children schema children))))
 
@@ -2714,6 +2734,7 @@
    :re (-re-schema false)
    :fn (-fn-schema)
    :ref (-ref-schema)
+   :reference (-ref-schema {:lazy true})
    :=> (-=>-schema)
    :-> (-->-schema nil)
    :function (-function-schema nil)
