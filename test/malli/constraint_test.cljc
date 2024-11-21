@@ -68,10 +68,6 @@
   ;;FIXME
   #_
   (is (= ::FIXME
-         (m/ast (m/constraint [:min 1] (string-context)))))
-  ;;FIXME
-  #_
-  (is (= ::FIXME
          (m/ast (m/constraint [:and [:min 1] [:max 2]] (string-context)))))
   (testing "constraints are simplified"
     (is (= [:and [:min 1] [:max 1]]
