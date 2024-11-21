@@ -32,10 +32,10 @@
   {::unknown {:error/message {:en "unknown error"}}
    ::m/missing-key {:error/message {:en "missing required key"}}
    ::m/count-limits {:error/fn {:en (fn [{:keys [schema value]} _]
-                                       (let [[min max] (m/children schema)]
+                                       (let [{:keys [min max]} (m/properties schema)]
                                          (en-count-limits min max value)))}}
    ::m/range-limits {:error/fn {:en (fn [{:keys [schema value]} _]
-                                      (let [[min max] (m/children schema)]
+                                      (let [{:keys [min max]} (m/properties schema)]
                                         (en-range-min-max min max value)))}}
    ::m/limits {:error/fn {:en (fn [{:keys [schema value]} _]
                                 (let [{:keys [min max]} (m/properties schema)]

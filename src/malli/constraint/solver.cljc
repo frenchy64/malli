@@ -106,14 +106,13 @@ collected."
 
 (defmethod -constraint-solutions* ::m/count-constraint
   [constraint constraint-opts {::keys [mode] :as options}]
-  (let [[min max] (m/children constraint)
+  (let [{:keys [min max]} (m/properties constraint)
         {gen-min :gen/min gen-max :gen/max} (when (= :gen mode) (m/properties constraint))]
-    (assert (<= 0 min)) ;;should this be enforced?
     (-min-max min max gen-min gen-max :min-count :max-count)))
 
 (defmethod -constraint-solutions* ::m/range-constraint
   [constraint constraint-opts {::keys [mode] :as options}]
-  (let [[min max] (m/children constraint)
+  (let [{:keys [min max]} (m/properties constraint)
         {gen-min :gen/min gen-max :gen/max} (when (= :gen mode) (m/properties constraint))]
     (-min-max min max gen-min gen-max :min-range :max-range)))
 

@@ -18,9 +18,9 @@
 
 (def count-constraint-options
   {::m/constraint-context {:parse-constraint {:min (fn [{:keys [properties children]} opts]
-                                                     [::m/count-constraint (first children) nil])
+                                                     [::m/count-constraint {:min (first children)}])
                                               :max (fn [{:keys [properties children]} opts]
-                                                     [::m/count-constraint 0 (first children)])}}
+                                                     [::m/count-constraint {:min 0 :max (first children)}])}}
    :registry {::m/count-constraint (m/-count-constraint)}})
 
 (deftest constraint-test
@@ -42,12 +42,12 @@
   (testing ":parse-constraint desugars constraints"
     (is (= ::m/count-constraint
            (m/type (m/constraint [:min 1] count-constraint-options))))
-    (is (= (m/children (m/constraint [:min 1] count-constraint-options))
-           [1 nil]))
-    (is (= (m/children (m/constraint [:max 1] count-constraint-options))
-           [0 1]))
-    (testing "properties unused in :max"
-      (is (nil? (m/properties (m/constraint [:max {:property true} 1] count-constraint-options)))))))
+    (is (= (m/properties (m/constraint [:min 1] count-constraint-options))
+           {:min 1}))
+    (is (= (m/properties (m/constraint [:max 1] count-constraint-options))
+           {:min 0 :max 1}))
+    (testing "properties not forwarded in :max"
+      (is (= {:min 0 :max 1} (m/properties (m/constraint [:max {:property true} 1] count-constraint-options)))))))
 
 (defn string-context []
   {::m/constraint-context (:string (m/base-constraint-extensions))})
