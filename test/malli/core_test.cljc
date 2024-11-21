@@ -1467,14 +1467,14 @@
                                       [schema [1]
                                        {:schema schema
                                         :value [1]
-                                        :errors [{:path [::mc/constraint 1], :in [], :type ::m/count-limits,
-                                                  :schema (nth (m/children constraint) 1) :value [1]}]}]
+                                        :errors [{:path [::mc/constraint], :in [], :type ::m/count-limits,
+                                                  :schema constraint :value [1]}]}]
 
                                       [schema [1 2 3 4]
                                        {:schema schema
                                         :value [1 2 3 4]
-                                        :errors [{:path [::mc/constraint 0], :in [], :type ::m/count-limits,
-                                                  :schema (nth (m/children constraint) 0) :value [1 2 3 4]}]}]
+                                        :errors [{:path [::mc/constraint], :in [], :type ::m/count-limits,
+                                                  :schema constraint :value [1 2 3 4]}]}]
 
                                       [schema [1 2 "3"]
                                        {:schema schema
@@ -1521,14 +1521,14 @@
                                    [schema #{1}
                                     {:schema schema
                                      :value #{1}
-                                     :errors [{:path [::mc/constraint 1], :in [], :type ::m/count-limits,
-                                               :schema (nth (m/children constraint) 1) :value #{1}}]}]
+                                     :errors [{:path [::mc/constraint], :in [], :type ::m/count-limits,
+                                               :schema constraint :value #{1}}]}]
 
                                    [schema #{1 2 3 4}
                                     {:schema schema
                                      :value #{1 2 3 4}
-                                     :errors [{:path [::mc/constraint 0], :in [], :type ::m/count-limits,
-                                               :schema (nth (m/children constraint) 0) :value #{1 2 3 4}}]}]
+                                     :errors [{:path [::mc/constraint], :in [], :type ::m/count-limits,
+                                               :schema constraint :value #{1 2 3 4}}]}]
 
                                    [schema #{1 2 "3"}
                                     {:schema schema
