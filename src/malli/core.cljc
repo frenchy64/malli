@@ -669,7 +669,9 @@
     (count x)
     (reduce (fn [cnt _] (inc cnt)) 0 x)))
 
-(defn -validate-limits [min max] (or ((-min-max-pred -safe-count) {:min min :max max}) (constantly true)))
+(defn -validate-limits
+  ([min-max] (or ((-min-max-pred -safe-count) min-max) (constantly true)))
+  ([min max] (-validate-limits {:min min :max max})))
 
 (defn -needed-bounded-checks [min max options]
   (c/max (or (some-> max inc) 0)
@@ -3157,21 +3159,7 @@
                                                                  (nat-int? max-count))
                                                      (-fail! ::count-constraint-max {:max max-count}))]))
                          ;;TODO bounded counts
-                         ;; idea: [:string {:or [[:min 0] [:min 5]]}] could just count once somehow
-                         ;; as opposed to [:or [:string {:min 1}] [:string {:min 5}]] which would be more difficult?
-                         :validator (fn [this]
-                                      (let [{min-count :min max-count :max} (-properties this)]
-                                        (cond
-                                          (and min-count max-count) (if (= min-count max-count)
-                                                                      #(= min-count (-safe-count %))
-                                                                      (if (<= min-count max-count)
-                                                                        #(let [size (-safe-count %)]
-                                                                           (and (<= min-count size)
-                                                                                (<= size max-count)))
-                                                                        (fn [_] false)))
-                                          min-count #(<= min-count (-safe-count %))
-                                          max-count #(<= (-safe-count %) max-count)
-                                          :else any?)))
+                         :validator #(-validate-limits (-properties %))
                          :explainer (fn [this path]
                                       (let [pred (-validator this)]
                                         (fn [x in acc]
