@@ -2967,7 +2967,7 @@
    :parse-properties (default-parse-properties)
    :unparse-properties (default-unparse-properties)})
 
-(defn -simple-constraint [{this-type :type :keys [validator explainer intersect]}]
+(defn -simple-constraint [{this-type :type :keys [validator explainer intersect check-children]}]
   ^{:type ::into-schema}
   (reify
     AST
@@ -2978,7 +2978,9 @@
     (-properties-schema [_ _])
     (-children-schema [_ _])
     (-into-schema [parent properties children options]
-      (-check-children! type properties children 0 0)
+      (if check-children
+        (check-children type properties children)
+        (-check-children! type properties children 0 0))
       (let [this (volatile! nil)
             form (delay (-constraint-form @this options))
             cache (-create-cache options)]
@@ -2993,12 +2995,12 @@
             (-to-ast [this _] (throw (ex-info "TODO" {})))
             Schema
             (-validator [this] (validator this))
-            ;;TODO unit test
             (-explainer [this path] (explainer this path))
-            (-parser [this] identity)
-            (-unparser [this] identity)
-            (-transformer [this transformer method options]
-              (-intercepting (-value-transformer transformer this method options)))
+            (-parser [this]
+              (let [validator (-validator this)]
+                (fn [x] (if (validator x) x ::invalid))))
+            (-unparser [this] (-parser this))
+            (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
             (-walk [this walker path options] (-walk-leaf this walker path options))
             (-properties [_] properties)
             (-options [_] options)
@@ -3016,6 +3018,7 @@
   (let [this-type ::true-constraint]
     (-simple-constraint {:type this-type
                          :validator (fn [_] any?)
+                         ;;TODO unit test
                          :explainer (fn [_ _] (fn [x in acc] acc))
                          :intersect (fn [this that _] (when (= this-type (type that)) this))})))
 
@@ -3117,89 +3120,54 @@
 
 (defn -range-constraint []
   (let [this-type ::range-constraint]
-    ^{:type ::into-schema}
-    (reify
-      AST
-      (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
-      IntoSchema
-      (-type [_] this-type)
-      (-type-properties [_])
-      (-properties-schema [_ _])
-      (-children-schema [_ _])
-      (-into-schema [parent properties children options]
-        (-check-children! this-type properties children 0 0)
-        (let [{min-range :min max-range :max} properties
-              ;; unclear if we want to enforce (<= min-range max-range)
-              ;; it's a perfectly well formed constraint that happens to satisfy no values
-              _ (when-not (or (nil? min-range)
-                              (number? min-range))
-                  (-fail! ::range-constraint-min {:min min-range}))
-              _ (when-not (or (nil? max-range)
-                              (number? max-range))
-                  (-fail! ::range-constraint-max {:max max-range}))
-              this (volatile! nil)
-              form (delay (-constraint-form @this options))
-              cache (-create-cache options)]
-          (vreset!
-            this
-            ^{:type ::schema}
-            (reify
-              mc/Constraint
-              (-constraint? [_] true)
-              (-intersect [_ that options']
-                (when (= this-type (type that))
-                  (let [{gen-min :gen/min gen-max :gen/max} properties
-                        {min-range' :min max-range' :max
-                         gen-min' :gen/min gen-max' :gen/max} (-properties that)
-                        min (or (when (and min-range min-range') (c/max min-range min-range')) min-range min-range')
-                        max (or (when (and max-range max-range') (c/min max-range max-range')) max-range max-range')
-                        gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
-                        gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
-                    (-into-schema parent
-                                  (cond-> {}
-                                    min (assoc :min min)
-                                    max (assoc :max max)
-                                    gen-min (assoc :gen/min gen-min)
-                                    gen-max (assoc :gen/max gen-max))
-                                  []
-                                  options))))
-              AST
-              (-to-ast [this _] (-to-value-ast this))
-              Schema
-              (-validator [_]
-                (cond
-                  (and min-range max-range) (if (= min-range max-range)
-                                              #(= min-range %)
-                                              (if (<= min-range max-range)
-                                                #(and (<= min-range %)
-                                                      (<= % max-range))
-                                                (fn [_] false)))
-                  min-range #(<= min-range %)
-                  max-range #(<= % max-range)
-                  :else any?))
-              (-explainer [this path]
-                (let [pred (-validator this)]
-                  (fn [x in acc]
-                    (cond-> acc
-                      (not (pred x))
-                      (conj (miu/-error path in this x ::range-limits))))))
-              (-parser [this]
-                (let [validator (-validator this)]
-                  (fn [x] (if (validator x) x ::invalid))))
-              (-unparser [this] (-parser this))
-              (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
-              (-walk [this walker path options] (-walk-leaf this walker path options))
-              (-properties [_] properties)
-              (-options [_] options)
-              (-children [_] children)
-              (-parent [_] parent)
-              (-form [_] @form)
-              Cached
-              (-cache [_] cache)
-              LensSchema
-              (-keep [_] (throw (ex-info "TODO" {})))
-              (-get [_ _ default] (throw (ex-info "TODO" {})))
-              (-set [this key _] (throw (ex-info "TODO" {}))))))))))
+    (-simple-constraint {:type this-type
+                         :check-children (fn [type properties children]
+                                           (-check-children! type properties children 0 0)
+                                           (let [{min-range :min max-range :max} properties
+                                                 ;; unclear if we want to enforce (<= min-range max-range)
+                                                 ;; it's a perfectly well formed constraint that happens to satisfy no values
+                                                 _ (when-not (or (nil? min-range)
+                                                                 (number? min-range))
+                                                     (-fail! ::range-constraint-min {:min min-range}))
+                                                 _ (when-not (or (nil? max-range)
+                                                                 (number? max-range))
+                                                     (-fail! ::range-constraint-max {:max max-range}))]))
+                         :validator (fn [this]
+                                      (let [{min-range :min max-range :max} (-properties this)]
+                                        (cond
+                                          (and min-range max-range) (if (= min-range max-range)
+                                                                      #(= min-range %)
+                                                                      (if (<= min-range max-range)
+                                                                        #(and (<= min-range %)
+                                                                              (<= % max-range))
+                                                                        (fn [_] false)))
+                                          min-range #(<= min-range %)
+                                          max-range #(<= % max-range)
+                                          :else any?)))
+                         :explainer (fn [this path]
+                                      (let [pred (-validator this)]
+                                        (fn [x in acc]
+                                          (cond-> acc
+                                            (not (pred x))
+                                            (conj (miu/-error path in this x ::range-limits))))))
+                         :intersect (fn [this that options]
+                                      (when (= this-type (type that))
+                                        (let [{min-range :min max-range :max
+                                               gen-min :gen/min gen-max :gen/max} (-properties this)
+                                              {min-range' :min max-range' :max
+                                               gen-min' :gen/min gen-max' :gen/max} (-properties that)
+                                              min (or (when (and min-range min-range') (c/max min-range min-range')) min-range min-range')
+                                              max (or (when (and max-range max-range') (c/min max-range max-range')) max-range max-range')
+                                              gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
+                                              gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
+                                          (-into-schema (-parent this)
+                                                        (cond-> {}
+                                                          min (assoc :min min)
+                                                          max (assoc :max max)
+                                                          gen-min (assoc :gen/min gen-min)
+                                                          gen-max (assoc :gen/max gen-max))
+                                                        []
+                                                        options))))})))
 
 (defn default-count-constraint-extensions [] (-default-number-min-max-constraint-extensions ::count-constraint))
 
