@@ -3093,10 +3093,6 @@
       (assoc :-walk -walk-leaf+constraints)
       (as-> $ (merge-with into $ (-default-range-constraint-extensions)))))
 
-(defn base-number-constraint-extensions []
-  (let [ext (-base-number-constraint-extension)]
-    {:int ext :double ext :float ext}))
-
 (defn- -intersect-min-max [this that _]
   (when (= (type this) (type that))
     (let [p (-properties this)
@@ -3167,11 +3163,6 @@
                                             (not (pred x))
                                             (conj (miu/-error path in this x ::count-limits))))))
                          :intersect -intersect-min-max})))
-
-(defn base-string-constraint-extensions []
-  {:string (-> (default-constraint-extensions)
-               (assoc :-walk -walk-leaf+constraints)
-               (as-> $ (merge-with into $ (default-count-constraint-extensions))))})
 
 (defn- -flatten-and [cs]
   (eduction (mapcat #(if (= ::and (type %))
@@ -3252,12 +3243,6 @@
       ;(assoc :-walk -walk-leaf+constraints)
       (as-> $ (merge-with into $ (default-count-constraint-extensions)))))
 
-(defn base-collection-constraint-extensions []
-  (let [ext (-base-collection-constraint-extension)]
-    {:vector ext :sequential ext :seqable ext :set ext
-     ;;TODO :every (bounded)
-     }))
-
 (defn base-constraints []
   {::range-constraint (-range-constraint)
    ::count-constraint (-count-constraint)
@@ -3265,9 +3250,15 @@
    ::true-constraint (-true-constraint)})
 
 (defn base-constraint-extensions []
-  (merge (base-number-constraint-extensions)
-         (base-string-constraint-extensions)
-         (base-collection-constraint-extensions)))
+  (merge (let [ext (-base-number-constraint-extension)]
+           {:int ext :double ext :float ext})
+         {:string (-> (default-constraint-extensions)
+                      (assoc :-walk -walk-leaf+constraints)
+                      (as-> $ (merge-with into $ (default-count-constraint-extensions))))}
+         (let [ext (-base-collection-constraint-extension)]
+           {:vector ext :sequential ext :seqable ext :set ext
+            ;;TODO :every (bounded)
+            })))
 
 (defn- activate-base-constraints! []
   (mce/register-constraints (base-constraints))
