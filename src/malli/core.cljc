@@ -3152,10 +3152,8 @@
                                             (conj (miu/-error path in this x ::range-limits))))))
                          :intersect (fn [this that options]
                                       (when (= this-type (type that))
-                                        (let [{min-range :min max-range :max
-                                               gen-min :gen/min gen-max :gen/max} (-properties this)
-                                              {min-range' :min max-range' :max
-                                               gen-min' :gen/min gen-max' :gen/max} (-properties that)
+                                        (let [{min-range :min max-range :max gen-min :gen/min gen-max :gen/max} (-properties this)
+                                              {min-range' :min max-range' :max gen-min' :gen/min gen-max' :gen/max} (-properties that)
                                               min (or (when (and min-range min-range') (c/max min-range min-range')) min-range min-range')
                                               max (or (when (and max-range max-range') (c/min max-range max-range')) max-range max-range')
                                               gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
@@ -3173,102 +3171,56 @@
 
 (defn -count-constraint []
   (let [this-type ::count-constraint]
-    ^{:type ::into-schema}
-    (reify
-      AST
-      (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
-      IntoSchema
-      (-type [_] this-type)
-      (-type-properties [_])
-      (-properties-schema [_ _])
-      (-children-schema [_ _])
-      (-into-schema [parent properties children options]
-        (-check-children! this-type properties children 0 0)
-        (let [{min-count :min max-count :max} properties
-              ;; unclear if we want to enforce (<= min-count max-count)
-              ;; it's a perfectly well formed constraint that happens to satisfy no values
-              _ (when-not (or (nil? min-count)
-                              (nat-int? min-count))
-                  (-fail! ::count-constraint-min {:min min-count}))
-              _ (when-not (or (nil? max-count)
-                              (nat-int? max-count))
-                  (-fail! ::count-constraint-max {:max max-count}))
-              this (volatile! nil)
-              form (delay (-constraint-form @this options))
-              cache (-create-cache options)]
-          (vreset!
-            this
-            ^{:type ::schema}
-            (reify
-              mc/Constraint
-              (-constraint? [_] true)
-              (-intersect [_ that options']
-                (when (= this-type (type that))
-                  (let [{gen-min :gen/min gen-max :gen/max} properties
-                        {min-count' :min max-count' :max gen-min' :gen/min gen-max' :gen/max} (-properties that)
-                        min (or (when (and min-count min-count') (c/max min-count min-count')) min-count min-count')
-                        max (or (when (and max-count max-count') (c/min max-count max-count')) max-count max-count')
-                        gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
-                        gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
-                    (-into-schema parent
-                                  (cond-> {}
-                                    min (assoc :min min)
-                                    max (assoc :max max)
-                                    gen-min (assoc :gen/min gen-min)
-                                    gen-max (assoc :gen/max gen-max))
-                                  []
-                                  options))))
-              AST
-              (-to-ast [this _] (-to-value-ast this))
-              Schema
-              ;;TODO bounded counts
-              ;; idea: [:string {:or [[:min 0] [:min 5]]}] could just count once somehow
-              ;; as opposed to [:or [:string {:min 1}] [:string {:min 5}]] which would be more difficult?
-              (-validator [_]
-                (cond
-                  (and min-count max-count) (if (= min-count max-count)
-                                              #(= min-count (-safe-count %))
-                                              (if (<= min-count max-count)
-                                                #(let [size (-safe-count %)]
-                                                   (and (<= min-count size)
-                                                        (<= size max-count)))
-                                                (fn [_] false)))
-                  min-count #(<= min-count (-safe-count %))
-                  max-count #(<= (-safe-count %) max-count)
-                  :else any?))
-              (-explainer [this path]
-                (let [pred (-validator this)]
-                  (fn [x in acc]
-                    (cond-> acc
-                      (not (pred x))
-                      (conj (miu/-error path in this x ::count-limits))))))
-              ;; potentially useful for :orn, :xorn, :impliesn constraints?
-              ;; [:string {:orn [[:small [:max 5]] [:large [:min 6]]]}]
-              ;; => [:small "12345"]
-              ;; => [:large "123456"]
-              ;; [:string {:impliesn [[:at-least-5 [:max 5]] [:at-least-6 [:max 6]]]}]
-              ;; => [:at-least-5 "12345"]
-              ;; => [[:not :at-least-5] "123456"]
-              ;; [:string {:iffn [[:max-5-left [:max 5]] [:max-5-right [:max 5]]]}]
-              ;; => [:P "12345"]
-              ;; => [:not-P "123456"]
-              (-parser [this]
-                (let [validator (-validator this)]
-                  (fn [x] (if (validator x) x ::invalid))))
-              (-unparser [this] (-parser this))
-              (-transformer [this transformer method options] (-fail! ::constraints-cannot-be-transformed this))
-              (-walk [this walker path options] (-walk-leaf this walker path options))
-              (-properties [_] properties)
-              (-options [_] options)
-              (-children [_] children)
-              (-parent [_] parent)
-              (-form [_] @form)
-              Cached
-              (-cache [_] cache)
-              LensSchema
-              (-keep [_] (throw (ex-info "TODO" {})))
-              (-get [_ _ default] (throw (ex-info "TODO" {})))
-              (-set [this key _] (throw (ex-info "TODO" {}))))))))))
+    (-simple-constraint {:type this-type
+                         :check-children (fn [type properties children]
+                                           (-check-children! type properties children 0 0)
+                                           (let [{min-count :min max-count :max} properties
+                                                 ;; unclear if we want to enforce (<= min-count max-count)
+                                                 ;; it's a perfectly well formed constraint that happens to satisfy no values
+                                                 _ (when-not (or (nil? min-count)
+                                                                 (nat-int? min-count))
+                                                     (-fail! ::count-constraint-min {:min min-count}))
+                                                 _ (when-not (or (nil? max-count)
+                                                                 (nat-int? max-count))
+                                                     (-fail! ::count-constraint-max {:max max-count}))]))
+                         ;;TODO bounded counts
+                         ;; idea: [:string {:or [[:min 0] [:min 5]]}] could just count once somehow
+                         ;; as opposed to [:or [:string {:min 1}] [:string {:min 5}]] which would be more difficult?
+                         :validator (fn [this]
+                                      (let [{min-count :min max-count :max} (-properties this)]
+                                        (cond
+                                          (and min-count max-count) (if (= min-count max-count)
+                                                                      #(= min-count (-safe-count %))
+                                                                      (if (<= min-count max-count)
+                                                                        #(let [size (-safe-count %)]
+                                                                           (and (<= min-count size)
+                                                                                (<= size max-count)))
+                                                                        (fn [_] false)))
+                                          min-count #(<= min-count (-safe-count %))
+                                          max-count #(<= (-safe-count %) max-count)
+                                          :else any?)))
+                         :explainer (fn [this path]
+                                      (let [pred (-validator this)]
+                                        (fn [x in acc]
+                                          (cond-> acc
+                                            (not (pred x))
+                                            (conj (miu/-error path in this x ::count-limits))))))
+                         :intersect (fn [this that options']
+                                      (when (= this-type (type that))
+                                        (let [{min-count :min max-count :max gen-min :gen/min gen-max :gen/max} (-properties this)
+                                              {min-count' :min max-count' :max gen-min' :gen/min gen-max' :gen/max} (-properties that)
+                                              min (or (when (and min-count min-count') (c/max min-count min-count')) min-count min-count')
+                                              max (or (when (and max-count max-count') (c/min max-count max-count')) max-count max-count')
+                                              gen-min (or (when (and gen-min gen-min') (c/max gen-min gen-min')) gen-min gen-min')
+                                              gen-max (or (when (and gen-max gen-max') (c/min gen-max gen-max')) gen-max gen-max')]
+                                          (-into-schema (-parent this)
+                                                        (cond-> {}
+                                                          min (assoc :min min)
+                                                          max (assoc :max max)
+                                                          gen-min (assoc :gen/min gen-min)
+                                                          gen-max (assoc :gen/max gen-max))
+                                                        []
+                                                        options))))})))
 
 (defn base-string-constraint-extensions []
   {:string (-> (default-constraint-extensions)
