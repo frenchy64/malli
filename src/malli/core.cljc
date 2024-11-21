@@ -2932,39 +2932,27 @@
       1 (first cs)
       (constraint (into [:and] cs) options))))
 
-(defn default-parse-constraints []
-  {:and (fn [{:keys [properties children]} opts]
-          (into [::and nil] children))
-   :true (fn [{:keys [properties children]} opts]
-           (-check-children! :true properties children 0 0)
-           [::true-constraint])
-   :false (fn [{:keys [properties children]} opts]
-            (-check-children! :false properties children 0 0)
-            [::false-constraint])})
-
-(defn default-parse-properties []
-  {:and (fn [v _] (into [:and] v))})
-
-(defn default-unparse-properties []
-  {::and
-   (fn [c into-properties {{:keys [unparse-properties]} ::constraint-context :as opts}]
-     (reduce (fn [into-properties c]
-               (unparse-properties c into-properties opts))
-             into-properties (-children c)))
-   ::true-constraint (fn [_ into-properties _] into-properties)
-   ::false-constraint (fn [_ into-properties _] (update into-properties :and (fnil conj []) [:false]))})
-
-(defn default-constraint-form []
-  {::and (fn [c options] (into [:and] (map form) (-children c)))
-   ::true-constraint (fn [c options] [:true])
-   ::false-constraint (fn [c options] [:false])})
-
 (defn default-constraint-extensions []
   {:constraint-from-properties -default-constraint-from-properties
-   :parse-constraint (default-parse-constraints)
-   :constraint-form (default-constraint-form)
-   :parse-properties (default-parse-properties)
-   :unparse-properties (default-unparse-properties)})
+   :parse-constraint {:and (fn [{:keys [properties children]} opts]
+                             (into [::and nil] children))
+                      :true (fn [{:keys [properties children]} opts]
+                              (-check-children! :true properties children 0 0)
+                              [::true-constraint])
+                      :false (fn [{:keys [properties children]} opts]
+                               (-check-children! :false properties children 0 0)
+                               [::false-constraint])}
+   :constraint-form {::and (fn [c options] (into [:and] (map form) (-children c)))
+                     ::true-constraint (fn [c options] [:true])
+                     ::false-constraint (fn [c options] [:false])}
+   :parse-properties {:and (fn [v _] (into [:and] v))}
+   :unparse-properties {::and
+                        (fn [c into-properties {{:keys [unparse-properties]} ::constraint-context :as opts}]
+                          (reduce (fn [into-properties c]
+                                    (unparse-properties c into-properties opts))
+                                  into-properties (-children c)))
+                        ::true-constraint (fn [_ into-properties _] into-properties)
+                        ::false-constraint (fn [_ into-properties _] (update into-properties :and (fnil conj []) [:false]))}})
 
 (defn -simple-constraint [{this-type :type :keys [validator explainer intersect into-schema]}]
   ^{:type ::into-schema}
