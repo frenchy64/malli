@@ -3147,7 +3147,9 @@
                                                   (-fail! ::count-constraint-min {:min min-count}))
                                               _ (when-not (or (nil? max-count)
                                                               (nat-int? max-count))
-                                                  (-fail! ::count-constraint-max {:max max-count}))]))
+                                                  (-fail! ::count-constraint-max {:max max-count}))]
+                                          (when (and min-count max-count (not (<= min-count max-count)))
+                                            (constraint [:false] options))))
                          ;;TODO bounded counts
                          :validator #(-validate-limits (-properties %))
                          :explainer (fn [this path]
