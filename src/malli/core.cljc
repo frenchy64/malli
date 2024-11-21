@@ -2967,51 +2967,57 @@
    :parse-properties (default-parse-properties)
    :unparse-properties (default-unparse-properties)})
 
+(defn -simple-constraint [{this-type :type :keys [validator explainer intersect]}]
+  ^{:type ::into-schema}
+  (reify
+    AST
+    (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
+    IntoSchema
+    (-type [_] this-type)
+    (-type-properties [_])
+    (-properties-schema [_ _])
+    (-children-schema [_ _])
+    (-into-schema [parent properties children options]
+      (-check-children! type properties children 0 0)
+      (let [this (volatile! nil)
+            form (delay (-constraint-form @this options))
+            cache (-create-cache options)]
+        (vreset!
+          this
+          ^{:type ::schema}
+          (reify
+            mc/Constraint
+            (-constraint? [_] true)
+            (-intersect [this that options] (intersect this that options))
+            AST
+            (-to-ast [this _] (throw (ex-info "TODO" {})))
+            Schema
+            (-validator [this] (validator this))
+            ;;TODO unit test
+            (-explainer [this path] (explainer this path))
+            (-parser [this] identity)
+            (-unparser [this] identity)
+            (-transformer [this transformer method options]
+              (-intercepting (-value-transformer transformer this method options)))
+            (-walk [this walker path options] (-walk-leaf this walker path options))
+            (-properties [_] properties)
+            (-options [_] options)
+            (-children [_] children)
+            (-parent [_] parent)
+            (-form [_] @form)
+            Cached
+            (-cache [_] cache)
+            LensSchema
+            (-keep [_])
+            (-get [_ _ default] default)
+            (-set [this key _] (-fail! ::non-associative-constraint {:schema this, :key key}))))))))
+
 (defn -true-constraint []
   (let [this-type ::true-constraint]
-    ^{:type ::into-schema}
-    (reify
-      AST
-      (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
-      IntoSchema
-      (-type [_] this-type)
-      (-type-properties [_])
-      (-properties-schema [_ _])
-      (-children-schema [_ _])
-      (-into-schema [parent properties children options]
-        (-check-children! type properties children 0 0)
-        (let [this (volatile! nil)
-              form (delay (-constraint-form @this options))
-              cache (-create-cache options)]
-          (vreset!
-            this
-            ^{:type ::schema}
-            (reify
-              mc/Constraint
-              (-constraint? [_] true)
-              (-intersect [this that options] (when (= this-type (type that)) this))
-              AST
-              (-to-ast [this _] (throw (ex-info "TODO" {})))
-              Schema
-              (-validator [_] any?)
-              ;;TODO unit test
-              (-explainer [this path] (fn [x in acc] acc))
-              (-parser [this] identity)
-              (-unparser [this] identity)
-              (-transformer [this transformer method options]
-                (-intercepting (-value-transformer transformer this method options)))
-              (-walk [this walker path options] (-walk-leaf this walker path options))
-              (-properties [_] properties)
-              (-options [_] options)
-              (-children [_] children)
-              (-parent [_] parent)
-              (-form [_] @form)
-              Cached
-              (-cache [_] cache)
-              LensSchema
-              (-keep [_])
-              (-get [_ _ default] default)
-              (-set [this key _] (-fail! ::non-associative-constraint {:schema this, :key key})))))))))
+    (-simple-constraint {:type this-type
+                         :validator (fn [_] any?)
+                         :explainer (fn [_ _] (fn [x in acc] acc))
+                         :intersect (fn [this that _] (when (= this-type (type that)) this))})))
 
 (defn- -default-number-min-max-constraint-extensions [this-type]
   (let [no-min (case this-type
