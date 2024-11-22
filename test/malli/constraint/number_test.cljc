@@ -28,11 +28,24 @@
            (me/humanize (m/explain [:int {:max 2}] 3))
            (me/humanize (m/explain [:int {:min 1 :max 2}] 3))
            (me/humanize (m/explain [:int {:and [[:max 23] [:max 2]]}] 3))))
-    (is (= ["should be 1"]
+    ;;TODO "should be 1"
+    (is (= ["should be at most 1"]
            (me/humanize (m/explain [:int {:min 1 :max 1}] 3))
-           (me/humanize (m/explain [:int {:and [[:min 1] [:max 1]]}] 3))
+           (me/humanize (m/explain [:int {:and [[:min 1] [:max 1]]}] 3))))
+    ;;TODO "should be 1"
+    (is (= ["should be at most 1"
+            "should be at most 2"]
            (me/humanize (m/explain [:int {:and [[:min 1] [:max 1]
-                                                [:min 0] [:max 2]]}] 3))))))
+                                                [:min 0] [:max 2]]}] 3))))
+    ;;TODO "should be 1"
+    (is (= ["should be at least 1"]
+           (me/humanize (m/explain [:int {:min 1 :max 1}] 0))
+           (me/humanize (m/explain [:int {:and [[:min 1] [:max 1]]}] 0))))
+    ;;TODO "should be 1"
+    (is (= ["should be at least 1"
+            "should be at least 0"]
+           (me/humanize (m/explain [:int {:and [[:min 1] [:max 1]
+                                                [:min 0] [:max 2]]}] -1))))))
 
 (deftest double+float-constraint-test
   (doseq [type [:double :float]]
@@ -59,7 +72,19 @@
              (me/humanize (m/explain [type {:max 2.5}] 3.5))
              (me/humanize (m/explain [type {:min 1.5 :max 2.5}] 3.5))
              (me/humanize (m/explain [type {:and [[:max 23.5] [:max 2.5]]}] 3.5))))
-      (is (= ["should be 1.5"]
-             (me/humanize (m/explain [type {:min 1.5 :max 1.5}] 3.5))
+      ;;TODO "should be 1.5"
+      (is (= ["should be at most 1.5"]
+             (me/humanize (m/explain [type {:min 1.5 :max 1.5}] 3.5))))
+      ;;TODO "should be 1.5"
+      (is (= ["should be at most 1.5"
+              "should be at most 2.5"]
              (me/humanize (m/explain [type {:and [[:min 1.5] [:max 1.5]
-                                                  [:min 0.5] [:max 2.5]]}] 3.5)))))))
+                                                  [:min 0.5] [:max 2.5]]}] 3.5))))
+      ;;TODO "should be 1.5"
+      (is (= ["should be at least 1.5"]
+             (me/humanize (m/explain [type {:min 1.5 :max 1.5}] 0.5))))
+      ;;TODO "should be 1.5"
+      (is (= ["should be at least 1.5"
+              "should be at least 0.5"]
+             (me/humanize (m/explain [type {:and [[:min 1.5] [:max 1.5]
+                                                  [:min 0.5] [:max 2.5]]}] 0.0)))))))

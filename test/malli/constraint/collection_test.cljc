@@ -41,7 +41,7 @@
       (is (= ["should have at most 1 element"]
              (me/humanize (m/explain [type {:min 1 :max 1} :int] (coerce [0 1 2])))
              (me/humanize (m/explain [type {:and [[:min 1] [:max 1]]} :int] (coerce [0 1 2])))))
+      ;; TODO "should have 1 element"
       (is (= ["should have at least 1 element"]
              (me/humanize (m/explain [type {:min 1 :max 1} :int] (coerce [])))
-             (me/humanize (m/explain [type {:and [[:min 1] [:max 1]]} :int] (coerce [])))))
-      )))
+             (me/humanize (m/explain [type {:and [[:min 1] [:max 1]]} :int] (coerce []))))))))
