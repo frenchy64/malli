@@ -241,7 +241,8 @@
 
   (testing "generator override"
     (testing "without generator"
-      (let [schema [:fn {:gen/fmap '(fn [_] (rand-int 10))}
+      (let [schema [:fn {:gen/return 5
+                         :gen/fmap '(fn [_] (rand-int 10))}
                     '(fn [x] (<= 0 x 10))]
             generator (mg/generator schema)]
         (dotimes [_ 100]
