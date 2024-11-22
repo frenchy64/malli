@@ -730,6 +730,7 @@
                 (-set-constraint [this c] (-set-constraint this c @constraint-context))
                 mc/Constraint
                 (-constraint? [_] (boolean constraint?))
+                (-constraint-form [this] (-constraint-form this options))
                 AST
                 (-to-ast [this _] (to-ast this))
                 Schema
@@ -2894,9 +2895,12 @@
                            (f constraint (apply dissoc properties (keys parse-properties)) {::constraint-options constraint-opts}))))))
 
 (defn -constraint-context [type options]
-  (some-> (or (get (::constraint-options options) type)
-              (mce/get-constraint-extension type))
-          (assoc :type type)))
+  (when-some [m (or (get (::constraint-options options) type)
+                    (mce/get-constraint-extension type))]
+    (let [r (-registry options)]
+      ;;backwards compat
+      (when (every? #(mr/-schema r %) (-> m :constraint-form keys))
+        (assoc m :type type)))))
 
 (defn -constraint-form [constraint {{:keys [constraint-form]} ::constraint-context :as options}]
   (let [t (type constraint)
@@ -2945,8 +2949,8 @@
 (defn -constraint-from-properties [properties options]
   (let [{:keys [parse-properties]} (::constraint-context options)
         cs (into [] (keep #(when-some [[_ v] (find properties %)]
-                               (constraint ((get parse-properties %) v options) options)))
-                   (-> parse-properties keys sort))]
+                             (constraint ((get parse-properties %) v options) options)))
+                 (-> parse-properties keys sort))]
     (case (count cs)
       0 (constraint [:any] options)
       1 (first cs)
@@ -2956,8 +2960,8 @@
   {:parse-constraint {:and (fn [{:keys [properties children]} opts]
                              (into [:and nil] children))
                       :any (fn [{:keys [properties children]} opts]
-                              (-check-children! :any properties children 0 0)
-                              [:any])
+                             (-check-children! :any properties children 0 0)
+                             [:any])
                       :never (fn [{:keys [properties children]} opts]
                                (-check-children! :never properties children 0 0)
                                [:never])}

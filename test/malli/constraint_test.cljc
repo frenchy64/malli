@@ -38,7 +38,7 @@
     (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
           #":malli\.core/no-constraint-form"
-          (m/form (m/constraint (m/schema (m/-any-schema)))))))
+          (mc/-constraint-form (m/constraint (m/schema (m/-any-schema)))))))
   (testing ":parse-constraint desugars constraints"
     (is (= :count
            (m/type (m/constraint [:min 1] count-constraint-options))))
@@ -57,10 +57,13 @@
 
 (deftest string-constraint-test
   (is (= :count (m/type (m/constraint [:min 1] (string-context)))))
-  (is (= [:min 1] (m/form (m/constraint [:min 1] (string-context)))))
+  (is (= [:min 1] (mc/-constraint-form (m/constraint [:min 1] (string-context)))))
+  (is (= [:count {:min 1}] (m/form (m/constraint [:min 1] (string-context)))))
   (is (= :count (m/type (m/constraint [:max 1] (string-context)))))
-  (is (= [:max 1] (m/form (m/constraint [:max 1] (string-context)))))
-  (is (= [:true] (m/form (m/constraint [:true] (string-context)))))
+  (is (= [:max 1] (mc/-constraint-form (m/constraint [:max 1] (string-context)))))
+  (is (= [:count {:max 1}] (m/form (m/constraint [:max 1] (string-context)))))
+  (is (= :any (m/form (m/constraint [:any] (string-context)))))
+  (is (= [:any] (mc/-constraint-form (m/constraint [:any] (string-context)))))
   ;;FIXME
   #_
   (is (= ::FIXME
@@ -72,9 +75,9 @@
   ;;TODO have a separate -constraint-form for pretty printing
   ;; use -form for independent printing
   ;; don't store constraint context in constraint
-  (testing "constraints are simplified"
-    (is (= [:and [:min 1] [:max 1]]
-           (m/form (m/constraint [:and [:min 0] [:min 1] [:max 1] [:max 2]] (string-context))))))
+  (testing "constraints are simplified" ;;TODO actually simplify?
+    (is (= [:and [:min 0] [:min 1] [:max 1] [:max 2]]
+           (mc/-constraint-form (m/constraint [:and [:min 0] [:min 1] [:max 1] [:max 2]] (string-context))))))
   (testing "but properties are preserved"
     (is (= [:string {:and [[:and [:min 1] [:max 1]]]}]
            (m/form (m/schema [:string {:and [[:and [:min 1] [:max 1]]]}] (string-context))))))
@@ -82,27 +85,28 @@
   (is (m/validate (m/schema [:string {:min 1 :max 1}]) "a"))
   (is (m/validate (m/schema [:string {:and [[:min 1] [:max 1]]}]) "a"))
   (is (not (m/validate (m/constraint [:and [:min 1] [:max 1]] (string-context)) "")))
-  (is (= '({:path [], :in [], :schema [:min 1], :value "" :type ::m/count-limits})
+  (is (= '({:path [], :in [], :schema [:count {:min 1}], :value "" :type ::m/count-limits})
          (errors (m/explain (m/constraint [:min 1] (string-context)) ""))))
-  (is (= '({:path [], :in [], :schema [:max 1], :value "12" :type ::m/count-limits})
+  (is (= '({:path [], :in [], :schema [:count {:max 1}], :value "12" :type ::m/count-limits})
          (errors (m/explain (m/constraint [:max 1] (string-context)) "12"))))
-  (is (= '({:path [], :in [], :schema [:and [:min 1] [:max 1]], :value "" :type ::m/count-limits})
+  (is (= '({:path [0], :in [], :schema [:count {:min 1}], :value "" :type ::m/count-limits})
          (errors (m/explain (m/constraint [:and [:min 1] [:max 1]] (string-context)) ""))))
-  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:min 5], :value "", :type ::m/count-limits}]
+  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:count {:min 5}], :value "", :type ::m/count-limits}]
          (errors (m/explain (m/schema [:string {:min 5}]) ""))))
-  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:max 1], :value "20", :type ::m/count-limits}]
+  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:count {:max 1}], :value "20", :type ::m/count-limits}]
          (errors (m/explain (m/schema [:string {:max 1}]) "20"))))
-  ;; TODO should be :path [:malli.constraint/constraint 0]
-  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:and [:min 5] [:max 10]], :value "", :type ::m/count-limits}]
-         (errors (m/explain (m/schema [:string {:min 5 :max 10}]) ""))
+  (is (= [{:path [:malli.constraint/constraint 0], :in [], :schema [:count {:min 5}], :value "", :type ::m/count-limits}]
          (errors (m/explain (m/schema [:string {:and [[:min 5] [:max 10]]}]) ""))))
-  ;; TODO should be [:schema [:min 1]], :in [0]
-  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:and [:min 1] [:max 1]], :value "", :type ::m/count-limits}]
-         (errors (m/explain (m/schema [:string {:min 1 :max 1}]) ""))
+  (is (= [{:path [:malli.constraint/constraint 1], :in [], :schema [:count {:min 5}], :value "", :type ::m/count-limits}]
+         (errors (m/explain (m/schema [:string {:min 5 :max 10}]) ""))))
+  (is (= [{:path [:malli.constraint/constraint 1], :in [], :schema [:count {:min 1}], :value "", :type ::m/count-limits}]
+         (errors (m/explain (m/schema [:string {:min 1 :max 1}]) ""))))
+  (is (= [{:path [:malli.constraint/constraint 0], :in [], :schema [:count {:min 1}], :value "", :type ::m/count-limits}]
          (errors (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]) ""))))
-  (is (= [{:path [:malli.constraint/constraint], :in [], :schema [:and [:min 1] [:max 1]], :value "", :type ::m/count-limits}]
+  (is (= [{:path [:malli.constraint/constraint 0], :in [], :schema [:count {:min 1}], :value "", :type ::m/count-limits}]
          (errors (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]) ""))))
-  (is (= ["should be 1 character"]
+  ;;TODO "should be 1 character"
+  (is (= ["should be at least 1 character"]
          (me/humanize (m/explain (m/schema [:string {:min 1 :max 1}]) ""))
          (me/humanize (m/explain (m/schema [:string {:and [[:min 1] [:max 1]]}]) ""))))
   (is (= ["should be at most 1 character"]
