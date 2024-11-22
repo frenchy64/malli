@@ -2916,18 +2916,13 @@
 
 (defn -constraint-from-properties [properties options]
   (let [{:keys [parse-properties]} (::constraint-context options)
-        ;; important for deterministic explain ordering
-        ks (-> parse-properties keys sort)
-        cs (-> []
-               (into (keep #(when-some [[_ v] (find properties %)]
-                              (constraint ((get parse-properties %) v options) options)))
-                     ks)
-               not-empty)]
+        cs (into [] (keep #(when-some [[_ v] (find properties %)]
+                               (constraint ((get parse-properties %) v options) options)))
+                   (-> parse-properties keys sort))]
     (case (count cs)
       0 (constraint [:true] options)
       1 (first cs)
       (constraint (into [:and] cs) options))))
-
 
 (defn default-constraint-extensions []
   {:parse-constraint {:and (fn [{:keys [properties children]} opts]
@@ -2939,16 +2934,15 @@
                                (-check-children! :false properties children 0 0)
                                [::false-constraint])}
    :constraint-form {::and (fn [c options] (into [:and] (map form) (-children c)))
-                     ::true-constraint (fn [c options] [:true])
-                     ::false-constraint (fn [c options] [:false])}
+                     ::true-constraint (fn [_ _] [:true])
+                     ::false-constraint (fn [_ _] [:false])}
    :parse-properties {:and (fn [v _] (into [:and] v))}
-   :unparse-properties {::and
-                        (fn [c into-properties {{:keys [unparse-properties]} ::constraint-context :as opts}]
-                          (reduce (fn [into-properties c]
-                                    (unparse-properties c into-properties opts))
-                                  into-properties (-children c)))
+   :unparse-properties {::and (fn [c into-properties {{:keys [unparse-properties]} ::constraint-context :as opts}]
+                                (reduce (fn [into-properties c]
+                                          (unparse-properties c into-properties opts))
+                                        into-properties (-children c)))
                         ::true-constraint (fn [_ into-properties _] into-properties)
-                        ::false-constraint (fn [_ into-properties _] (update into-properties :and (fnil conj []) [:false]))}})
+                        ::false-constraint (fn [_ into-properties _] (assoc into-properties :and [[:false]]))}})
 
 (defn -simple-constraint [{this-type :type :keys [validator explainer intersect into-schema]}]
   ^{:type ::into-schema}
@@ -3005,8 +2999,7 @@
 
 (defn- -default-number-min-max-constraint-extensions [this-type]
   (let [ks [:min :max :gen/min :gen/max]]
-    {;; [:max 5] => [::range-constraint {:max 5}] etc
-     :parse-constraint (into {} (map (fn [k]
+    {:parse-constraint (into {} (map (fn [k]
                                        [k (fn [{:keys [properties children]} opts]
                                             (-check-children! k properties children 1 1)
                                             [this-type {k (first children)}])]))
@@ -3019,17 +3012,9 @@
                                                           frms))
                                                       [] ks)]
                                      (case (count frms)
-                                       ;; [:int {:and [:true]} <= [this-type {:min 0}]
                                        0 [:true]
-                                       ;; [:int {:and [:min 5]} <= [this-type {:min 5}]
-                                       ;; [:int {:and [:max 4]} <= [this-type {:max 4}]
-                                       ;; [:int {:and [:gen/min 5]}] <= [this-type {:gen/min 5}]
-                                       ;; [:int {:and [:gen/max 4]}] <= [this-type {:gen/max 4}]
                                        1 (first frms)
-                                       ;; [:int {:and [:range {:min 3 :max 4 :gen/min 1 :gen/max 2}]}] <= [this-type {:min 3 :max 4 :gen/min 1 :gen/max 2}]
                                        (into [:and] frms))))}
-
-     ;; (-get-constraint [:int {:min 5}]) => [:min 5] etc
      :parse-properties (into {} (map (fn [k] [k (fn [v opts] [k v])])) ks)
      :unparse-properties {this-type (fn [c into-properties _] (into into-properties (-properties c)))}}))
 
@@ -3077,56 +3062,58 @@
                                       m))
                                   nil {:min c/max :max c/min :gen/min c/max :gen/max c/min})))))
 
+(defn -range-or-count-constraint [this-type into-schema validator error-path]
+  (-simple-constraint {:type this-type
+                       :into-schema into-schema
+                       :validator validator
+                       :explainer (fn [this path]
+                                    (let [pred (-validator this)]
+                                      (fn [x in acc]
+                                        (cond-> acc
+                                          (not (pred x))
+                                          (conj (miu/-error path in this x error-path))))))
+                       :intersect -intersect-min-max}))
+
 (defn -range-constraint []
   (let [this-type ::range-constraint]
-    (-simple-constraint {:type this-type
-                         :into-schema (fn [parent properties children options]
-                                        (-check-children! this-type properties children 0 0)
-                                        (let [{min-range :min max-range :max} properties
-                                              _ (when-not (or (nil? min-range)
-                                                              (number? min-range))
-                                                  (-fail! ::range-constraint-min {:min min-range}))
-                                              _ (when-not (or (nil? max-range)
-                                                              (number? max-range))
-                                                  (-fail! ::range-constraint-max {:max max-range}))]
-                                          (when (and min-range max-range (not (<= min-range max-range)))
-                                            (constraint [:false] options))))
-                         :validator (fn [this] (or ((-min-max-pred nil) (-properties this)) any?))
-                         :explainer (fn [this path]
-                                      (let [pred (-validator this)]
-                                        (fn [x in acc]
-                                          (cond-> acc
-                                            (not (pred x))
-                                            (conj (miu/-error path in this x ::range-limits))))))
-                         :intersect -intersect-min-max})))
+    (-range-or-count-constraint
+      this-type
+      (fn [parent properties children options]
+        (-check-children! this-type properties children 0 0)
+        (let [{min-range :min max-range :max} properties
+              _ (when-not (or (nil? min-range)
+                              (number? min-range))
+                  (-fail! ::range-constraint-min {:min min-range}))
+              _ (when-not (or (nil? max-range)
+                              (number? max-range))
+                  (-fail! ::range-constraint-max {:max max-range}))]
+          (when (and min-range max-range (not (<= min-range max-range)))
+            (constraint [:false] options))))
+      (fn [this] (or ((-min-max-pred nil) (-properties this)) any?))
+      ::range-limits)))
 
 (defn default-count-constraint-extensions [] (-default-number-min-max-constraint-extensions ::count-constraint))
 
 (defn -count-constraint []
   (let [this-type ::count-constraint]
-    (-simple-constraint {:type this-type
-                         :into-schema (fn [parent properties children options]
-                                        (-check-children! this-type properties children 0 0)
-                                        (let [{min-count :min max-count :max} properties
-                                              ;; unclear if we want to enforce (<= min-count max-count)
-                                              ;; it's a perfectly well formed constraint that happens to satisfy no values
-                                              _ (when-not (or (nil? min-count)
-                                                              (nat-int? min-count))
-                                                  (-fail! ::count-constraint-min {:min min-count}))
-                                              _ (when-not (or (nil? max-count)
-                                                              (nat-int? max-count))
-                                                  (-fail! ::count-constraint-max {:max max-count}))]
-                                          (when (and min-count max-count (not (<= min-count max-count)))
-                                            (constraint [:false] options))))
-                         ;;TODO bounded counts
-                         :validator #(-validate-limits (-properties %))
-                         :explainer (fn [this path]
-                                      (let [pred (-validator this)]
-                                        (fn [x in acc]
-                                          (cond-> acc
-                                            (not (pred x))
-                                            (conj (miu/-error path in this x ::count-limits))))))
-                         :intersect -intersect-min-max})))
+    (-range-or-count-constraint
+      this-type
+      (fn [parent properties children options]
+        (-check-children! this-type properties children 0 0)
+        (let [{min-count :min max-count :max} properties
+              ;; unclear if we want to enforce (<= min-count max-count)
+              ;; it's a perfectly well formed constraint that happens to satisfy no values
+              _ (when-not (or (nil? min-count)
+                              (nat-int? min-count))
+                  (-fail! ::count-constraint-min {:min min-count}))
+              _ (when-not (or (nil? max-count)
+                              (nat-int? max-count))
+                  (-fail! ::count-constraint-max {:max max-count}))]
+          (when (and min-count max-count (not (<= min-count max-count)))
+            (constraint [:false] options))))
+      ;;TODO bounded counts
+      #(-validate-limits (-properties %))
+      ::count-limits)))
 
 (defn- -flatten-and [cs]
   (eduction (mapcat #(if (= ::and (type %))
