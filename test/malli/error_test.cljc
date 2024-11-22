@@ -543,7 +543,7 @@
              (m/explain [1 2 :foo])
              (me/humanize)))))
 
-(deftest error-definion-lookup-test
+(deftest error-definition-lookup-test
   (is (= {:foo ["should be an integer"]}
          (-> [:map
               [:foo :int]]

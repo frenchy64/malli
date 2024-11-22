@@ -241,7 +241,8 @@
 
   (testing "generator override"
     (testing "without generator"
-      (let [schema [:fn {:gen/fmap '(fn [_] (rand-int 10))}
+      (let [schema [:fn {:gen/return 5
+                         :gen/fmap '(fn [_] (rand-int 10))}
                     '(fn [x] (<= 0 x 10))]
             generator (mg/generator schema)]
         (dotimes [_ 100]
@@ -999,7 +1000,10 @@
 
 (defn alphanumeric-char? [c]
   {:pre [(char? c)]}
-  (let [i (int c)]
+  (let [int (fn [c]
+              #?(:clj (int c)
+                 :cljs (.charCodeAt c 0)))
+        i (int c)]
     (or (<= (int \a) i (int \z))
         (<= (int \A) i (int \Z))
         (<= (int \0) i (int \9)))))
@@ -1009,28 +1013,29 @@
   (every? alphanumeric-char? s))
 
 (deftest string-gen-alphanumeric-test
-  (dotimes [seed 100]
+  (doseq [seed (range 100)
+          :let [options {:seed seed}]]
     (testing (pr-str seed)
       (testing "(and min (= min max))"
         (is (alphanumeric-string?
              (mg/generate [:string {:min 10, :max 10}]
-                          {:seed seed}))))
+                          options))))
       (testing "(and min max)"
         (is (alphanumeric-string?
              (mg/generate [:string {:min 10, :max 20}]
-                          {:seed seed}))))
+                          options))))
       (testing "min"
         (is (alphanumeric-string?
              (mg/generate [:string {:min 10}]
-                          {:seed seed}))))
+                          options))))
       (testing "max"
         (is (alphanumeric-string?
              (mg/generate [:string {:max 20}]
-                          {:seed seed}))))
+                          options))))
       (testing ":else"
         (is (alphanumeric-string?
              (mg/generate [:string {}]
-                          {:seed seed})))))))
+                          options)))))))
 
 (deftest non-empty-vector-generator-test
   (is (= [:.+ [1]]
