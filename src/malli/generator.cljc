@@ -121,10 +121,8 @@
        gen-one-of))
 
 (defn- -min-max-solutions-gen [schema options mink maxk min-max->gen]
-  (prn "-min-max-solutions-gen" mink maxk)
   (-solutions-gen schema
                   (fn [solution]
-                    (prn "solution" solution)
                     (when-some [unsupported-keys (not-empty (disj (set (keys solution))
                                                                   mink maxk))]
                       (m/-fail! ::unsupported-constraint-solution {:type (m/type schema)
