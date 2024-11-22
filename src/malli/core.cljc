@@ -2958,7 +2958,7 @@
                       :never (fn [{:keys [properties children]} opts]
                                (-check-children! :never properties children 0 0)
                                [:never])}
-   :constraint-form {:and (fn [c options] (into [:and] (map -constraint-form) (-children c)))
+   :constraint-form {:and (fn [c options] (into [:and] (map #(-constraint-form % options)) (-children c)))
                      :any (fn [_ _] [:any])
                      :never (fn [_ _] [:never])}
    :parse-properties {:and (fn [v _] (into [:and] v))}
@@ -2994,6 +2994,7 @@
               (reify
                 mc/Constraint
                 (-constraint? [_] true)
+                (-constraint-form [_] @form)
                 AST
                 (-to-ast [this _] (throw (ex-info "TODO" {})))
                 Schema
@@ -3007,7 +3008,7 @@
                 (-options [_] options)
                 (-children [_] children)
                 (-parent [_] parent)
-                (-form [_] @form)
+                (-form [_] (-simple-form parent properties children identity options))
                 Cached
                 (-cache [_] cache)
                 LensSchema
@@ -3098,10 +3099,10 @@
       (fn [this] (or ((-min-max-pred nil) (-properties this)) any?))
       ::range-limits)))
 
-(defn default-count-constraint-extensions [] (-default-number-min-max-constraint-extensions ::count-constraint))
+(defn default-count-constraint-extensions [] (-default-number-min-max-constraint-extensions :count))
 
 (defn -count-constraint []
-  (let [this-type ::count-constraint]
+  (let [this-type :count]
     (-range-or-count-constraint
       this-type
       (fn [parent properties children options]
@@ -3111,10 +3112,10 @@
               ;; it's a perfectly well formed constraint that happens to satisfy no values
               _ (when-not (or (nil? min-count)
                               (nat-int? min-count))
-                  (-fail! ::count-constraint-min {:min min-count}))
+                  (-fail! ::count-min {:min min-count}))
               _ (when-not (or (nil? max-count)
                               (nat-int? max-count))
-                  (-fail! ::count-constraint-max {:max max-count}))]
+                  (-fail! ::count-max {:max max-count}))]
           (when (and min-count max-count (not (<= min-count max-count)))
             (constraint [:never] options))))
       ;;TODO bounded counts
@@ -3129,7 +3130,7 @@
 
 (defn base-constraints []
   {::range-constraint (-range-constraint)
-   ::count-constraint (-count-constraint)})
+   :count (-count-constraint)})
 
 (defn base-constraint-extensions []
   (merge (let [ext (-base-number-constraint-extension)]

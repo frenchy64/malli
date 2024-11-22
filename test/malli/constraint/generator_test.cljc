@@ -11,7 +11,7 @@
   (testing ":and + :min + :max"
     (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
-          #":malli\.core/count-constraint-min"
+          #":malli\.core/count-min"
           (mg/generate [:string {:min -1}])))
     (is (= ["" "W" "pC" "4C" "x" "61" "8K8" "X5" "I4v" "sy3VC"]
            (vec (mg/sample [:string {}] options))

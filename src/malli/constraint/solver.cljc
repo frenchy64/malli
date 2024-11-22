@@ -105,7 +105,7 @@ collected."
   [constraint constraint-opts options]
   (apply -conj-solutions (map #(-constraint-solutions % constraint-opts options) (m/children constraint))))
 
-(defmethod -constraint-solutions* ::m/count-constraint
+(defmethod -constraint-solutions* :count
   [constraint constraint-opts {::keys [mode] :as options}]
   (let [{:keys [min max]} (m/properties constraint)
         {gen-min :gen/min gen-max :gen/max} (when (= :gen mode) (m/properties constraint))]

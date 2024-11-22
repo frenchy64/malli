@@ -18,10 +18,10 @@
 
 (def count-constraint-options
   {::m/constraint-context {:parse-constraint {:min (fn [{:keys [properties children]} opts]
-                                                     [::m/count-constraint {:min (first children)}])
+                                                     [:count {:min (first children)}])
                                               :max (fn [{:keys [properties children]} opts]
-                                                     [::m/count-constraint {:min 0 :max (first children)}])}}
-   :registry {::m/count-constraint (m/-count-constraint)}})
+                                                     [:count {:min 0 :max (first children)}])}}
+   :registry {:count (m/-count-constraint)}})
 
 (deftest constraint-test
   (testing "Constraints are returned as-is"
@@ -40,7 +40,7 @@
           #":malli\.core/no-constraint-form"
           (m/form (m/constraint (m/schema (m/-tf-constraint true)))))))
   (testing ":parse-constraint desugars constraints"
-    (is (= ::m/count-constraint
+    (is (= :count
            (m/type (m/constraint [:min 1] count-constraint-options))))
     (is (= (m/properties (m/constraint [:min 1] count-constraint-options))
            {:min 1}))
@@ -56,9 +56,9 @@
   (mapv #(update % :schema m/form) errors))
 
 (deftest string-constraint-test
-  (is (= ::m/count-constraint (m/type (m/constraint [:min 1] (string-context)))))
+  (is (= :count (m/type (m/constraint [:min 1] (string-context)))))
   (is (= [:min 1] (m/form (m/constraint [:min 1] (string-context)))))
-  (is (= ::m/count-constraint (m/type (m/constraint [:max 1] (string-context)))))
+  (is (= :count (m/type (m/constraint [:max 1] (string-context)))))
   (is (= [:max 1] (m/form (m/constraint [:max 1] (string-context)))))
   (is (= [:true] (m/form (m/constraint [:true] (string-context)))))
   ;;FIXME

@@ -21,7 +21,7 @@
                                     nil {:min c/max :max c/min :gen/min c/max :gen/max c/min})))))
 
 (defmethod intersect ::m/range-constraint [this that _] (m/-intersect-min-max this that))
-(defmethod intersect ::m/count-constraint [this that _] (m/-intersect-min-max this that))
+(defmethod intersect :count [this that _] (m/-intersect-min-max this that))
 
 (defmethod intersect ::m/true-constraint [this that _] (when (= (m/type this) (m/type that)) this))
 (defmethod intersect :any [this that _] (when (= (m/type this) (m/type that)) this))

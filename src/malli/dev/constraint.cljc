@@ -18,7 +18,7 @@
 (def ConstraintExtension
   [:map
    ;; a function taking surface-syntax for a constraint and returning a Constraint.
-   ;; e.g., :string's [:max 5] => [::m/count-constraint {:min 0 :max 5}]
+   ;; e.g., :string's [:max 5] => [:count {:min 0 :max 5}]
    ;; e.g., :int's [:max 5] => [::m/range-constraint {:max 5}]
    [:parse-constraint
     {:optional true}
@@ -32,7 +32,7 @@
                    Options
                    ?Constraint]]]
    ;; a function to return the form of a constraint under the current schema.
-   ;; e.g., :string's [:max 5] <= [::m/count-constraint {:min 0 :max 5}]
+   ;; e.g., :string's [:max 5] <= [:count {:min 0 :max 5}]
    ;; e.g., :int's [:max 5] <= [::m/range-constraint {:max 5}]
    [:constraint-form
     {:optional true}
@@ -43,7 +43,7 @@
    [:parse-properties
     [:map-of :any [:-> :any Options ContextualConstraintForm]]]
    ;; a function to convert a Constraint back to the properties of its schema.
-   ;; e.g., [:string {:max 4}] <= [::m/count-constraint {:min 0 :max 4}]
+   ;; e.g., [:string {:max 4}] <= [:count {:min 0 :max 4}]
    ;; e.g., [:int {:max 4}] <= [::m/range-constraint {:min 0 :max 4}]
    [:unparse-properties
     [:-> Constraint Properties Options Properties]]

@@ -43,6 +43,10 @@
            (me/humanize (m/explain [:string {:max 2}] "123"))
            (me/humanize (m/explain [:string {:min 1 :max 2}] "123"))
            (me/humanize (m/explain [:string {:and [[:max 2]]}] "123"))))
+    (is (= (m/form (mc/-get-constraint (m/schema [:string {:and [[:min 1] [:max 1]]}])))
+           [:and [:count {:min 1}] [:count {:max 1}]]))
+    (is (= '[:and [:min 1] [:max 1]]
+           (mc/-constraint-form (mc/-get-constraint (m/schema [:string {:and [[:min 1] [:max 1]]}])))))
     (is (= ["should be 1 character"]
            (me/humanize (m/explain [:string {:min 1 :max 1}] "123"))
            (me/humanize (m/explain [:string {:and [[:min 1] [:max 1]]}] "123"))))))
