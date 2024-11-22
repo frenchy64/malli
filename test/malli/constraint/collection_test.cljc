@@ -2,9 +2,10 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.test.check.generators :as gen]
             [malli.core :as m]
+            [malli.constraint :as mc]
             [malli.error :as me]))
 
-(deftest ^:constraints min-max-collection-constraint-test
+(deftest min-max-collection-constraint-test
   (doseq [[type coerce] [[:vector #'vec]
                          [:sequential #'sequence]
                          ;;TODO bounded count
@@ -36,6 +37,11 @@
              (me/humanize (m/explain [type {:min 1 :max 2} :int] (coerce [0 1 2])))
              (me/humanize (m/explain [type {:min 1 :max 2} :int] (coerce [0 1 2])))
              (me/humanize (m/explain [type {:and [[:max 2]]} :int] (coerce [0 1 2])))))
-      (is (= ["should have 1 element"]
+      ;; TODO "should have 1 element"
+      (is (= ["should have at most 1 element"]
              (me/humanize (m/explain [type {:min 1 :max 1} :int] (coerce [0 1 2])))
-             (me/humanize (m/explain [type {:and [[:min 1] [:max 1]]} :int] (coerce [0 1 2]))))))))
+             (me/humanize (m/explain [type {:and [[:min 1] [:max 1]]} :int] (coerce [0 1 2])))))
+      (is (= ["should have at least 1 element"]
+             (me/humanize (m/explain [type {:min 1 :max 1} :int] (coerce [])))
+             (me/humanize (m/explain [type {:and [[:min 1] [:max 1]]} :int] (coerce [])))))
+      )))

@@ -705,6 +705,9 @@
       (reify
         AST
         (-from-ast [parent ast options] (from-ast parent ast options))
+        mc/IntoConstraint
+        (-into-constraint [parent properties children options]
+          (-into-schema parent properties children options))
         IntoSchema
         (-type [_] type)
         (-type-properties [_] type-properties)
