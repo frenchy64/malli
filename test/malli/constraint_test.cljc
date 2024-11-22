@@ -25,20 +25,20 @@
 
 (deftest constraint-test
   (testing "Constraints are returned as-is"
-    (is (= ::m/true-constraint
-           (m/type (m/constraint (m/schema (m/-tf-constraint true))))
-           (m/type (m/constraint (m/schema (m/-tf-constraint true)) nil)))))
+    (is (= :any
+           (m/type (m/constraint (m/schema (m/-any-schema))))
+           (m/type (m/constraint (m/schema (m/-any-schema)) nil)))))
   (testing "IntoSchema's are not allowed in raw form"
     (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
           #":malli\.core/missing-parse-constraint-options"
           (m/constraint [::m/true-constraint]
-                        {:registry {::m/true-constraint (m/-tf-constraint true)}}))))
+                        {:registry {::m/true-constraint (m/-any-schema)}}))))
   (testing "m/form requires a constraint context"
     (is (thrown-with-msg?
           #?(:clj Exception, :cljs js/Error)
           #":malli\.core/no-constraint-form"
-          (m/form (m/constraint (m/schema (m/-tf-constraint true)))))))
+          (m/form (m/constraint (m/schema (m/-any-schema)))))))
   (testing ":parse-constraint desugars constraints"
     (is (= :count
            (m/type (m/constraint [:min 1] count-constraint-options))))
