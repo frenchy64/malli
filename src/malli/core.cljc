@@ -3043,6 +3043,8 @@
                                        0 [:any]
                                        1 (first frms)
                                        (into [:and] frms))))}
+     ;;TODO have a way to process min/max at the same time so then we don't need to intersect
+     ;; for improved errors
      :parse-properties (into {} (map (fn [k] [k (fn [v opts] [k v])])) ks)
      :unparse-properties {this-type (fn [c into-properties _] (into into-properties (-properties c)))}}))
 
