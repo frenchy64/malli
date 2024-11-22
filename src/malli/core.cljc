@@ -2897,9 +2897,11 @@
 (defn -constraint-context [type options]
   (when-some [m (or (get (::constraint-options options) type)
                     (mce/get-constraint-extension type))]
-    (let [r (-registry options)]
+    (let [needs (-> m :constraint-form keys)
+          r (-registry options)]
       ;;backwards compat
-      (when (every? #(mr/-schema r %) (-> m :constraint-form keys))
+      (when (or (empty? needs)
+                (and r (every? #(mr/schema r %) (-> m :constraint-form keys))))
         (assoc m :type type)))))
 
 (defn -constraint-form [constraint {{:keys [constraint-form]} ::constraint-context :as options}]

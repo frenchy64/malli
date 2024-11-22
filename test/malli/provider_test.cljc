@@ -161,4 +161,5 @@
 
 (deftest provider-test
   (doseq [[schema samples options] expectations]
-    (is (= (m/form schema) (m/form (mp/provide samples options))))))
+    (is (= (m/form schema) (m/form (mp/provide samples options)))
+        [schema samples])))
