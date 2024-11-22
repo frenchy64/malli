@@ -3,6 +3,13 @@
 #?(:cljs (goog-define mode "on")
    :clj  (def mode (or (System/getProperty "malli.constraint/mode") "on")))
 
+(defprotocol IntoConstraint
+  (-into-constraint [parent properties children options]))
+
+(defn into-constraint?
+  "Checks if x is a IntoConstraint instance"
+  [x] (#?(:clj instance?, :cljs implements?) malli.constraint.IntoConstraint x))
+
 (defprotocol Constraint
   (-constraint? [this])
   (-constraint-form [this]))

@@ -7,7 +7,7 @@
 
 (deftest string-constraint-test
   (testing "default constraint"
-    (is (= ::m/true-constraint
+    (is (= :any
            (-> :string
                m/schema
                mc/-get-constraint

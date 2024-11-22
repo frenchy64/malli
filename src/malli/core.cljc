@@ -17,7 +17,8 @@
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
          parser unparser ast from-ast -instrument ^:private -safely-countable?
-         -set-constraint -constraint-context -constraint-from-properties -constraint-form)
+         -set-constraint -constraint-context -constraint-from-properties -constraint-form
+         constraint base-constraints)
 
 ;;
 ;; protocols and records
@@ -788,12 +789,22 @@
 
 (defn -and-schema []
   ^{:type ::into-schema}
-  (reify IntoSchema
+  (reify
+    mc/IntoConstraint
+    (-into-constraint [parent properties children options]
+      (prn "-into-constraint" :and (count children))
+      (let [children (-vmap #(constraint % options) children)]
+        (case (count children)
+          0 (schema :any options)
+          1 (first children)
+          (into-schema parent properties children options))))
+    IntoSchema
     (-type [_] :and)
     (-type-properties [_])
     (-properties-schema [_ _])
     (-children-schema [_ _])
     (-into-schema [parent properties children options]
+      (prn "-into-schema" :and (count children))
       (-check-children! :and properties children 1 nil)
       (let [children (-vmap #(schema % options) children)
             form (delay (-simple-form parent properties children -form options))
@@ -2231,16 +2242,31 @@
   "Checks if x is a IntoSchema instance"
   [x] (#?(:clj instance?, :cljs implements?) malli.core.IntoSchema x))
 
+(defn- -into-f
+  ([f type properties children]
+   (-into-f f type properties children nil))
+  ([f type properties children options]
+   (prn "into-f" type f)
+   (let [properties' (when properties (when (pos? (count properties)) properties))
+         r (when properties' (properties' :registry))
+         options (if r (-update options :registry #(mr/composite-registry r (or % (-registry options)))) options)
+         properties (if r (assoc properties' :registry (-property-registry r options identity)) properties')]
+     (f (-lookup! type [type properties children] into-schema? false options) properties children options))))
+
 (defn into-schema
   "Creates a Schema instance out of type, optional properties map and children"
   ([type properties children]
    (into-schema type properties children nil))
   ([type properties children options]
-   (let [properties' (when properties (when (pos? (count properties)) properties))
-         r (when properties' (properties' :registry))
-         options (if r (-update options :registry #(mr/composite-registry r (or % (-registry options)))) options)
-         properties (if r (assoc properties' :registry (-property-registry r options identity)) properties')]
-     (-into-schema (-lookup! type [type properties children] into-schema? false options) properties children options))))
+   (-into-f -into-schema type properties children options)))
+
+(defn into-constraint
+  "Creates a Constraint instance out of type, optional properties map and children"
+  ([type properties children]
+   (into-constraint type properties children nil))
+  ([type properties children options]
+   (prn "into-constraint" type)
+   (-into-f mc/-into-constraint type properties children options)))
 
 (defn type
   "Returns the Schema type."
@@ -2669,6 +2695,7 @@
 
 (defn type-schemas []
   {:any (-any-schema)
+   :never (-never-schema)
    :some (-some-schema)
    :nil (-nil-schema)
    :string (-string-schema)
@@ -2766,14 +2793,8 @@
    ::schema (-schema-schema {:raw true})})
 
 (defn default-schemas []
-  (merge (predicate-schemas) (class-schemas) (comparator-schemas) (type-schemas) (sequence-schemas) (base-schemas)))
-
-(def default-registry
-  (let [strict (identical? mr/mode "strict")
-        custom (identical? mr/type "custom")
-        registry (if custom (mr/fast-registry {}) (mr/composite-registry (mr/fast-registry (default-schemas)) (mr/var-registry)))]
-    (when-not strict (mr/set-default-registry! registry))
-    (mr/registry (if strict registry (mr/custom-default-registry)))))
+  (merge (predicate-schemas) (class-schemas) (comparator-schemas) (type-schemas) (sequence-schemas) (base-schemas)
+         (base-constraints)))
 
 ;;
 ;; function schemas
@@ -2909,16 +2930,15 @@
                                (mc/-constraint? ?constraint) ?constraint
                                (vector? ?constraint) (let [v #?(:clj ^IPersistentVector ?constraint, :cljs ?constraint)
                                                            t #?(:clj (.nth v 0), :cljs (nth v 0))
-                                                           t (if (into-schema? t)
+                                                           t (if (mc/into-constraint? t)
                                                                t
-                                                               (or (mce/get-constraint t)
-                                                                   (-lookup t options)
+                                                               (or (-lookup t options)
                                                                    (-fail! ::unknown-constraint {:type t})))
                                                            n #?(:bb (count v) :clj (.count v), :cljs (count v))
                                                            ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))]
                                                        (if (or (nil? ?p) (map? ?p))
-                                                         (into-schema t ?p (when (< 2 n) (subvec ?constraint 2 n)) options)
-                                                         (into-schema t nil (when (< 1 n) (subvec ?constraint 1 n)) options)))
+                                                         (into-constraint t ?p (when (< 2 n) (subvec ?constraint 2 n)) options)
+                                                         (into-constraint t nil (when (< 1 n) (subvec ?constraint 1 n)) options)))
                                :else (-fail! ::unknown-constraint {:constraint ?constraint})))
      :else (-fail! ::invalid-constraint {:outer-schema (-> options ::constraint-context :type)
                                          :constraint ?constraint}))))
@@ -2929,35 +2949,37 @@
                                (constraint ((get parse-properties %) v options) options)))
                    (-> parse-properties keys sort))]
     (case (count cs)
-      0 (constraint [:true] options)
+      0 (constraint [:any] options)
       1 (first cs)
       (constraint (into [:and] cs) options))))
 
 (defn default-constraint-extensions []
   {:parse-constraint {:and (fn [{:keys [properties children]} opts]
                              (into [:and nil] children))
-                      :true (fn [{:keys [properties children]} opts]
-                              (-check-children! :true properties children 0 0)
-                              [::true-constraint])
-                      :false (fn [{:keys [properties children]} opts]
-                               (-check-children! :false properties children 0 0)
-                               [::false-constraint])}
+                      :any (fn [{:keys [properties children]} opts]
+                              (-check-children! :any properties children 0 0)
+                              [:any])
+                      :never (fn [{:keys [properties children]} opts]
+                               (-check-children! :never properties children 0 0)
+                               [:never])}
    :constraint-form {:and (fn [c options] (into [:and] (map -constraint-form) (-children c)))
-                     ::true-constraint (fn [_ _] [:true])
-                     ::false-constraint (fn [_ _] [:false])}
+                     :any (fn [_ _] [:any])
+                     :never (fn [_ _] [:never])}
    :parse-properties {:and (fn [v _] (into [:and] v))}
    :unparse-properties {:and (fn [c into-properties {{:keys [unparse-properties]} ::constraint-context :as opts}]
                                (reduce (fn [into-properties c]
                                          (unparse-properties c into-properties opts))
                                        into-properties (-children c)))
-                        ::true-constraint (fn [_ into-properties _] into-properties)
-                        ::false-constraint (fn [_ into-properties _] (assoc into-properties :and [[:false]]))}})
+                        :any (fn [_ into-properties _] into-properties)
+                        :never (fn [_ into-properties _] (assoc into-properties :and [[:never]]))}})
 
 (defn -simple-constraint [{this-type :type :keys [validator explainer into-schema]}]
   ^{:type ::into-schema}
   (reify
     AST
     (-from-ast [parent ast options] (throw (ex-info "TODO" {})))
+    mc/IntoConstraint
+    (-into-constraint [parent properties children options] (-into-schema parent properties children options))
     IntoSchema
     (-type [_] this-type)
     (-type-properties [_])
@@ -2997,13 +3019,6 @@
                 (-get [_ _ default] default)
                 (-set [this key _] (-fail! ::non-associative-constraint {:schema this, :key key})))))))))
 
-(defn -tf-constraint [tf]
-  (let [this-type (if tf ::true-constraint ::false-constraint)]
-    (-simple-constraint {:type this-type
-                         :validator (fn [_] (if tf any? (fn [_] false)))
-                         ;;TODO unit test
-                         :explainer (fn [this path] (fn [x in acc] (cond-> acc (not tf) (conj (miu/-error (conj path ::constraint) in this x)))))})))
-
 (defn- -default-number-min-max-constraint-extensions [this-type]
   (let [ks [:min :max :gen/min :gen/max]]
     {:parse-constraint (into {} (map (fn [k]
@@ -3019,7 +3034,7 @@
                                                           frms))
                                                       [] ks)]
                                      (case (count frms)
-                                       0 [:true]
+                                       0 [:any]
                                        1 (first frms)
                                        (into [:and] frms))))}
      :parse-properties (into {} (map (fn [k] [k (fn [v opts] [k v])])) ks)
@@ -3083,7 +3098,7 @@
                               (number? max-range))
                   (-fail! ::range-constraint-max {:max max-range}))]
           (when (and min-range max-range (not (<= min-range max-range)))
-            (constraint [:false] options))))
+            (constraint [:never] options))))
       (fn [this] (or ((-min-max-pred nil) (-properties this)) any?))
       ::range-limits)))
 
@@ -3105,7 +3120,7 @@
                               (nat-int? max-count))
                   (-fail! ::count-constraint-max {:max max-count}))]
           (when (and min-count max-count (not (<= min-count max-count)))
-            (constraint [:false] options))))
+            (constraint [:never] options))))
       ;;TODO bounded counts
       #(-validate-limits (-properties %))
       ::count-limits)))
@@ -3118,9 +3133,7 @@
 
 (defn base-constraints []
   {::range-constraint (-range-constraint)
-   ::count-constraint (-count-constraint)
-   ::true-constraint (-tf-constraint true)
-   ::false-constraint (-tf-constraint false)})
+   ::count-constraint (-count-constraint)})
 
 (defn base-constraint-extensions []
   (merge (let [ext (-base-number-constraint-extension)]
@@ -3146,3 +3159,12 @@
   ;; [:<= 5] is a constraint and :int is a constrained schema
   ;; :and updates the constrained schema with the constraint, merging them
   )
+
+
+
+(def default-registry
+  (let [strict (identical? mr/mode "strict")
+        custom (identical? mr/type "custom")
+        registry (if custom (mr/fast-registry {}) (mr/composite-registry (mr/fast-registry (default-schemas)) (mr/var-registry)))]
+    (when-not strict (mr/set-default-registry! registry))
+    (mr/registry (if strict registry (mr/custom-default-registry)))))
