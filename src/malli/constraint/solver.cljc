@@ -98,8 +98,8 @@ collected."
   (lazy-seq
     (-constraint-solutions* constraint constraint-opts options)))
 
-(defmethod -constraint-solutions* ::m/true-constraint [constraint constraint-opts options] [{}])
-(defmethod -constraint-solutions* ::m/false-constraint [constraint constraint-opts options] [])
+(defmethod -constraint-solutions* :any [constraint constraint-opts options] [{}])
+(defmethod -constraint-solutions* :never [constraint constraint-opts options] [])
 
 (defmethod -constraint-solutions* :and
   [constraint constraint-opts options]
