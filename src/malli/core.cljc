@@ -792,7 +792,6 @@
   (reify
     mc/IntoConstraint
     (-into-constraint [parent properties children options]
-      (prn "-into-constraint" :and (count children))
       (let [children (-vmap #(constraint % options) children)]
         (case (count children)
           0 (schema :any options)
@@ -804,7 +803,6 @@
     (-properties-schema [_ _])
     (-children-schema [_ _])
     (-into-schema [parent properties children options]
-      (prn "-into-schema" :and (count children))
       (-check-children! :and properties children 1 nil)
       (let [children (-vmap #(schema % options) children)
             form (delay (-simple-form parent properties children -form options))
@@ -2246,7 +2244,6 @@
   ([f type properties children]
    (-into-f f type properties children nil))
   ([f type properties children options]
-   (prn "into-f" type f)
    (let [properties' (when properties (when (pos? (count properties)) properties))
          r (when properties' (properties' :registry))
          options (if r (-update options :registry #(mr/composite-registry r (or % (-registry options)))) options)
@@ -2265,7 +2262,6 @@
   ([type properties children]
    (into-constraint type properties children nil))
   ([type properties children options]
-   (prn "into-constraint" type)
    (-into-f mc/-into-constraint type properties children options)))
 
 (defn type
