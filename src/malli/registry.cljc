@@ -51,11 +51,11 @@
     (-schemas [_] (-schemas @registry*))))
 
 (defn composite-registry [& ?registries]
-  (let [registries (mapv registry ?registries)]
+  (let [registries (into [] (keep registry) ?registries)]
     (reify
       Registry
       (-schema [_ type] (some #(-schema % type) registries))
-      (-schemas [_] (reduce merge (map -schemas (reverse registries)))))))
+      (-schemas [_] (reduce merge (map -schemas (rseq registries)))))))
 
 (defn mutable-registry [db]
   (reify
