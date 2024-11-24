@@ -31,6 +31,7 @@
            (map #(apply merge %))))
     [{}]))
 
+;;TODO make extensible
 (def ^:private type-super
   {:int #{:number}})
 
@@ -73,26 +74,22 @@
 
 (defmulti -solve (fn [schema options] (m/type schema)))
 
-(defn- -solve-from-return [props]
-  (when (contains? props :gen/return)
-    [{:= (:gen/return props)}]))
+(defn- -solve-from-schema [props options] (some-> (:gen/schema props) (solve options)))
 
-(defn- -solve-from-elements [props]
-  (some->> (:gen/elements props) (mapv #(hash-map := %))))
-
-(defn- -solve-from-schema [props options]
-  (some-> (:gen/schema props) (solve options)))
-
-(defn solve [schema {::keys [mode] :as options}]
-  {:post [(every? map? %)]}
-  (lazy-seq
-    (or (when (= :gen mode) ;;TODO :gen/fmap
-          (let [props (-merge (m/type-properties schema)
-                              (m/properties schema))]
-            (or (-solve-from-return props)
-                (-solve-from-elements props)
-                (-solve-from-schema props options))))
-        (-solve schema options))))
+(defn solve
+  "Returns a sequence of maps each representing values that satisfy schema.
+  
+  Options:
+  - ::mode if :gen, consider generative fields like :gen/schema and :gen/min
+           as necessary to satify the schema."
+  ([schema] (solve schema nil))
+  ([schema {::keys [mode] :as options}]
+   (lazy-seq
+     (or (when (= :gen mode) ;;TODO :gen/fmap, :gen/return, :gen/elements
+           (let [props (-merge (m/type-properties schema)
+                               (m/properties schema))]
+             (-solve-from-schema props options)))
+         (-solve schema options)))))
 
 (defmethod -solve :any [schema options] [{}])
 (defmethod -solve :and [schema options] (-intersect (map #(solve % options) (m/children schema))))

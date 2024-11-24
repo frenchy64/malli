@@ -220,7 +220,7 @@
         solutions (let [options (assoc options ::gen/mode :gen)]
                     (some-> (seq (cond-> (map #(solver/solve % options) schildren)
                                    (::solutions options) (conj (::solutions options))))
-                            solver/-intersect-solutions))]
+                            solver/-intersect))]
     (if-some [gen (-not-unreachable (generator gchild (assoc options ::solutions solutions)))]
       (gen/such-that (m/validator schema options) gen
                      {:max-tries 100
