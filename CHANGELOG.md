@@ -21,10 +21,12 @@ Malli is in well matured [alpha](README.md#alpha).
   * use `:gen/return nil` property to restore this behavior
 * FIX: `malli.registry/{mode,type}` not respected in Babashka [#1124](https://github.com/metosin/malli/issues/1124)
 * Change `:and` generator to be more reliable
-  * new function `malli.solver/solve` describe values that satisfy schemas
-  * new approach: `[:and s1 s2]` generates `s1` with `(solve s2)` narrowing `s1`'s generator
+  * new function `malli.solver/solve` returns descriptions of values that satisfy schemas
+  * new approach: `[:and s1 s2]` generates `s1` with `(solve s2)` narrowing `s1`'s generator by changing the arguments passed to test.check
+    * e.g., `[:and [:<= 5] [:>= 5]]` combines `(gen/double* {:max 5})` with solution `{:min-number 5}` giving `(gen/double* {:min 5 :max 5})`
   * extend `malli.solver/-solve` to extend solver to new schemas
-  * will change seeds for `:and` generators that used to be prone to `gen/such-that` failures
+  * mechanism for adding new solution constraints tbd
+  * note: will change seeds for `:and` generators that used to be prone to certain `gen/such-that` failures
 * FIX: `:seqable`/`:every` generates `nil` when `:min` is positive [#1121](https://github.com/metosin/malli/issues/1121)
 * Updated dependencies:
 
