@@ -25,6 +25,7 @@ Malli is in well matured [alpha](README.md#alpha).
   * new approach: `[:and s1 s2]` generates `s1` with `(solve s2)` narrowing `s1`'s generator
   * extend `malli.solver/-solve` to extend solver to new schemas
   * will change seeds for `:and` generators that used to be prone to `gen/such-that` failures
+* FIX: `:seqable`/`:every` generates `nil` when `:min` is positive [#1121](https://github.com/metosin/malli/issues/1121)
 * Updated dependencies:
 
 ```
