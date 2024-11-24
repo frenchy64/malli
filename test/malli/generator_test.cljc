@@ -1152,7 +1152,7 @@
                                             [:and [:>= 2] [:<= 2]]
                                             [:and [:>= 1] [:<= 1]]]] {:size 100000}))))
   (is (= #{2 3} (set (distinct (mg/sample [:and :int [:>= 2] [:and [:or [:<= 3] [:<= 2]]]] {:size 100000})))))
-  ;; use hash-set for cljs
+  ;; use hash-set for cljs where 2.0 is 2
   (is (= (hash-set 2 2.0 1 1.0)
          (set (mg/sample [:or
                           [:and [:>= 2] [:<= 2]]
