@@ -1137,3 +1137,33 @@
                   [{} :map]]]
       (is (every? #{{:type nil} {:type {}}} (mg/sample schema)))
       (is (every? (m/validator schema) (mg/sample schema))))))
+
+(deftest and-schema-solver-test
+  ;; unsatisfiable
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.generator/unsatisfiable-schema"
+        (dorun (mg/sample [:and :int [:>= 1.5] [:<= 1.5]] {:size 1000}))))
+  (is (= #{1} (set (mg/sample [:and :int [:>= 1] [:<= 1]] {:size 1000}))))
+  (is (= #{1 2} (set (mg/sample [:and :int [:or
+                                             [:and [:>= 1] [:<= 1]]
+                                             [:and [:>= 2] [:<= 2]]]] {:size 1000}))))
+  (is (= #{1 2} (set (mg/sample [:and :int [:or
+                                            [:and [:>= 2] [:<= 2]]
+                                            [:and [:>= 1] [:<= 1]]]] {:size 100000}))))
+  (is (= #{2 3} (set (distinct (mg/sample [:and :int [:>= 2] [:and [:or [:<= 3] [:<= 2]]]] {:size 100000})))))
+  (is (= #{2 2.0 1 1.0})
+          (set (mg/sample [:or
+                        [:and [:>= 2] [:<= 2]]
+                        [:and [:>= 1] [:<= 1]]] {:size 100000})))
+  (is (= #{2 2.0} (set (mg/sample [:and [:>= 2] [:<= 2]] {:size 100000}))))
+  (is (every? #(< 2 % 3) (mg/sample [:and [:> 2] [:< 3]] {:size 100000})))
+  (is (every? #(and (< 2 %) (<= % 3)) (mg/sample [:and [:> 2] [:<= 3]] {:size 100000})))
+  (is (some #{3.0} (mg/sample [:and [:> 2] [:<= 3]] {:size 100000})))
+  (is (every? #(and (<= 2 %) (< % 3)) (mg/sample [:and [:>= 2] [:< 3]] {:size 100000})))
+  (is (mg/generate [:and [:<= 3] [:fn {:gen/schema :int} int?]]))
+  (is (mg/generate [:and [:<= 3] [:fn {:gen/schema pos?} #(< 0 %)]]))
+  (is (mg/generate [:and [:<= 3] [:fn {:gen/schema neg?} #(< % 0)]] {:seed 0}))
+  (is (mg/sample [:and :int [:fn {:gen/schema neg?} #(< % 0)]]))
+  (is (mg/sample [:and :any :int]))
+  (is (mg/sample [:and :int :any])))

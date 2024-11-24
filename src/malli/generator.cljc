@@ -226,34 +226,6 @@
                                             (assoc % :schema schema))})
       (-never-gen options))))
 
-(comment
-  ;; unsatisfiable
-  (sample [:and :int [:>= 1.5] [:<= 1.5]] {:size 1000})
-  (assert (= #{1} (set (sample [:and :int [:>= 1] [:<= 1]] {:size 1000}))))
-  (assert (= #{1 2} (set (sample [:and :int [:or
-                                             [:and [:>= 1] [:<= 1]]
-                                             [:and [:>= 2] [:<= 2]]]] {:size 1000}))))
-  (assert (= #{1 2} (set (sample [:and :int [:or
-                                             [:and [:>= 2] [:<= 2]]
-                                             [:and [:>= 1] [:<= 1]]]] {:size 100000}))))
-  (assert (= #{2 3} (set (distinct (sample [:and :int [:>= 2] [:and [:or [:<= 3] [:<= 2]]]] {:size 100000})))))
-  (assert (= #{2 2.0 1 1.0})
-          (set (sample [:or
-                        [:and [:>= 2] [:<= 2]]
-                        [:and [:>= 1] [:<= 1]]] {:size 100000})))
-  (assert (= #{2 2.0} (set (sample [:and [:>= 2] [:<= 2]] {:size 100000}))))
-  (assert (every? #(< 2 % 3) (sample [:and [:> 2] [:< 3]] {:size 100000})))
-  (assert (every? #(and (< 2 %) (<= % 3)) (sample [:and [:> 2] [:<= 3]] {:size 100000})))
-  (assert (some #{3.0} (sample [:and [:> 2] [:<= 3]] {:size 100000})))
-  (assert (every? #(and (<= 2 %) (< % 3)) (sample [:and [:>= 2] [:< 3]] {:size 100000})))
-  (generate [:and [:<= 3] [:fn {:gen/schema :int} int?]])
-  (generate [:and [:<= 3] [:fn {:gen/schema pos?} #(< 0 %)]])
-  (generate [:and [:<= 3] [:fn {:gen/schema neg?} #(< % 0)]] {:seed 0})
-  (sample [:and :int [:fn {:gen/schema neg?} #(< % 0)]])
-  (sample [:and :any :int])
-  (sample [:and :int :any])
-  )
-
 (defn- gen-one-of [gs]
   (if (= 1 (count gs))
     (first gs)
