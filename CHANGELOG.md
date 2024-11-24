@@ -21,7 +21,9 @@ Malli is in well matured [alpha](README.md#alpha).
   * use `:gen/return nil` property to restore this behavior
 * FIX: `malli.registry/{mode,type}` not respected in Babashka [#1124](https://github.com/metosin/malli/issues/1124)
 * Change `:and` generator to be more reliable
-  * new ns `malli.solver` returns
+  * new function `malli.solver/solve` describe values that satisfy schemas
+  * new approach: `[:and s1 s2]` generates `s1` with `(solve s2)` narrowing `s1`'s generator
+  * extend `malli.solver/-solve` to extend solver to new schemas
 * Updated dependencies:
 
 ```

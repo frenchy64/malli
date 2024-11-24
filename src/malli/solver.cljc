@@ -5,6 +5,10 @@
             [malli.core :as m]
             [malli.impl.util :refer [-merge]]))
 
+;; known constraints
+;; :type              a keyword describing the value type
+;; :{min,max}-number  numbers describing value {minimum,maximum} bounds
+
 (declare solve)
 
 (defn- -intersect-number-constraints [all-sols mink maxk]
@@ -24,14 +28,13 @@
   (if-some [sols (when (seq all-sols)
                    (not-empty (into [] (keep (fn [[mink maxk]]
                                                (-intersect-number-constraints all-sols mink maxk)))
-                                    [[:min-count :max-count]
-                                     [:min-range :max-range]])))]
+                                    [#_[:min-count :max-count] ;;TODO
+                                     [:min-number :max-number]])))]
     (lazy-seq
       (->> (apply comb/cartesian-product sols)
            (map #(apply merge %))))
     [{}]))
 
-;;TODO make extensible
 (def ^:private type-super
   {:int #{:number}})
 
@@ -52,7 +55,7 @@
                                                (disj (into #{} (mapcat keys) all-sols)
                                                      :type
                                                      :max-count :min-count
-                                                     :max-range :min-range))]
+                                                     :max-number :min-number))]
                   (m/-fail! ::unsupported-solution {:unsupported-keys unsupported-keys}))
                 (let [type-constraints (-intersect-type all-sols)
                       number-solutions (-intersect-min-max all-sols)
@@ -63,21 +66,21 @@
                             (rec (rest cart-sols))))))))]
     (distinct (rec (apply comb/cartesian-product (distinct sols))))))
 
-(defn- -min-max-range [stype schema {::keys [mode]}]
+(defn- -min-max-number [stype schema {::keys [mode]}]
   (let [{gen-min :gen/min gen-max :gen/max :keys [min max]} (m/properties schema)]
     [(cond-> {:type stype}
-       min (assoc :min-range min)
-       max (assoc :max-range max)
+       min (assoc :min-number min)
+       max (assoc :max-number max)
        (= :gen mode) (cond->
-                       gen-min (assoc :min-range gen-min)
-                       gen-max (assoc :max-range gen-max)))]))
+                       gen-min (assoc :min-number gen-min)
+                       gen-max (assoc :max-number gen-max)))]))
 
 (defmulti -solve (fn [schema options] (m/type schema)))
 
 (defn- -solve-from-schema [props options] (some-> (:gen/schema props) (solve options)))
 
 (defn solve
-  "Returns a sequence of maps each representing values that satisfy schema.
+  "Returns a sequence of maps each describing values that satisfy schema.
   
   Options:
   - ::mode if :gen, consider generative fields like :gen/schema and :gen/min
@@ -93,14 +96,14 @@
 
 (defmethod -solve :any [schema options] [{}])
 (defmethod -solve :and [schema options] (-intersect (map #(solve % options) (m/children schema))))
-(defmethod -solve :or [schema options] (into [] (mapcat #(solve % options)) (m/children schema)))
-(defmethod -solve :<= [schema options] [{:type :number :max-range (first (m/children schema))}])
-(defmethod -solve :>= [schema options] [{:type :number :min-range (first (m/children schema))}])
-(defmethod -solve :< [schema options] [{:type :number :max-range (math/next-down (first (m/children schema)))}])
-(defmethod -solve :> [schema options] [{:type :number :min-range (math/next-up (first (m/children schema)))}])
-(defmethod -solve 'pos? [schema options] [{:type :number :min-range (math/next-up 0)}])
-(defmethod -solve 'neg? [schema options] [{:type :number :max-range (math/next-down 0)}])
-(defmethod -solve :int [schema options] (-min-max-range :int schema options))
-(defmethod -solve :double [schema options] (-min-max-range :double schema options))
-(defmethod -solve :float [schema options] (-min-max-range :float schema options))
+(defmethod -solve :or [schema options] (mapcat #(solve % options) (m/children schema)))
+(defmethod -solve :<= [schema options] [{:type :number :max-number (first (m/children schema))}])
+(defmethod -solve :>= [schema options] [{:type :number :min-number (first (m/children schema))}])
+(defmethod -solve :< [schema options] [{:type :number :max-number (math/next-down (first (m/children schema)))}])
+(defmethod -solve :> [schema options] [{:type :number :min-number (math/next-up (first (m/children schema)))}])
+(defmethod -solve 'pos? [schema options] [{:type :number :min-number (math/next-up 0)}])
+(defmethod -solve 'neg? [schema options] [{:type :number :max-number (math/next-down 0)}])
+(defmethod -solve :int [schema options] (-min-max-number :int schema options))
+(defmethod -solve :double [schema options] (-min-max-number :double schema options))
+(defmethod -solve :float [schema options] (-min-max-number :float schema options))
 (defmethod -solve :default [schema options] [{}])

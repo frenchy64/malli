@@ -101,19 +101,19 @@
 
 (defn- -double-gen* [goptions options]
   (-solve-each
-    (fn [{:keys [min-range max-range] :as solution}]
+    (fn [{:keys [min-number max-number] :as solution}]
       (let [{:keys [min max] :as goptions}
             (cond-> (merge {:infinite? false, :NaN? false} goptions)
               solution (cond->
-                         min-range (update :min #(let [;; TODO more thorough bounds checking
-                                                       min-range (double min-range)]
+                         min-number (update :min #(let [;; TODO more thorough bounds checking
+                                                       min-number (double min-number)]
                                                    (if %
-                                                     (max % min-range)
-                                                     min-range)))
-                         max-range (update :max #(let [max-range (double max-range)]
+                                                     (max % min-number)
+                                                     min-number)))
+                         max-number (update :max #(let [max-number (double max-number)]
                                                    (if %
-                                                     (min % max-range)
-                                                     max-range)))))]
+                                                     (min % max-number)
+                                                     max-number)))))]
         (if (and min max (not (<= min max)))
           (-never-gen options)
           (gen/double* goptions))))
@@ -121,19 +121,19 @@
 
 (defn- -int-gen* [goptions options]
   (-solve-each
-    (fn [{:keys [min-range max-range] :as solution}]
+    (fn [{:keys [min-number max-number] :as solution}]
       (let [{:keys [min max] :as goptions} (cond-> goptions
                                              solution
                                              (cond->
-                                               min-range (update :min #(let [;; TODO more thorough bounds checking
-                                                                             min-range (long (math/ceil min-range))]
+                                               min-number (update :min #(let [;; TODO more thorough bounds checking
+                                                                             min-number (long (math/ceil min-number))]
                                                                          (if %
-                                                                           (max % min-range)
-                                                                           min-range)))
-                                               max-range (update :max #(let [max-range (long (math/floor max-range))]
+                                                                           (max % min-number)
+                                                                           min-number)))
+                                               max-number (update :max #(let [max-number (long (math/floor max-number))]
                                                                          (if %
-                                                                           (min % max-range)
-                                                                           max-range)))))]
+                                                                           (min % max-number)
+                                                                           max-number)))))]
         (if (and min max (not (<= min max)))
           (-never-gen options)
           (gen/large-integer* goptions))))
@@ -141,26 +141,26 @@
 
 (defn- -number-gen* [goptions options]
   (-solve-each
-    (fn [{stype :type :keys [min-range max-range] :as solution}]
+    (fn [{stype :type :keys [min-number max-number] :as solution}]
       (let [{:keys [min max] :as goptions}
             (cond-> (merge {:infinite? false, :NaN? false} goptions)
               solution (cond->
-                         min-range (update :min #(let [;; TODO more thorough bounds checking
-                                                       min-range (double min-range)]
+                         min-number (update :min #(let [;; TODO more thorough bounds checking
+                                                       min-number (double min-number)]
                                                    (if %
-                                                     (max % min-range)
-                                                     min-range)))
-                         max-range (update :max #(let [max-range (double max-range)]
+                                                     (max % min-number)
+                                                     min-number)))
+                         max-number (update :max #(let [max-number (double max-number)]
                                                    (if %
-                                                     (min % max-range)
-                                                     max-range)))))]
+                                                     (min % max-number)
+                                                     max-number)))))]
         (if (or (and min max (not (<= min max)))
                 ;;TODO :decimal
                 (and stype (not (#{:int :double :float :number} stype))))
           (-never-gen options)
           (let [gen-type (fn gen-type [stype]
                            (case stype
-                             ;; follow spec's generator for number?
+                             ;; follow spec's generator for `number?`
                              (nil :number) (gen/one-of (mapv gen-type [:int :double]))
                              :int (gen/large-integer* goptions)
                              :float (->> (gen/double* goptions)
