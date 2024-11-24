@@ -110,35 +110,50 @@
                                           (min % max-number)
                                           max-number)))))
 
-(defn- -bounds-between? [min max lb ub]
-  (prn "-bounds-between?" [min max lb ub])
-  (and (or (not min) (<= lb min))
-       (or (not max) (<= max ub))
+(defn- -finite-bounds-between? [min max lb ub]
+  (and (or (not min) (and (not (infinite? min))
+                          (<= lb min)))
+       (or (not max) (and (not (infinite? max))
+                          (<= max ub)))
        (or (not (and min max)) (<= min max))))
 
+(defn- -float-ceil  [d] #?(:cljs (float d) :clj (loop [f (float d)] (cond-> f (< f d) (-> Math/nextUp recur)))))
+(defn- -float-floor [d] #?(:cljs (float d) :clj (loop [f (float d)] (cond-> f (< d f) (-> Math/nextDown recur)))))
+
 (defn- -reachable-float*-options [{:keys [min max] :as goptions}]
-  (when (-bounds-between? min max -min-float -max-float)
-    (let [fmin (some-> min float)
-          fmax (some-> max float)]
-      ;;TODO
-      (assert (<= min (float min) (float max) max) "Float bounds cannot be preserved")
-      (-> goptions
-          (assoc :min (or fmin #?(:clj -min-float :cljs nil)))
-          (assoc :max (or fmax #?(:clj -max-float :cljs nil)))
-          #?(:clj (assoc :infinite? false)
-             :default (update :infinite? #(if (some? %) % false)))
-          (update :NaN? #(if (some? %) % false))))))
+  (when (-finite-bounds-between? min max -min-float -max-float)
+    (let [fmin (some-> min -float-ceil)
+          fmax (some-> max -float-floor)
+          preserved-float-bounds? (<= min fmin fmax max)]
+      (when preserved-float-bounds?
+        (-> goptions
+            (assoc :min (or fmin #?(:clj -min-float :cljs nil)))
+            (assoc :max (or fmax #?(:clj -max-float :cljs nil)))
+            (update :infinite? #(if (some? %) % false))
+            (update :NaN? #(if (some? %) % false)))))))
+
+(defn- -float-within [d min max]
+  #?(:cljs (float d)
+     :clj (if (= ##Inf d)
+            Float/POSITIVE_INFINITY
+            (if (= ##-Inf d)
+              Float/NEGATIVE_INFINITY
+              (let [good (fn [f] (when (<= min f max) f))]
+                (or (good (float d))
+                    (good (-float-ceil min))
+                    (good (-float-floor max))
+                    (m/-fail! ::could-not-coerce-float {:number d :min min :max max})))))))
 
 (defn- -float-gen* [goptions options]
   (-solve-each
     (fn [solution options]
-      (let [goptions (-with-number-bounds goptions solution)]
-        (or (some->> (-reachable-float*-options goptions) gen/double*
-                     (gen/fmap #(float %)))
-            (-never-gen options))))))
+      (if-some [{:keys [min max] :as goptions} (-reachable-float*-options (-with-number-bounds goptions solution))]
+        (gen/fmap (gen/double* goptions) #(-float-within % min max))
+        (-never-gen options)))
+    options))
 
 (defn- -reachable-double*-options [{:keys [min max] :as goptions}]
-  (when (-bounds-between? min max -min-double -max-double)
+  (when (-finite-bounds-between? min max -min-double -max-double)
     (-> goptions
         (update :infinite? #(if (some? %) % false))
         (update :NaN? #(if (some? %) % false)))))
@@ -152,8 +167,7 @@
     options))
 
 (defn- -reachable-large-integer*-options [{:keys [min max] :as goptions}]
-  (prn "-reachable-large-integer*-options" goptions (-bounds-between? min max -min-long -max-long))
-  (when (-bounds-between? min max -min-long -max-long)
+  (when (-finite-bounds-between? min max -min-long -max-long)
     (cond-> (or goptions {})
       ;; {:min 1.5} => {:min 2}
       min (assoc :min (long (math/ceil min)))
@@ -165,7 +179,6 @@
     (fn [solution options]
       (let [goptions (-with-number-bounds goptions solution)]
         (or (some-> (-reachable-large-integer*-options goptions) gen/large-integer*)
-            (prn "-int-gen* never")
             (-never-gen options))))
     options))
 
