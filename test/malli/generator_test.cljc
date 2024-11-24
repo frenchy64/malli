@@ -1140,6 +1140,11 @@
       (is (every? #{{:type nil} {:type {}}} (mg/sample schema)))
       (is (every? (m/validator schema) (mg/sample schema))))))
 
+(deftest number-pred-generators-test
+  (doseq [f [pos? neg? pos-int? neg-int? nat-int? number? integer? int? float?]]
+    (testing (pr-str f)
+      (is (every? f (mg/sample f {:size 100}))))))
+
 (deftest and-schema-solver-test
   ;; unsatisfiable
   (is (thrown-with-msg?

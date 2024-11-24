@@ -535,7 +535,7 @@
                                                                    {:max-tries 100
                                                                     :ex-fn #(m/-exception ::not=-generator-failure (assoc % :schema schema))}))
 (defmethod -schema-generator 'pos? [_ options] (-number-gen* {:min (math/next-up 0)} options))
-(defmethod -schema-generator 'neg? [_ options] (-number-gen* {:min (math/next-down 0)} options))
+(defmethod -schema-generator 'neg? [_ options] (-number-gen* {:max (math/next-down 0)} options))
 (defmethod -schema-generator 'pos-int? [_ options] (-int-gen* {:min 1} options))
 (defmethod -schema-generator 'neg-int? [_ options] (-int-gen* {:max -1} options))
 (defmethod -schema-generator 'nat-int? [_ options] (-int-gen* {:min 0} options))

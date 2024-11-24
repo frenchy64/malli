@@ -26,7 +26,12 @@ Malli is in well matured [alpha](README.md#alpha).
     * e.g., `[:and [:<= 5] [:>= 5]]` combines `(gen/double* {:max 5})` with solution `{:min-number 5}` giving `(gen/double* {:min 5 :max 5})`
   * extend `malli.solver/-solve` to extend solver to new schemas
   * mechanism for adding new solution constraints tbd
-  * note: will change seeds for `:and` generators that used to be prone to certain `gen/such-that` failures
+  * note: will change seeds for some `:and` generators
+    * those that used to be prone to certain `gen/such-that` failures
+* `pos?`/`neg?` generators now generate from the closest double up/down from zero
+  * note: will change seeds
+* `[:> n]`/`[:< n]` generators now generate from the closest double up/down from n
+  * note: will change seeds
 * FIX: `:seqable`/`:every` generates `nil` when `:min` is positive [#1121](https://github.com/metosin/malli/issues/1121)
 * Updated dependencies:
 
