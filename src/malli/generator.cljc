@@ -133,16 +133,19 @@
             (update :NaN? #(if (some? %) % false)))))))
 
 (defn- -float-within [d min max]
-  #?(:cljs (float d)
-     :clj (if (= ##Inf d)
-            Float/POSITIVE_INFINITY
-            (if (= ##-Inf d)
-              Float/NEGATIVE_INFINITY
-              (let [good (fn [f] (when (<= min f max) f))]
-                (or (good (float d))
-                    (good (-float-ceil min))
-                    (good (-float-floor max))
-                    (m/-fail! ::could-not-coerce-float {:number d :min min :max max})))))))
+  (float
+    #?(:cljs d
+       :clj (if (= ##Inf d)
+              Float/POSITIVE_INFINITY
+              (if (= ##-Inf d)
+                Float/NEGATIVE_INFINITY
+                (if (= ##NaN d)
+                  Float/NaN
+                  (let [good (fn [f] (when (<= min f max) f))]
+                    (or (good (float d))
+                        (good (-float-ceil min))
+                        (good (-float-floor max))
+                        (m/-fail! ::could-not-coerce-float {:number d :min min :max max})))))))))
 
 (defn- -float-gen* [goptions options]
   (-solve-each
