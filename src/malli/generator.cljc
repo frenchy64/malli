@@ -106,14 +106,14 @@
             (cond-> (merge {:infinite? false, :NaN? false} goptions)
               solution (cond->
                          min-number (update :min #(let [;; TODO more thorough bounds checking
-                                                       min-number (double min-number)]
+                                                        min-number (double min-number)]
                                                    (if %
                                                      (max % min-number)
                                                      min-number)))
                          max-number (update :max #(let [max-number (double max-number)]
-                                                   (if %
-                                                     (min % max-number)
-                                                     max-number)))))]
+                                                    (if %
+                                                      (min % max-number)
+                                                      max-number)))))]
         (if (and min max (not (<= min max)))
           (-never-gen options)
           (gen/double* goptions))))
@@ -126,7 +126,7 @@
                                              solution
                                              (cond->
                                                min-number (update :min #(let [;; TODO more thorough bounds checking
-                                                                             min-number (long (math/ceil min-number))]
+                                                                              min-number (long (math/ceil min-number))]
                                                                          (if %
                                                                            (max % min-number)
                                                                            min-number)))
