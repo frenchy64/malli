@@ -91,56 +91,71 @@
 
 (defn- -solve-each [f {::keys [solutions] :as options}] (gen-one-of (mapv f (or solutions [{}])) options))
 
+;; double/long bounds coincide with test.check
 (def ^:private -max-double #?(:clj Double/MAX_VALUE :cljs (.-MAX_VALUE js/Number)))
 (def ^:private -min-double (- -max-double))
 (def ^:private -max-float #?(:clj Float/MAX_VALUE :cljs (.-MAX_VALUE js/Number)))
 (def ^:private -min-float (- -max-float))
-(def ^:private -max-long #?(:clj Long/MAX_VALUE :cljs (long (.-MAX_VALUE js/Number))))
+(def ^:private -max-long #?(:clj Long/MAX_VALUE :cljs (dec (apply * (repeat 53 2)))))
 (def ^:private -min-long #?(:clj Long/MIN_VALUE :cljs (- -max-long)))
 
-(defn- -float-gen* [goptions options]
-  (->> (gen/double* (merge {:infinite? false, :NaN? false}
-                           (-> goptions
-                               (update :min #(or (some-> % float)
-                                                 #?(:clj -min-float :cljs nil)))
-                               (update :max #(or (some-> % float)
-                                                 #?(:clj -max-float :cljs nil)))
-                               #?(:clj (dissoc :infinite?)))))
-       (gen/fmap #?(:clj #(.floatValue ^Double %)
-                    :default #(float %)))))
+(defn- -reachable-float*-options [{:keys [min max] :as goptions}]
+  (when (and (or (not min) (<= min -max-float))
+             (or (not max) (<= -min-float max))
+             (or (not (and min max)) (<= min max)))
+    (let [fmin (some-> min float)
+          fmax (some-> max float)]
+      ;;TODO
+      (assert (<= min (float min) (float max) max) "Float bounds cannot be preserved")
+      (-> goptions
+          (assoc :min (or fmin #?(:clj -min-float :cljs nil)))
+          (assoc :max (or fmax #?(:clj -max-float :cljs nil)))
+          #?(:clj (assoc :infinite? false)
+             :default (update :infinite? #(if (some? %) % false)))
+          (update :NaN? #(if (some? %) % false))))))
 
-(defn- -valid-double-bounds [{:keys [min max]} options]
-  (when (and (or (not (and min max)) (<= min max))
-             (or (not min) (<= min Double/MAX_VALUE))
-             (or (not max) (<= Long/MIN_VALUE max)))
-    (cond-> goptions
-      ;; {:min 1.5} => {:min 2}
-      min (assoc :min (long (math/ceil min)))
-      ;; {:max 1.5} => {:max 1}
-      max (assoc :max (long (math/floor max)))))
-  )
+(defn- -float-gen* [goptions options]
+  (-solve-each
+    (fn [{:keys [min-number max-number] :as solution}]
+      (let [goptions (cond-> goptions
+                       solution (cond->
+                                  min-number (update :min #(if %
+                                                             (max % min-number)
+                                                             min-number))
+                                  max-number (update :max #(if %
+                                                             (min % max-number)
+                                                             max-number))))]
+        (or (some->> (-reachable-float*-options) gen/double*
+                     (gen/fmap #(float %)))
+            (-never-gen options))))))
+
+(defn- -reachable-double*-options [{:keys [min max] :as goptions}]
+  (when (and (or (not min) (<= min -max-double))
+             (or (not max) (<= -min-double max))
+             (or (not (and min max)) (<= min max)))
+    (-> goptions
+        (update :infinite? #(if (some? %) % false))
+        (update :NaN? #(if (some? %) % false)))))
 
 (defn- -double-gen* [goptions options]
   (-solve-each
     (fn [{:keys [min-number max-number] :as solution}]
-      (let [{:keys [min max] :as goptions}
-            (cond-> (merge {:infinite? false, :NaN? false} goptions)
-              solution (cond->
-                         min-number (update :min #(if %
-                                                    (max % min-number)
-                                                    min-number))
-                         max-number (update :max #(if %
-                                                    (min % max-number)
-                                                    max-number))))]
-        (if (and min max (not (<= min max)))
-          (-never-gen options)
-          (gen/double* goptions))))
+      (let [goptions (cond-> goptions
+                       solution (cond->
+                                  min-number (update :min #(if %
+                                                             (max % min-number)
+                                                             min-number))
+                                  max-number (update :max #(if %
+                                                             (min % max-number)
+                                                             max-number))))]
+        (or (some-> (-reachable-double*-options goptions) gen/double*)
+            (-never-gen options))))
     options))
 
-(defn- -valid-int-bounds [{:keys [min max] :as goptions}]
-  (when (and (or (not (and min max)) (<= min max))
-             (or (not min) (<= min Long/MAX_VALUE))
-             (or (not max) (<= Long/MIN_VALUE max)))
+(defn- -reachable-large-integer*-options [{:keys [min max] :as goptions}]
+  (when (and (or (not min) (<= min Long/MAX_VALUE))
+             (or (not max) (<= Long/MIN_VALUE max))
+             (or (not (and min max)) (<= min max)))
     (cond-> goptions
       ;; {:min 1.5} => {:min 2}
       min (assoc :min (long (math/ceil min)))
@@ -159,7 +174,7 @@
                          max-number (update :max #(if %
                                                     (min % max-number)
                                                     max-number))))]
-        (or (some-> (-valid-int-bounds goptions) gen/large-integer*)
+        (or (some-> (-reachable-large-integer*-options goptions) gen/large-integer*)
             (-never-gen options))))
     options))
 
