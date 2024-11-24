@@ -1145,8 +1145,35 @@
     (testing (pr-str f)
       (is (every? f (mg/sample f {:size 100}))))))
 
+(deftest number-gen-bounds-test
+  (doseq [s [[:> Double/MAX_VALUE]
+             ;;TODO
+             ;;[:>= ##NaN]
+             ;;[:= ##NaN]
+             [:< ##NaN]
+             [:> ##NaN]
+             [:> ##Inf]
+             [:< ##-Inf]]]
+    (testing (pr-str s)
+      (is (thrown-with-msg?
+            #?(:clj Exception, :cljs js/Error)
+            #":malli\.generator/invalid-bounds"
+            (mg/generate s)))))
+  (is (= 1.0 (shrink [:>= (- Double/MAX_VALUE)])))
+  (is (shrink [:>= (/ (- Double/MAX_VALUE) 2)]))
+  (is (shrink [:<= (/ (- Double/MAX_VALUE) 2)]))
+  (is (shrink [:>= (/ Double/MAX_VALUE 2)]))
+  (is (shrink [:<= (/ Double/MAX_VALUE 2)]))
+  (is (= 1.0 (shrink [:< ##Inf])))
+  (is (= 1.0 (shrink [:> ##-Inf])))
+  (is (= 1.0 (shrink [:<= Double/MAX_VALUE])))
+  ;; FIXME underlying generators don't seem to handle these well
+  (is (= (- Double/MAX_VALUE) (shrink [:<= (- Double/MAX_VALUE)])))
+  ;;(is (= (- Double/MAX_VALUE) (shrink [:double {:max (- Double/MAX_VALUE)}])))
+  (is (= Double/MAX_VALUE (shrink [:>= Double/MAX_VALUE])))
+  (is (= 1.0 (shrink [:<= Double/MAX_VALUE]))))
+
 (deftest and-schema-solver-test
-  ;; unsatisfiable
   (is (thrown-with-msg?
         #?(:clj Exception, :cljs js/Error)
         #":malli\.generator/unsatisfiable-schema"
@@ -1159,12 +1186,11 @@
                                             [:and [:>= 2] [:<= 2]]
                                             [:and [:>= 1] [:<= 1]]]] {:size 100000}))))
   (is (= #{2 3} (set (distinct (mg/sample [:and :int [:>= 2] [:and [:or [:<= 3] [:<= 2]]]] {:size 100000})))))
-  ;; use hash-set for cljs where 2.0 is 2
-  (is (= (hash-set 2 2.0 1 1.0)
+  (is (= #?(:cljs #{2.0 1.0} :default #{2 2.0 1 1.0})
          (set (mg/sample [:or
                           [:and [:>= 2] [:<= 2]]
                           [:and [:>= 1] [:<= 1]]] {:size 100000}))))
-  (is (= (hash-set 2 2.0) (set (mg/sample [:and [:>= 2] [:<= 2]] {:size 100000}))))
+  (is (= #?(:cljs #{2.0} :default #{2 2.0}) (set (mg/sample [:and [:>= 2] [:<= 2]] {:size 100000}))))
   (is (every? #(< 2 % 3) (mg/sample [:and [:> 2] [:< 3]] {:size 100000})))
   (is (every? #(and (< 2 %) (<= % 3)) (mg/sample [:and [:> 2] [:<= 3]] {:size 100000})))
   (is (some #{3.0} (mg/sample [:and [:> 2] [:<= 3]] {:size 100000})))

@@ -161,7 +161,15 @@
           (let [gen-type (fn gen-type [stype]
                            (case stype
                              ;; follow spec's generator for `number?`
-                             (nil :number) (gen/one-of (mapv gen-type [:int :double]))
+                             (nil :number) (gen-one-of
+                                             (-> (cond-> []
+                                                   #?(:cljs true
+                                                      :clj (and (or (not min)
+                                                                    (<= (double Long/MIN_VALUE) (double min) (double Long/MAX_VALUE)))
+                                                                (or (not max)
+                                                                    (<= (double Long/MIN_VALUE) (double max) (double Long/MAX_VALUE)))))
+                                                   (conj (gen-type :int)))
+                                                 (conj (gen-type :double))))
                              :int (gen/large-integer* goptions)
                              :float (->> (gen/double* goptions)
                                          (gen/fmap #(if (double? %)
@@ -525,10 +533,26 @@
 
 (defmethod -schema-generator ::default [schema options] (ga/gen-for-pred (m/validator schema options)))
 
+(defn- next-up [d schema]
+  (when (or (<= #?(:clj Double/MAX_VALUE :cljs (.-MAX_VALUE js/Number)) d)
+            #?(:clj (Double/isNaN d)
+               :cljs (js/isNaN d)))
+    (m/-fail! ::invalid-bounds {:schema schema}))
+  (math/next-up d))
+
+(defn- next-down [d schema]
+  (when (or (<= d (- Double/MAX_VALUE))
+            #?(:clj (Double/isNaN d)
+               :cljs (js/isNaN d)))
+    (m/-fail! ::invalid-bounds {:schema schema}))
+  (math/next-down d))
+
+;;TODO :<=, :>=, should not allow ##NaN, ##Inf
+;;TODO := should not allow ##NaN (equality always false, probably needs a dedicated schema or property)
 (defmethod -schema-generator 'number? [schema options] (-number-gen* nil options))
-(defmethod -schema-generator :> [schema options] (-number-gen* {:min (-> schema (m/children options) first math/next-up)} options))
+(defmethod -schema-generator :> [schema options] (-number-gen* {:min (-> schema (m/children options) first (next-up schema))} options))
 (defmethod -schema-generator :>= [schema options] (-number-gen* {:min (-> schema (m/children options) first)} options))
-(defmethod -schema-generator :< [schema options] (-number-gen* {:max (-> schema (m/children options) first math/next-down)} options))
+(defmethod -schema-generator :< [schema options] (-number-gen* {:max (-> schema (m/children options) first (next-down schema))} options))
 (defmethod -schema-generator :<= [schema options] (-number-gen* {:max (-> schema (m/children options) first)} options))
 (defmethod -schema-generator := [schema options] (gen/return (first (m/children schema options))))
 (defmethod -schema-generator :not= [schema options] (gen/such-that #(not= % (-> schema (m/children options) first)) gen/any-printable
