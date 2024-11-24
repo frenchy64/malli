@@ -1103,7 +1103,9 @@
       (is (= '({-1 false}
                {-4399 true, 59 false, -4049 false, -49 false, -1 false, 15 false, -967 false, -3 false, -674 false, 2730 true, -2104 false, 3 false, -444 true, 8 false}
                {119 true, 1324 false, 7276 false, -2410 true})
-             (filter map? (mg/sample [op [:tuple :int :boolean]] {:seed 1 :size 30})))))))
+             (filter map? (mg/sample [op [:tuple :int :boolean]] {:seed 1 :size 30}))))
+      (dotimes [_ 100]
+        (is (not-any? nil? (mg/sample [op {:min 1} :any])))))))
 
 (deftest double-with-long-min-test
   (is (m/validate :double (shrink [:double {:min 3}])))
