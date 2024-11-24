@@ -1152,10 +1152,10 @@
                                             [:and [:>= 2] [:<= 2]]
                                             [:and [:>= 1] [:<= 1]]]] {:size 100000}))))
   (is (= #{2 3} (set (distinct (mg/sample [:and :int [:>= 2] [:and [:or [:<= 3] [:<= 2]]]] {:size 100000})))))
-  (is (= #{2 2.0 1 1.0})
-          (set (mg/sample [:or
-                        [:and [:>= 2] [:<= 2]]
-                        [:and [:>= 1] [:<= 1]]] {:size 100000})))
+  (is (= #{2 2.0 1 1.0}
+         (set (mg/sample [:or
+                          [:and [:>= 2] [:<= 2]]
+                          [:and [:>= 1] [:<= 1]]] {:size 100000}))))
   (is (= #{2 2.0} (set (mg/sample [:and [:>= 2] [:<= 2]] {:size 100000}))))
   (is (every? #(< 2 % 3) (mg/sample [:and [:> 2] [:< 3]] {:size 100000})))
   (is (every? #(and (< 2 %) (<= % 3)) (mg/sample [:and [:> 2] [:<= 3]] {:size 100000})))
