@@ -217,8 +217,10 @@
 
 (defn -and-gen [schema options]
   (let [[gchild & schildren] (m/children schema)
-        solutions (cond-> (solver/-solve-constraints schildren options)
-                    (::solutions options) (apply solver/-conj-solutions (::solutions options)))]
+        solutions (let [options (assoc options ::gen/mode :gen)]
+                    (some-> (seq (cond-> (map #(solver/solve % options) schildren)
+                                   (::solutions options) (conj (::solutions options))))
+                            solver/-intersect-solutions))]
     (if-some [gen (-not-unreachable (generator gchild (assoc options ::solutions solutions)))]
       (gen/such-that (m/validator schema options) gen
                      {:max-tries 100
