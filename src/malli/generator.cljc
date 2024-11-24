@@ -117,9 +117,7 @@
        (or (not (and min max)) (<= min max))))
 
 (defn- -reachable-float*-options [{:keys [min max] :as goptions}]
-  (when (and (or (not min) (<= min -max-float))
-             (or (not max) (<= -min-float max))
-             (or (not (and min max)) (<= min max)))
+  (when (-bounds-between? min max -min-float -max-float)
     (let [fmin (some-> min float)
           fmax (some-> max float)]
       ;;TODO
@@ -586,20 +584,8 @@
 (defmethod -schema-generator :nil [_ _] nil-gen)
 (defmethod -schema-generator :string [schema options] (-string-gen schema options))
 (defmethod -schema-generator :int [schema options] (-int-gen* (-min-max schema options) options))
-(defmethod -schema-generator :double [schema options]
-  (-double-gen* (merge (let [props (m/properties schema options)]
-                         {:infinite? (get props :gen/infinite? false)
-                          :NaN? (get props :gen/NaN? false)})
-                       (-> (-min-max schema options)
-                           (update :min #(some-> % double))
-                           (update :max #(some-> % double))))
-                options))
-(defmethod -schema-generator :float [schema options]
-  (let [props (m/properties schema options)]
-    (-float-gen* (merge {:infinite? (get props :gen/infinite? false)
-                         :NaN? (get props :gen/NaN? false)}
-                        (-min-max schema options))
-                 options)))
+(defmethod -schema-generator :double [schema options] (-double-gen* (-min-max schema options) options))
+(defmethod -schema-generator :float [schema options] (-float-gen* (-min-max schema options) options))
 (defmethod -schema-generator :boolean [_ _] gen/boolean)
 (defmethod -schema-generator :keyword [_ _] gen/keyword)
 (defmethod -schema-generator :symbol [_ _] gen/symbol)
