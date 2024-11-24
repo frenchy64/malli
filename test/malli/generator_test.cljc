@@ -1103,9 +1103,7 @@
       (is (= '({-1 false}
                {-4399 true, 59 false, -4049 false, -49 false, -1 false, 15 false, -967 false, -3 false, -674 false, 2730 true, -2104 false, 3 false, -444 true, 8 false}
                {119 true, 1324 false, 7276 false, -2410 true})
-             (filter map? (mg/sample [op [:tuple :int :boolean]] {:seed 1 :size 30}))))
-      (dotimes [_ 100]
-        (is (not-any? nil? (mg/sample [op {:min 1} :any])))))))
+             (filter map? (mg/sample [op [:tuple :int :boolean]] {:seed 1 :size 30})))))))
 
 (deftest double-with-long-min-test
   (is (m/validate :double (shrink [:double {:min 3}])))
@@ -1144,34 +1142,6 @@
   (doseq [f [pos? neg? pos-int? neg-int? nat-int? number? integer? int? float?]]
     (testing (pr-str f)
       (is (every? f (mg/sample f {:size 100}))))))
-
-(deftest number-gen-bounds-test
-  (doseq [s [[:> Double/MAX_VALUE]
-             ;;TODO
-             ;;[:>= ##NaN]
-             ;;[:= ##NaN]
-             [:< ##NaN]
-             [:> ##NaN]
-             [:> ##Inf]
-             [:< ##-Inf]]]
-    (testing (pr-str s)
-      (is (thrown-with-msg?
-            #?(:clj Exception, :cljs js/Error)
-            #":malli\.generator/invalid-bounds"
-            (mg/generate s)))))
-  (is (= 1.0 (shrink [:>= (- Double/MAX_VALUE)])))
-  (is (shrink [:>= (/ (- Double/MAX_VALUE) 2)]))
-  (is (shrink [:<= (/ (- Double/MAX_VALUE) 2)]))
-  (is (shrink [:>= (/ Double/MAX_VALUE 2)]))
-  (is (shrink [:<= (/ Double/MAX_VALUE 2)]))
-  (is (= 1.0 (shrink [:< ##Inf])))
-  (is (= 1.0 (shrink [:> ##-Inf])))
-  (is (= 1.0 (shrink [:<= Double/MAX_VALUE])))
-  ;; FIXME underlying generators don't seem to handle these well
-  (is (= (- Double/MAX_VALUE) (shrink [:<= (- Double/MAX_VALUE)])))
-  ;;(is (= (- Double/MAX_VALUE) (shrink [:double {:max (- Double/MAX_VALUE)}])))
-  (is (= Double/MAX_VALUE (shrink [:>= Double/MAX_VALUE])))
-  (is (= 1.0 (shrink [:<= Double/MAX_VALUE]))))
 
 (deftest and-schema-solver-test
   (is (thrown-with-msg?

@@ -31,10 +31,7 @@ Malli is in well matured [alpha](README.md#alpha).
 * `pos?`/`neg?` generators now generate from the closest double up/down from zero
   * note: will change seeds
 * `[:> n]`/`[:< n]` generators now generate from the closest double up/down from n
-  * throws if resulting numbers are infinite or NaN
   * note: will change seeds
-* FIX: `[:> Double/MAX_VALUE]` generates `Double/MAX_VALUE` [#1035](https://github.com/metosin/malli/issues/1035)
-* FIX: `:seqable`/`:every` generates `nil` when `:min` is positive [#1121](https://github.com/metosin/malli/issues/1121)
 * Updated dependencies:
 
 ```
