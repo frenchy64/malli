@@ -2,14 +2,12 @@
   (:require [clojure.core :as c]
             [clojure.math :as math]
             [clojure.math.combinatorics :as comb]
+            [clojure.set :as set]
             [malli.core :as m]
-            [malli.impl.util :refer [-merge]]))
+            [malli.impl.util :refer [-merge]]
+            [malli.util :as mu]))
 
-;; known constraints
-;; :type              a keyword describing the value type
-;; :{min,max}-number  numbers describing value {minimum,maximum} bounds
-
-(declare solve)
+(declare solve -intersect)
 
 (defn- -intersect-number-constraints [all-sols mink maxk]
   (let [maxv (some->> (seq (keep maxk all-sols)) (apply c/min))
@@ -36,16 +34,65 @@
     [{}]))
 
 (def ^:private type-super
-  {:int #{:number}})
+  {:int #{:number}
+   :list #{:counted :sequential :coll}
+   :vector #{:counted :indexed :sequential :coll}
+   :map #{:counted :indexed :coll}
+   :set #{:counted :indexed :coll}
+   :sequential #{:coll}
+   :coll #{:seqable}})
 
 (defn- -type-supers [t] (into #{} (mapcat #(cons % (-type-supers %))) (type-super t)))
 
 (defn- -type-constraints [all-sols]
-  (when-some [types (not-empty (into #{} (map :type) all-sols))]
+  (when-some [types (not-empty (into #{} (keep :type) all-sols))]
     (let [remove-redundant (reduce (fn [acc t] (apply disj acc (-type-supers t))) types types)]
       (mapv #(hash-map :type %) remove-redundant))))
 
 (defn- -intersect-type [all-sols] (or (-type-constraints all-sols) [{}]))
+
+(defn- -intersect-map [all-sols]
+  (let [keysets (keep :keyset all-sols)
+        gets (keep :get all-sols)
+        open-maps (keep :open-map all-sols)
+        keyss (keep :keys all-sols)
+        valss (keep :vals all-sols)
+        default-keyss (keep :default-keys all-sols)
+        default-valss (keep :default-vals all-sols)
+        intersect-get (apply merge-with #(-intersect %&) gets)
+        intersect-keyset (apply merge-with
+                                (fn [l r]
+                                  (or (when (= l r) l)
+                                      (when (and (every? #{:present :absent} [l r])
+                                                 (not= l r))
+                                        :contradiction)
+                                      (when (some #{:absent} [l r]) :absent)
+                                      (when (some #{:present} [l r]) :present)
+                                      (m/-fail! ::unrecognized-keyset-solution {:l l :r r})))
+                                keysets)
+        unsatisfiable-keyset (some #{:contradiction} (vals intersect-keyset))
+        unsatisfiable-open-map (some->> (seq open-maps) (apply not=))
+        absent-keys (mapcat (fn [[k v]] (when (= :absent v) [k])) intersect-keyset)
+        intersect-get (apply dissoc intersect-get absent-keys)
+        intersect-keys (-intersect keyss)
+        intersect-vals (-intersect valss)
+        intersect-default-keys (-intersect default-keyss)
+        intersect-default-vals (-intersect default-valss)
+        contradiction (or unsatisfiable-keyset unsatisfiable-open-map
+                          (some empty? (concat (vals intersect-get)
+                                               [intersect-keys intersect-vals
+                                                intersect-default-keys intersect-default-vals])))]
+    (cond-> []
+      (not contradiction)
+      (conj (cond-> {}
+              (seq intersect-keyset) (assoc :keyset intersect-keyset)
+              (seq intersect-get) (assoc :get intersect-get)
+              ;;TODO combine keys and default-keys
+              (not= [{}] intersect-keys) (assoc :keys intersect-keys)
+              (not= [{}] intersect-vals) (assoc :vals intersect-vals)
+              (not= [{}] intersect-default-keys) (assoc :default-keys intersect-default-keys)
+              (not= [{}] intersect-default-vals) (assoc :default-vals intersect-default-vals)
+              (seq open-maps) (assoc :open-map (first open-maps)))))))
 
 (defn -intersect [sols]
   (letfn [(rec [cart-sols]
@@ -54,26 +101,36 @@
                 (when-some [unsupported-keys (not-empty
                                                (disj (into #{} (mapcat keys) all-sols)
                                                      :type
+                                                     :keys :vals :default-keys :default-vals
+                                                     :keyset :get :open-map
                                                      :max-count :min-count
                                                      :max-number :min-number))]
                   (m/-fail! ::unsupported-solution {:unsupported-keys unsupported-keys}))
                 (let [type-constraints (-intersect-type all-sols)
                       number-solutions (-intersect-min-max all-sols)
-                      combined-sols (comb/cartesian-product type-constraints number-solutions)]
+                      ;;TODO contains number constraints
+                      map-constraints (-intersect-map all-sols)
+                      combined-sols (comb/cartesian-product type-constraints number-solutions map-constraints)]
                   (if (empty? combined-sols)
                     []
+                    ;;TODO check solutions are compatible and/or merge them
+                    ;; e.g., [:and [:map [:a :int]] empty?] gets count from two different places
                     (concat (map #(apply merge %) combined-sols)
                             (rec (rest cart-sols))))))))]
-    (distinct (rec (apply comb/cartesian-product (distinct sols))))))
+    (if (empty? sols)
+      [{}]
+      (distinct (rec (apply comb/cartesian-product (distinct sols)))))))
 
-(defn- -min-max-number [stype schema {::keys [mode]}]
+(defn- -min-max-* [stype schema mink maxk {::keys [mode]}]
   (let [{gen-min :gen/min gen-max :gen/max :keys [min max]} (m/properties schema)]
     [(cond-> {:type stype}
-       min (assoc :min-number min)
-       max (assoc :max-number max)
+       min (assoc mink min)
+       max (assoc maxk max)
        (= :gen mode) (cond->
-                       gen-min (assoc :min-number gen-min)
-                       gen-max (assoc :max-number gen-max)))]))
+                       gen-min (assoc mink gen-min)
+                       gen-max (assoc maxk gen-max)))]))
+
+(defn- -min-max-number [stype schema options] (-min-max-* stype schema :min-number :max-number options))
 
 (defmulti -solve (fn [schema options] (m/type schema)))
 
@@ -94,9 +151,11 @@
              (-solve-from-schema props options)))
          (-solve schema options)))))
 
+(defn -union [sols] (apply concat sols))
+
 (defmethod -solve :any [schema options] [{}])
 (defmethod -solve :and [schema options] (-intersect (map #(solve % options) (m/children schema))))
-(defmethod -solve :or [schema options] (mapcat #(solve % options) (m/children schema)))
+(defmethod -solve :or [schema options] (-union (map #(solve % options) (m/children schema))))
 (defmethod -solve :<= [schema options] [{:type :number :max-number (first (m/children schema))}])
 (defmethod -solve :>= [schema options] [{:type :number :min-number (first (m/children schema))}])
 (defmethod -solve :< [schema options] [{:type :number :max-number (math/next-down (first (m/children schema)))}])
@@ -118,5 +177,69 @@
 (defmethod -solve 'sequential? [schema options] [{:type :sequential}])
 (defmethod -solve 'set? [schema options] [{:type :set}])
 (defmethod -solve 'vector? [schema options] [{:type :vector}])
+
+(defn- -min-max-count [stype schema options] (-min-max-* stype schema :min-count :max-count options))
+
+(defmethod -solve :tuple [schema options]
+  (let [children (m/children schema)
+        len (count children)
+        sols (into {} (map-indexed (fn [i c] [i (solve c options)])) children)]
+    [{:type :vector
+      :min-count len :max-count len
+      :elements (-union (vals sols))
+      :nth sols}]))
+
+(defn- -solve-collection-schema [stype schema options]
+  (mapv #(assoc % :elements (solve (mu/get schema 0) options))
+        (-min-max-count stype schema options)))
+
+(defmethod -solve :vector [schema options] (-solve-collection-schema :vector schema options))
+(defmethod -solve :seqable [schema options] (-solve-collection-schema :seqable schema options))
+(defmethod -solve :every [schema options] (-solve-collection-schema :seqable schema options))
+(defmethod -solve :set [schema options] (-solve-collection-schema :set schema options))
+(defmethod -solve :sequential [schema options] (-solve-collection-schema :sequential schema options))
+
+(defmethod -solve :map-of [schema options]
+  (let [ks (solve (mu/get schema 0) options)
+        vs (solve (mu/get schema 1) options)
+        extra (cond-> {:open-map false}
+                (not= ks [{}]) (assoc :keys ks)
+                (not= vs [{}]) (assoc :vals vs))]
+    (mapv #(into % extra) (-min-max-count :map schema options))))
+
+(defmethod -solve :map [schema options]
+  (let [default (m/default-schema schema)
+        entries (into {} (comp (if default
+                                 (remove m/-default-entry)
+                                 identity)
+                               (map (fn [[k v]]
+                                      [k {:props (m/properties v)
+                                          :schema (mu/get v 0)}])))
+                      (m/entries schema))
+        base-keyset (into {} (map (fn [[k {{:keys [optional]} :props}]]
+                                    [k (if optional :optional :present)]))
+                          entries)
+        base-get (into {} (map (fn [[k {:keys [schema]}]]
+                                 [k (solve schema options)]))
+                       entries)
+        {base-closed :closed} (m/properties schema)
+        default-solutions (when default
+                            (mapv (fn [solution]
+                                    (-> solution
+                                        (set/rename-keys {:keys :default-keys
+                                                          :vals :default-vals})
+                                        (update :get #(apply dissoc % (keys base-keyset)))
+                                        (update :keyset #(apply dissoc % (keys base-keyset)))))
+                                  (solve default options)))
+        closed (when-not default (-> schema m/properties :closed boolean))
+        min-count (count (remove (comp :optional :props val) entries))
+        max-count (when closed (count entries))]
+    (cond-> [(cond-> {:type :map}
+               (seq base-get) (assoc :get base-get)
+               (seq base-keyset) (assoc :keyset base-keyset)
+               (some? closed) (assoc :open-map (not closed))
+               (pos? min-count) (assoc :min-count min-count)
+               max-count (assoc :max-count max-count))]
+      default-solutions (-> (vector default-solutions) -intersect))))
 
 (defmethod -solve :default [schema options] [{}])
