@@ -161,20 +161,22 @@
       :else gen/string-alphanumeric)))
 
 (defn- -first-child [schema options] (first (m/children schema options)))
-(defn- -gen-first-child [schema options] (generator (-first-child schema) options))
+(defn- -gen-first-child [schema options] (generator (-first-child schema options) options))
 
 (defn- -coll-gen [schema f options]
-  (let [{:keys [min max]} (-min-max schema options)]
-    (if-some [gen (-not-unreachable (-gen-first-child schema options))]
-      (gen/fmap f (cond
-                    (and min (= min max)) (gen/vector gen min)
-                    (and min max) (gen/vector gen min max)
-                    min (gen-vector-min gen min options)
-                    max (gen/vector gen 0 max)
-                    :else (gen/vector gen)))
-      (if (= 0 (or min 0))
-        (gen/fmap f (gen/return []))
-        (-never-gen options)))))
+  (-solve-each (fn [solution options]
+                 (let [{:keys [min max]} (-min-max schema options)]
+                   (if-some [gen (-not-unreachable (-gen-first-child schema options))]
+                     (gen/fmap f (cond
+                                   (and min (= min max)) (gen/vector gen min)
+                                   (and min max) (gen/vector gen min max)
+                                   min (gen-vector-min gen min options)
+                                   max (gen/vector gen 0 max)
+                                   :else (gen/vector gen)))
+                     (if (= 0 (or min 0))
+                       (gen/fmap f (gen/return []))
+                       (-never-gen options)))))
+               options))
 
 (defn- -coll-distinct-gen [schema f options]
   (let [{:keys [min max]} (-min-max schema options)]
@@ -485,7 +487,10 @@
   (-solve-each (fn [solution options]
                  (let [child (m/-get schema 0 nil)]
                    (when-some [coerce (-coerce-regex-result solution)]
-                     (if-some [g (-not-unreachable (-coll-gen schema identity options))]
+                     (if-some [g (-not-unreachable (-coll-gen schema coerce
+                                                              (cond-> options
+                                                                (not (m/-regex-op? child))
+                                                                (assoc ::solutions [solution]))))]
                        (cond->> g
                          (m/-regex-op? child)
                          (gen/fmap (comp coerce #(apply concat %))))
