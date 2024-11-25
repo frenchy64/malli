@@ -154,10 +154,6 @@
 (defn- -intersect-solution [solution options]
   (update options ::solutions (fn [solutions]
                                 (solver/-intersect [(or solutions [{}]) [solution]]))))
-(comment
-  (solver/-intersect [[{:type :int}] [{:type :number}]])
-  (solver/-intersect [[{:type :set}] [{:type :seqable}]])
-  )
 
 (defn- -string-gen [schema options]
   (->> options
