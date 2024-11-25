@@ -1197,6 +1197,4 @@
             #":malli\.generator/unsatisfiable-schema"
             (mg/generate [:and [re :any] f])))))
   (is (mg/sample [:and [:seqable :any] set?]))
-  #_
-  (is (every? vector? (mg/sample [:and [:cat [:tuple :keyword :keyword]] map?])))
 )

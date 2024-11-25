@@ -28,7 +28,7 @@
   (if-some [sols (when (seq all-sols)
                    (not-empty (into [] (keep (fn [[mink maxk]]
                                                (-intersect-number-constraints all-sols mink maxk)))
-                                    [#_[:min-count :max-count] ;;TODO
+                                    [[:min-count :max-count]
                                      [:min-number :max-number]])))]
     (lazy-seq
       (->> (apply comb/cartesian-product sols)
