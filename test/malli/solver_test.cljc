@@ -36,6 +36,24 @@
   (is (= '({:type :map, :keys [{:type :int}], :open-map false}) (solver/solve [:map-of [:and :any :int] :any])))
   (is (= '({:type :map, :vals [{:type :int}] :open-map false}) (solver/solve [:map-of :any [:and :any :int]]))))
 
+;;encoding map constraints
+(defn contains [& ks]
+  {:pre [(seq ks)
+         (every? #(and (= % %) (not= ::m/default %)) ks)]}
+  (into [:and] (map (fn [k] [:map [k :any]])) ks))
+
+(defn not-contains [& ks]
+  {:pre [(seq ks)
+         (every? #(= % %) ks)]}
+  (into [:and] (map (fn [k] [:map-of [:not= k] :any])) ks))
+
+(defn xor-keys [& ks]
+  (let [ks (into (sorted-set) ks)]
+    (into [:or]
+          (map (fn [k]
+                 (into [:and (contains k)] (map not-contains) (disj ks k))))
+          ks)))
+
 (deftest solver-map-test
   (is (= [{:type :map, :open-map true}] (solver/solve :map)))
   (is (= [{:type :map, :keyset {:a :present} :get {:a [{:type :int}]} :min-count 1 :open-map true}]
@@ -59,16 +77,50 @@
          (solver/solve [:map [:a {:optional true} :int]
                         [::m/default
                          [:map-of :int :int]]])))
-  (is (solver/solve [:map [:a {:optional true} :int]
-                     [::m/default
-                      [:map [:b {:optional true} :int]]]]))
+  (is (= [{:type :map, :get {:a [{:type :int}], :b [{:type :int}]}, :keyset {:a :optional, :b :optional}, :open-map true}]
+         (solver/solve [:map [:a {:optional true} :int]
+                        [::m/default
+                         [:map [:b {:optional true} :int]]]])))
   (is (solver/solve [:and
                      [:map [:a {:optional true} :int]
                       [::m/default
                        [:map-of :int :int]]]
                      [:map]]))
-  (is (solver/solve [:and [:map-of {:min 10} :any :any] empty?]))
+  (is (= (solver/solve [:map-of :int :int])
+         (solver/solve [:and
+                        [:map [:a {:optional true} :int]]
+                        [:map-of :int :int]])))
+  (is (seq (solver/solve [:and
+                          [:map [0 :boolean]]
+                          [:map-of :int :int]])))
+  (is (empty? (solver/solve [:and
+                             [:map [:a :int]]
+                             [:map-of :int :int]])))
+  (is (seq (solver/solve [:and
+                          [:map [0 :map]]
+                          [:map-of :int :int]])))
+  (is (empty? (solver/solve [:and [:map-of {:min 10} :any :any] empty?])))
+  ;;required entry
+  (is (= [{:get {:a [{:type :int}]}, :type :map, :keyset {:a :present}, :min-count 1, :open-map true}]
+         (solver/solve [:and
+                        [:map
+                         [:a {:optional true} :int]]
+                        (contains :a)])))
+  ;;forbidden entry
+  (is (= [{:type :map :open-map true :keyset {:a :absent}}]
+         (solver/solve [:and
+                        [:map
+                         [:a {:optional true} :int]]
+                        (not-contains :a)])))
+  ;;exactly one entry
+  (is (seq (solver/solve [:and
+                          [:map
+                           [:a {:optional true} :int]
+                           [:b {:optional true} :int]
+                           [:c {:optional true} :int]]
+                          (xor-keys :a :b :c)])))
   )
+
 (comment
   (m/validate [:map {:closed true} [:a {:optional true} :int]
                [::m/default
