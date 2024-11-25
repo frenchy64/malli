@@ -1,5 +1,5 @@
 (ns malli.solver-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
             [malli.core :as m]
             [malli.solver :as solver]))
 
@@ -81,18 +81,34 @@
          (solver/solve [:map [:a {:optional true} :int]
                         [::m/default
                          [:map [:b {:optional true} :int]]]])))
-  (is (solver/solve [:and
-                     [:map [:a {:optional true} :int]
-                      [::m/default
-                       [:map-of :int :int]]]
-                     [:map]]))
+  (is (= [{:get {:a [{:type :int}]}, :type :map, :default-vals [{:type :int}],
+           :default-keys [{:type :int}], :keyset {:a :optional}, :open-map false}]
+         (solver/solve [:and
+                        [:map [:a {:optional true} :int]
+                         [::m/default
+                          [:map-of :int :int]]]
+                        [:map]])))
+  (testing "combine :keys and :default-keys"
+    (is (= [{:type :map, :get {0 [{:type :int}]},
+             :keys [{:type :int}], :vals [{:type :int}],
+             :default-keys [{:type :int}], :default-vals [{:type :int}],
+             :keyset {0 :optional},
+             :open-map false}]
+           (solver/solve [:and
+                          [:map [0 {:optional true} :int]
+                           [::m/default
+                            [:map-of :int :int]]]
+                          [:map-of :int :int]]))))
+  ;;TODO filter out impossible keys
   (is (= (solver/solve [:map-of :int :int])
          (solver/solve [:and
                         [:map [:a {:optional true} :int]]
                         [:map-of :int :int]])))
-  (is (seq (solver/solve [:and
-                          [:map [0 :boolean]]
-                          [:map-of :int :int]])))
+  ;;TODO filter out impossible keys
+  (is (empty? (solver/solve [:and
+                             [:map [0 :boolean]]
+                             [:map-of :int :int]])))
+  ;;TODO filter out impossible keys
   (is (empty? (solver/solve [:and
                              [:map [:a :int]]
                              [:map-of :int :int]])))

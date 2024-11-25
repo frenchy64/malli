@@ -52,6 +52,7 @@
 (defn- -intersect-type [all-sols] (or (-type-constraints all-sols) [{}]))
 
 (defn- -intersect-map [all-sols]
+  (prn "-intersect-map" all-sols)
   (let [keysets (keep :keyset all-sols)
         gets (keep :get all-sols)
         open-maps (keep :open-map all-sols)
@@ -71,17 +72,31 @@
                                       (m/-fail! ::unrecognized-keyset-solution {:l l :r r})))
                                 keysets)
         unsatisfiable-keyset (some #{:contradiction} (vals intersect-keyset))
-        unsatisfiable-open-map (some->> (seq open-maps) (apply not=))
+        intersect-open-map (some->> (seq open-maps) (not-any? false?))
         absent-keys (mapcat (fn [[k v]] (when (= :absent v) [k])) intersect-keyset)
         intersect-get (apply dissoc intersect-get absent-keys)
         intersect-keys (-intersect keyss)
         intersect-vals (-intersect valss)
         intersect-default-keys (-intersect default-keyss)
         intersect-default-vals (-intersect default-valss)
-        contradiction (or unsatisfiable-keyset unsatisfiable-open-map
-                          (some empty? (concat (vals intersect-get)
-                                               [intersect-keys intersect-vals
-                                                intersect-default-keys intersect-default-vals])))]
+        contradiction (or (and unsatisfiable-keyset [:unsatisfiable-keyset intersect-keyset])
+                          (some #(when (empty? (val %)) %)
+                                (into (into {} (map (fn [[k v]] [[:intersect-get k] v])) intersect-get)
+                                      (cond-> {:intersect-keys intersect-keys 
+                                               :intersect-vals intersect-vals
+                                               :intersect-default-keys intersect-default-keys 
+                                               :intersect-default-vals intersect-default-vals}
+                                        ;; how does this interact with :open-map?
+                                        #_#_
+                                        (seq intersect-keys) (assoc :intersect-keys+get
+                                                                    (-intersect (concat intersect-keys
+                                                                                        (map #(do [{:= #{%}}]) (keys intersect-get)))))
+                                        #_#_
+                                        (seq intersect-vals) (assoc :intersect-vals+get
+                                                                    (-intersect (concat intersect-vals
+                                                                                        (vals intersect-get))))
+                                        ))))]
+    (prn "contradiction" contradiction)
     (cond-> []
       (not contradiction)
       (conj (cond-> {}
@@ -92,7 +107,7 @@
               (not= [{}] intersect-vals) (assoc :vals intersect-vals)
               (not= [{}] intersect-default-keys) (assoc :default-keys intersect-default-keys)
               (not= [{}] intersect-default-vals) (assoc :default-vals intersect-default-vals)
-              (seq open-maps) (assoc :open-map (first open-maps)))))))
+              (some? intersect-open-map) (assoc :open-map intersect-open-map))))))
 
 (defn -intersect [sols]
   (letfn [(rec [cart-sols]
@@ -166,6 +181,11 @@
 (defmethod -solve :double [schema options] (-min-max-number :double schema options))
 (defmethod -solve :float [schema options] (-min-max-number :double schema options))
 (defmethod -solve 'zero? [schema options] [{:type :number :min-number 0 :max-number 0}])
+
+;;TODO test
+(defmethod -solve := [schema options] [{:= #{(first (m/children schema))}}])
+(defmethod -solve :enum [schema options] [{:= (set (m/children schema))}])
+(defmethod -solve :not= [schema options] [{:not= #{(first (m/children schema))}}])
 
 (defmethod -solve 'coll? [schema options] [{:type :coll}])
 (defmethod -solve 'empty? [schema options] (mapv #(do {:type % :min-count 0 :max-count 0}) [:counted :seqable]))
