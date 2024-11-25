@@ -1186,15 +1186,20 @@
         #":malli\.generator/unsatisfiable-schema"
         (mg/generate [:and [:* :any] set?])))
   (doseq [f [coll? vector? list? sequential? seqable?]
-          re [:* :? :+ :repeat]]
+          re [:* :? :+ :repeat :seqable]]
     (testing (pr-str (-> f m/schema m/form) re)
       (is (every? f (mg/sample [:and [re :any] f])))))
   (doseq [f [set? map?]
-          re [:* :? :+ :repeat]]
+          re [:* :? :+ :repeat
+              ;;TODO
+              ;:vector
+              ]]
     (testing (pr-str (-> f m/schema m/form) re)
       (is (thrown-with-msg?
             #?(:clj Exception, :cljs js/Error)
             #":malli\.generator/unsatisfiable-schema"
             (mg/generate [:and [re :any] f])))))
-  (is (mg/sample [:and [:seqable :any] set?]))
+  (is (every? set? (mg/sample [:and [:seqable :any] set?])))
+  ;TODO unreachable
+  ;(is (every? set? (mg/sample [:and [:vector :any] list?])))
 )

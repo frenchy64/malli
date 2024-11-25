@@ -151,6 +151,16 @@
                                           :generator gen
                                           :min min})))
 
+(defn- -intersect-solution [solution options]
+  (prn "-intersect-solution" solution)
+  (update options ::solutions (fn [solutions]
+                                (prn "solutions" solutions)
+                                (solver/-intersect [(or solutions [{}]) [solution]]))))
+(comment
+  (solver/-intersect [[{:type :int}] [{:type :number}]])
+  (solver/-intersect [[{:type :set}] [{:type :seqable}]])
+  )
+
 (defn- -string-gen [schema options]
   (->> options
        (-intersect-solution (let [{:keys [min max]} (-min-max schema options)]
@@ -178,11 +188,6 @@
     (do (println "Unknown regex result solution type" (:type solution))
         identity)))
 
-(defn- -intersect-solution [solution options]
-  (update options ::solutions #(if %
-                                 (solver/-intersect (conj % solution))
-                                 [solution])))
-
 (defn- -coll-gen [schema solution options]
   (->> options
        (-intersect-solution (let [{:keys [min max]} (-min-max schema options)]
@@ -209,7 +214,7 @@
     :object-array #(into-array #?(:clj Object) %)
     :list #(apply list %)
     :map #(into {} (map vec) %)
-    :set set?
+    :set set
     (:int :double :number) nil
     (do (println "Unknown regex result solution type" (:type solution))
         identity)))
@@ -221,6 +226,7 @@
                                 min (assoc :min-count min)
                                 max (assoc :max-count max))))
        (-solve-each (fn [{min :min-count max :max-count :as solution} options]
+                      (prn "-coll-distinct-gen solution" solution)
                       (when-some [f (-coerce-coll-distinct-result solution)]
                         (if-some [gen (-not-unreachable (-gen-child schema options))]
                           (gen/fmap f (gen/vector-distinct gen {:min-elements min, :max-elements max, :max-tries 100
@@ -252,13 +258,15 @@
         (gen/one-of gs)))))
 
 (defn- -seqable-gen [schema options]
+  (prn "-seqable-gen" (-min-max schema options))
   (->> options
        (-intersect-solution (let [{:keys [min max]} (-min-max schema options)]
                               (cond-> {:type :seqable}
                                 min (assoc :min-count min)
                                 max (assoc :max-count max))))
        (-solve-each (fn [{min :min-count :as solution} options]
-                      (let [el (-gen-child schema options)]
+                      (prn "-solve-each :seqable" solution)
+                      (let [el (-first-child schema options)]
                         (gen-one-of
                           (-> []
                               (cond->
@@ -603,7 +611,7 @@
 (defmethod -schema-generator :multi [schema options] (-multi-gen schema options))
 (defmethod -schema-generator :vector [schema options] (-coll-gen schema {} options))
 (defmethod -schema-generator :sequential [schema options] (-coll-gen schema {} options))
-(defmethod -schema-generator :set [schema options] (-coll-distinct-gen schema [{:type :set}] options))
+(defmethod -schema-generator :set [schema options] (-coll-distinct-gen schema {:type :set} options))
 (defmethod -schema-generator :enum [schema options] (gen-elements (m/children schema options)))
 (defmethod -schema-generator :seqable [schema options] (-seqable-gen schema options))
 (defmethod -schema-generator :every [schema options] (-seqable-gen schema options)) ;;infinite seqs?
