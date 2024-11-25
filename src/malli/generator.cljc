@@ -152,9 +152,7 @@
                                           :min min})))
 
 (defn- -intersect-solution [solution options]
-  (prn "-intersect-solution" solution)
   (update options ::solutions (fn [solutions]
-                                (prn "solutions" solutions)
                                 (solver/-intersect [(or solutions [{}]) [solution]]))))
 (comment
   (solver/-intersect [[{:type :int}] [{:type :number}]])
@@ -226,7 +224,6 @@
                                 min (assoc :min-count min)
                                 max (assoc :max-count max))))
        (-solve-each (fn [{min :min-count max :max-count :as solution} options]
-                      (prn "-coll-distinct-gen solution" solution)
                       (when-some [f (-coerce-coll-distinct-result solution)]
                         (if-some [gen (-not-unreachable (-gen-child schema options))]
                           (gen/fmap f (gen/vector-distinct gen {:min-elements min, :max-elements max, :max-tries 100
@@ -258,14 +255,12 @@
         (gen/one-of gs)))))
 
 (defn- -seqable-gen [schema options]
-  (prn "-seqable-gen" (-min-max schema options))
   (->> options
        (-intersect-solution (let [{:keys [min max]} (-min-max schema options)]
                               (cond-> {:type :seqable}
                                 min (assoc :min-count min)
                                 max (assoc :max-count max))))
        (-solve-each (fn [{min :min-count :as solution} options]
-                      (prn "-solve-each :seqable" solution)
                       (let [el (-first-child schema options)]
                         (gen-one-of
                           (-> []
@@ -520,25 +515,29 @@
                options))
 
 (defn -*-gen [schema options]
-  (-solve-each (fn [solution options]
-                 (let [child (m/-get schema 0 nil)
-                       mode (::-*-gen-mode options :*)
-                       options (dissoc options ::-*-gen-mode)]
-                   (when-some [coerce (-coerce-regex-result solution)]
-                     (if-some [g (-not-unreachable (generator child options))]
-                       (cond->> (case mode
-                                  :* (gen/vector g)
-                                  :+ (gen-vector-min g 1 options))
-                         (m/-regex-op? child)
-                         (gen/fmap (comp coerce #(apply concat %)))
+  (let [mode (::-*-gen-mode options :*)
+        options (dissoc options ::-*-gen-mode)]
+    (->> options
+         (-intersect-solution {:type :sequential
+                               :min-count (case mode
+                                            :* 0
+                                            :+ 1)})
+         (-solve-each (fn [solution options]
+                        (let [child (m/-get schema 0 nil)]
+                          (when-some [coerce (-coerce-regex-result solution)]
+                            (if-some [g (-not-unreachable (generator child options))]
+                              (cond->> (case mode
+                                         :* (gen/vector g)
+                                         :+ (gen-vector-min g 1 options))
+                                (m/-regex-op? child)
+                                (gen/fmap (comp coerce #(apply concat %)))
 
-                         (and (not (m/-regex-op? child))
-                              (some-> (:type solution) (not= :vector)))
-                         (gen/fmap coerce))
-                       (case mode
-                         :* (gen/return (coerce ()))
-                         :+ (-never-gen options))))))
-               options))
+                                (and (not (m/-regex-op? child))
+                                     (some-> (:type solution) (not= :vector)))
+                                (gen/fmap coerce))
+                              (case mode
+                                :* (gen/return (coerce ()))
+                                :+ (-never-gen options))))))))))
 
 (defn -+-gen [schema options]
   (-*-gen schema (assoc options ::-*-gen-mode :+)))
@@ -547,7 +546,7 @@
   (-solve-each (fn [solution options]
                  (let [child (m/-get schema 0 nil)]
                    (when-some [coerce (-coerce-regex-result solution)]
-                     (if-some [g (-not-unreachable (-coll-gen schema (if (m/-regex-op? child) {} solution) options))]
+                     (if-some [g (-not-unreachable (-coll-gen schema (if (m/-regex-op? child) {:type :sequential} solution) options))]
                        (cond->> g
                          (m/-regex-op? child)
                          (gen/fmap (comp coerce #(apply concat %))))
@@ -609,8 +608,8 @@
 (defmethod -schema-generator :map [schema options] (-map-gen schema options))
 (defmethod -schema-generator :map-of [schema options] (-map-of-gen schema options))
 (defmethod -schema-generator :multi [schema options] (-multi-gen schema options))
-(defmethod -schema-generator :vector [schema options] (-coll-gen schema {} options))
-(defmethod -schema-generator :sequential [schema options] (-coll-gen schema {} options))
+(defmethod -schema-generator :vector [schema options] (-coll-gen schema {:type :vector} options))
+(defmethod -schema-generator :sequential [schema options] (-coll-gen schema {:type :sequential} options))
 (defmethod -schema-generator :set [schema options] (-coll-distinct-gen schema {:type :set} options))
 (defmethod -schema-generator :enum [schema options] (gen-elements (m/children schema options)))
 (defmethod -schema-generator :seqable [schema options] (-seqable-gen schema options))

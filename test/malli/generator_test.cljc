@@ -1189,10 +1189,20 @@
           re [:* :? :+ :repeat :seqable]]
     (testing (pr-str (-> f m/schema m/form) re)
       (is (every? f (mg/sample [:and [re :any] f])))))
+  (doseq [f [empty?]
+          re [:* :? :repeat :seqable]]
+    (testing (pr-str (-> f m/schema m/form) re)
+      (is (every? f (mg/sample [:and [re :any] f])))))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.generator/unsatisfiable-schema"
+        (mg/generate [:and [:+ :any] empty?])))
   (doseq [f [set? map?]
-          re [:* :? :+ :repeat
+          re [:? :repeat
               ;;TODO
               ;:vector
+              :sequential
+              ;; :* :+
               ]]
     (testing (pr-str (-> f m/schema m/form) re)
       (is (thrown-with-msg?
