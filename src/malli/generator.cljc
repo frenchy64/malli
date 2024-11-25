@@ -95,8 +95,6 @@
 ;; double/long bounds coincide with test.check
 (def ^:private -max-double #?(:clj Double/MAX_VALUE :cljs (.-MAX_VALUE js/Number)))
 (def ^:private -min-double (- -max-double))
-(def ^:private -max-float #?(:clj Float/MAX_VALUE :cljs (.-MAX_VALUE js/Number)))
-(def ^:private -min-float (- -max-float))
 (def ^:private -max-long #?(:clj Long/MAX_VALUE :cljs (dec (apply * (repeat 53 2)))))
 (def ^:private -min-long #?(:clj Long/MIN_VALUE :cljs (- -max-long)))
 
@@ -116,44 +114,6 @@
        (or (not max) (and (not (infinite? max))
                           (<= max ub)))
        (or (not (and min max)) (<= min max))))
-
-(defn- -float-ceil  [d] #?(:cljs (float d) :clj (loop [f (float d)] (cond-> f (< f d) (-> Math/nextUp recur)))))
-(defn- -float-floor [d] #?(:cljs (float d) :clj (loop [f (float d)] (cond-> f (< d f) (-> Math/nextDown recur)))))
-
-(defn- -reachable-float*-options [{:keys [min max] :as goptions}]
-  (when (-finite-bounds-between? min max -min-float -max-float)
-    (let [fmin (some-> min -float-ceil)
-          fmax (some-> max -float-floor)
-          preserved-float-bounds? (<= min fmin fmax max)]
-      (when preserved-float-bounds?
-        (-> goptions
-            (assoc :min (or fmin #?(:clj -min-float :cljs nil)))
-            (assoc :max (or fmax #?(:clj -max-float :cljs nil)))
-            (update :infinite? #(if (some? %) % false))
-            (update :NaN? #(if (some? %) % false)))))))
-
-(defn- -float-within [d min max]
-  (float
-    #?(:cljs d
-       :clj (if (= ##Inf d)
-              Float/POSITIVE_INFINITY
-              (if (= ##-Inf d)
-                Float/NEGATIVE_INFINITY
-                (if (= ##NaN d)
-                  Float/NaN
-                  (let [good (fn [f] (when (<= min f max) f))]
-                    (or (good (float d))
-                        (good (-float-ceil min))
-                        (good (-float-floor max))
-                        (m/-fail! ::could-not-coerce-float {:number d :min min :max max})))))))))
-
-(defn- -float-gen* [goptions options]
-  (-solve-each
-    (fn [solution options]
-      (if-some [{:keys [min max] :as goptions} (-reachable-float*-options (-with-number-bounds goptions solution))]
-        (gen/fmap (gen/double* goptions) #(-float-within % min max))
-        (-never-gen options)))
-    options))
 
 (defn- -reachable-double*-options [{:keys [min max] :as goptions}]
   (when (-finite-bounds-between? min max -min-double -max-double)
@@ -192,7 +152,6 @@
                        (case stype
                          (nil :number) (gen-one-of (mapv gen-type [:int :double]) options)
                          :int (-int-gen* goptions options)
-                         :float (-float-gen* goptions options)
                          :double (-double-gen* goptions options)
                          (-never-gen options)))]
         (gen-type (:type solution))))
@@ -592,7 +551,7 @@
   (-solve-each (fn [solution options]
                  (case (:type solution)
                    nil (ga/gen-for-pred any?)
-                   (:int :double :float :number) (generator number? options)))
+                   (:int :double :number) (generator number? options)))
                options))
 
 (defmethod -schema-generator :any [_ options] (-any-gen* options))
@@ -601,7 +560,7 @@
 (defmethod -schema-generator :string [schema options] (-string-gen schema options))
 (defmethod -schema-generator :int [schema options] (-int-gen* (-min-max schema options) options))
 (defmethod -schema-generator :double [schema options] (-double-gen* (-min-max schema options) options))
-(defmethod -schema-generator :float [schema options] (-float-gen* (-min-max schema options) options))
+(defmethod -schema-generator :float [schema options] (-double-gen* (-min-max schema options) options))
 (defmethod -schema-generator :boolean [_ _] gen/boolean)
 (defmethod -schema-generator :keyword [_ _] gen/keyword)
 (defmethod -schema-generator :symbol [_ _] gen/symbol)
