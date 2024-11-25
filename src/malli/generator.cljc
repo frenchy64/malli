@@ -423,8 +423,8 @@
 
 (defn- -coerce-regex-result [solution]
   (case (:type solution)
-    (:counted :indexed :vector) vec
-    (nil :coll :seq :sequential :seqable) sequence
+    (:counted :indexed :vector :sequential) vec
+    (nil :coll :seq :seqable) sequence
     :list (comp #(do (assert (list? %)) %) #(apply list %))
     (:int :double :number :map :set) nil
     (do (println "Unknown regex result solution type" (:type solution))
