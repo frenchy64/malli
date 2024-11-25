@@ -92,7 +92,6 @@
 (defn- -solve-each [f {::keys [solutions] :as options}]
   (gen-one-of (into [] (keep #(f % (assoc options ::solutions [%]))) (or solutions [{}])) options))
 
-;; double/long bounds coincide with test.check
 (def ^:private -max-double #?(:clj Double/MAX_VALUE :cljs (.-MAX_VALUE js/Number)))
 (def ^:private -min-double (- -max-double))
 (def ^:private -max-long #?(:clj Long/MAX_VALUE :cljs (dec (apply * (repeat 53 2)))))
@@ -421,13 +420,28 @@
 (defn- entry->schema [e] (if (vector? e) (get e 2) e))
 
 (defn -cat-gen [schema options]
-  (let [gs (->> (m/children schema options)
-                (map #(-regex-generator (entry->schema %) options)))]
-    (if (some -unreachable-gen? gs)
-      (-never-gen options)
-      (->> gs
-           (apply gen/tuple)
-           (gen/fmap #(apply concat %))))))
+  (-solve-each (fn [solution options]
+                 (prn "solution" solution)
+                 (let [gs (->> (m/children schema options)
+                               (map #(-regex-generator (entry->schema %)
+                                                       ;; clears solution as we descend a :path level
+                                                       ;; we need a current path to view solution by
+                                                       (dissoc options ::solutions))))]
+                   (if (some -unreachable-gen? gs)
+                     (-never-gen options)
+                     (->> gs
+                          (apply gen/tuple)
+                          (gen/fmap (comp
+                                      (case (:type solution)
+                                        (:counted :indexed :vector) vec
+                                        :set set
+                                        :map #(into {} (map vec) %)
+                                        :list #(apply list %)
+                                        (nil :coll :seq :sequential :seqable) identity
+                                        (do (println "Unknown -cat-gen solution type" (:type solution))
+                                            identity))
+                                      #(apply concat %)))))))
+               options))
 
 (defn -alt-gen [schema options]
   (gen-one-of (mapv #(-regex-generator (entry->schema %) options) (m/children schema options)) options))
@@ -539,7 +553,9 @@
   (-solve-each (fn [solution options]
                  (case (:type solution)
                    nil (ga/gen-for-pred any?)
-                   (:int :double :number) (generator number? options)))
+                   (:int :double :number) (generator number? options)
+                   (:vector) (generator vector? options)
+                   ))
                options))
 
 (defmethod -schema-generator :any [_ options] (-any-gen* options))

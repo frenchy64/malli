@@ -1144,6 +1144,7 @@
       (is (every? f (mg/sample f {:size 100}))))))
 
 (deftest and-schema-solver-test
+  ;;numbers
   (is (thrown-with-msg?
         #?(:clj Exception, :cljs js/Error)
         #":malli\.generator/unsatisfiable-schema"
@@ -1170,4 +1171,13 @@
   (is (mg/generate [:and [:<= 3] [:fn {:gen/schema neg?} #(< % 0)]] {:seed 0}))
   (is (mg/sample [:and :int [:fn {:gen/schema neg?} #(< % 0)]]))
   (is (mg/sample [:and :any :int]))
-  (is (mg/sample [:and :int :any])))
+  (is (mg/sample [:and :int :any]))
+
+  ;;collections
+  (is (every? vector? (mg/sample [:and [:cat :keyword] vector?])))
+  (is ((every-pred #(some vector? %) #(some list? %)) (mg/sample [:and [:cat :keyword] [:or list? vector?]] {:size 50})))
+  (is (every? list? (mg/sample [:and [:cat :keyword] list?])))
+  (is (every? vector? (mg/sample [:and [:cat :keyword [:* :any]] vector?])))
+  #_
+  (is (every? vector? (mg/sample [:and [:cat [:tuple :keyword :keyword]] map?])))
+)
