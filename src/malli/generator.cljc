@@ -90,7 +90,7 @@
      :max (or gen-max max)}))
 
 (defn- -solve-each [f {::keys [solutions] :as options}]
-  (gen-one-of (mapv #(f % (assoc options ::solutions [%])) (or solutions [{}])) options))
+  (gen-one-of (into [] (keep #(f % (assoc options ::solutions [%]))) (or solutions [{}])) options))
 
 ;; double/long bounds coincide with test.check
 (def ^:private -max-double #?(:clj Double/MAX_VALUE :cljs (.-MAX_VALUE js/Number)))
@@ -122,40 +122,28 @@
         (update :NaN? #(if (some? %) % false)))))
 
 (defn- -double-gen* [goptions options]
-  (-solve-each
-    (fn [solution options]
-      (let [goptions (-with-number-bounds goptions solution)]
-        (or (some-> (-reachable-double*-options goptions) gen/double*)
-            (-never-gen options))))
-    options))
+  (-solve-each (fn [solution options]
+                 (some-> goptions (-with-number-bounds solution) -reachable-double*-options gen/double*))
+               options))
 
 (defn- -reachable-large-integer*-options [{:keys [min max] :as goptions}]
   (when (-finite-bounds-between? min max -min-long -max-long)
-    (cond-> (or goptions {})
-      ;; {:min 1.5} => {:min 2}
-      min (assoc :min (long (math/ceil min)))
-      ;; {:max 1.5} => {:max 1}
-      max (assoc :max (long (math/floor max))))))
+    (let [imin (some-> min math/ceil long)
+          imax (some-> max math/floor long)]
+      (when (-finite-bounds-between? imin imax min max)
+        (cond-> (or goptions {})
+          imin (assoc :min imin)
+          imax (assoc :max imax))))))
 
 (defn- -int-gen* [goptions options]
-  (-solve-each
-    (fn [solution options]
-      (let [goptions (-with-number-bounds goptions solution)]
-        (or (some-> (-reachable-large-integer*-options goptions) gen/large-integer*)
-            (-never-gen options))))
-    options))
+  (-solve-each (fn [solution options]
+                 (some-> goptions (-with-number-bounds solution) -reachable-large-integer*-options gen/large-integer*))
+               options))
 
 (defn- -number-gen* [goptions options]
-  (-solve-each
-    (fn [solution options]
-      (let [gen-type (fn gen-type [stype]
-                       (case stype
-                         (nil :number) (gen-one-of (mapv gen-type [:int :double]) options)
-                         :int (-int-gen* goptions options)
-                         :double (-double-gen* goptions options)
-                         (-never-gen options)))]
-        (gen-type (:type solution))))
-    options))
+  (gen-one-of [(-int-gen* goptions options)
+               (-double-gen* goptions options)]
+              options))
 
 (defn- gen-vector-min [gen min options]
   (cond-> (gen/sized #(gen/vector gen min (+ min %)))
