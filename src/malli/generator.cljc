@@ -305,6 +305,7 @@
     (cond->> g (-not-unreachable g) (gen/fmap (fn [v] [k v])))))
 
 (defn -map-gen [schema options]
+  ;;TODO -solve-each
   (loop [[[k s :as e] & entries] (m/entries schema)
          gens []]
     (if (nil? e)
