@@ -1178,6 +1178,24 @@
   (is ((every-pred #(some vector? %) #(some list? %)) (mg/sample [:and [:cat :keyword] [:or list? vector?]] {:size 50})))
   (is (every? list? (mg/sample [:and [:cat :keyword] list?])))
   (is (every? vector? (mg/sample [:and [:cat :keyword [:* :any]] vector?])))
+  (is (every? vector? (mg/sample [:and [:* :any] vector?])))
+  (is (every? vector? (mg/sample [:and [:* :any] set?])))
+  (is (m/validate [:and [:* :any] coll?] [1 2 ]))
+  (doseq [f [coll? vector? list? sequential? seqable?]]
+    (testing (pr-str (-> f m/schema m/form))
+      (is (every? f (mg/sample [:and [:* :any] f])))
+      (is (every? f (mg/sample [:and [:? :any] f])))
+      (is (every? f (mg/sample [:and [:+ :any] f])))))
+  (is (mg/sample [:and [:* :any] set?]))
+  (is (mg/sample [:and [:? :any] vector?]))
+  (is (mg/sample [:and [:? :any] list?]))
+  (is (mg/sample [:? :any]))
+  (is (mg/sample [:and [:? :any] vector?]))
+  (is (mg/sample [:and [:? :any] list?]))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.generator/unsatisfiable-schema"
+        (mg/generate [:and [:* :any] set?])))
   #_
   (is (every? vector? (mg/sample [:and [:cat [:tuple :keyword :keyword]] map?])))
 )

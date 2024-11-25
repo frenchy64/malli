@@ -90,7 +90,7 @@
      :max (or gen-max max)}))
 
 (defn- -solve-each [f {::keys [solutions] :as options}]
-  (gen-one-of (into [] (keep #(f % (assoc options ::solutions [%]))) (or solutions [{}])) options))
+  (gen-one-of (into [] (keep #(f % (dissoc options ::solutions))) (or solutions [{}])) options))
 
 (def ^:private -max-double #?(:clj Double/MAX_VALUE :cljs (.-MAX_VALUE js/Number)))
 (def ^:private -min-double (- -max-double))
@@ -419,65 +419,78 @@
 
 (defn- entry->schema [e] (if (vector? e) (get e 2) e))
 
+(defn- -coerce-regex-result [solution]
+  (case (:type solution)
+    (:counted :indexed :vector) vec
+    (nil :coll :seq :sequential :seqable) sequence
+    :list (comp #(do (assert (list? %)) %) #(apply list %))
+    (:int :double :number :map :set) nil
+    (do (println "Unknown regex result solution type" (:type solution))
+        identity)))
+
 (defn -cat-gen [schema options]
   (-solve-each (fn [solution options]
-                 (prn "solution" solution)
                  (let [gs (->> (m/children schema options)
-                               (map #(-regex-generator (entry->schema %)
-                                                       ;; clears solution as we descend a :path level
-                                                       ;; we need a current path to view solution by
-                                                       (dissoc options ::solutions))))]
-                   (if (some -unreachable-gen? gs)
-                     (-never-gen options)
-                     (->> gs
-                          (apply gen/tuple)
-                          (gen/fmap (comp
-                                      (case (:type solution)
-                                        (:counted :indexed :vector) vec
-                                        :set set
-                                        :map #(into {} (map vec) %)
-                                        :list #(apply list %)
-                                        (nil :coll :seq :sequential :seqable) identity
-                                        (do (println "Unknown -cat-gen solution type" (:type solution))
-                                            identity))
-                                      #(apply concat %)))))))
+                               (map #(-regex-generator (entry->schema %) options)))]
+                   (when (not-any? -unreachable-gen? gs)
+                     (when-some [coerce (-coerce-regex-result solution)]
+                       (->> gs
+                            (apply gen/tuple)
+                            (gen/fmap (comp coerce #(apply concat %))))))))
                options))
 
 (defn -alt-gen [schema options]
   (gen-one-of (mapv #(-regex-generator (entry->schema %) options) (m/children schema options)) options))
 
 (defn -?-gen [schema options]
-  (let [child (m/-get schema 0 nil)]
-    (if-some [g (-not-unreachable (generator child options))]
-      (if (m/-regex-op? child)
-        (gen/one-of [g (gen/return ())])
-        (gen/vector g 0 1))
-      (gen/return ()))))
+  (-solve-each (fn [solution options]
+                 (let [child (m/-get schema 0 nil)]
+                   (when-some [coerce (-coerce-regex-result solution)]
+                     (if-some [g (-not-unreachable (generator child (cond-> options
+                                                                      (m/-regex-op? child)
+                                                                      (assoc ::solutions [solution]))))]
+                       (if (m/-regex-op? child)
+                         (gen/one-of [g (gen/return (coerce ()))])
+                         (cond->> (gen/vector g 0 1)
+                           (some-> (:type solution) (not= :vector))
+                           (gen/fmap coerce)))
+                       (gen/return (coerce ()))))))
+               options))
 
 (defn -*-gen [schema options]
-  (let [child (m/-get schema 0 nil)
-        mode (::-*-gen-mode options :*)
-        options (dissoc options ::-*-gen-mode)]
-    (if-some [g (-not-unreachable (generator child options))]
-      (cond->> (case mode
-                 :* (gen/vector g)
-                 :+ (gen-vector-min g 1 options))
-        (m/-regex-op? child)
-        (gen/fmap #(apply concat %)))
-      (case mode
-        :* (gen/return ())
-        :+ (-never-gen options)))))
+  (-solve-each (fn [solution options]
+                 (let [child (m/-get schema 0 nil)
+                       mode (::-*-gen-mode options :*)
+                       options (dissoc options ::-*-gen-mode)]
+                   (when-some [coerce (-coerce-regex-result solution)]
+                     (if-some [g (-not-unreachable (generator child options))]
+                       (cond->> (case mode
+                                  :* (gen/vector g)
+                                  :+ (gen-vector-min g 1 options))
+                         (m/-regex-op? child)
+                         (gen/fmap (comp coerce #(apply concat %)))
+
+                         (and (not (m/-regex-op? child))
+                              (some-> (:type solution) (not= :vector)))
+                         (gen/fmap coerce))
+                       (case mode
+                         :* (gen/return (coerce ()))
+                         :+ (-never-gen options))))))
+               options))
 
 (defn -+-gen [schema options]
   (-*-gen schema (assoc options ::-*-gen-mode :+)))
 
 (defn -repeat-gen [schema options]
-  (let [child (m/-get schema 0 nil)]
-    (if-some [g (-not-unreachable (-coll-gen schema identity options))]
-      (cond->> g
-        (m/-regex-op? child)
-        (gen/fmap #(apply concat %)))
-      (gen/return ()))))
+  (-solve-each (fn [solution options]
+                 (let [child (m/-get schema 0 nil)]
+                   (when-some [coerce (-coerce-regex-result solution)]
+                     (if-some [g (-not-unreachable (-coll-gen schema identity options))]
+                       (cond->> g
+                         (m/-regex-op? child)
+                         (gen/fmap (comp coerce #(apply concat %))))
+                       (gen/return (coerce ()))))))
+               options))
 
 (defn -qualified-ident-gen [schema mk-value-with-ns value-with-ns-gen-size pred gen]
   (if-let [namespace-unparsed (:namespace (m/properties schema))]
@@ -551,11 +564,11 @@
 
 (defn -any-gen* [options]
   (-solve-each (fn [solution options]
-                 (case (:type solution)
-                   nil (ga/gen-for-pred any?)
-                   (:int :double :number) (generator number? options)
-                   (:vector) (generator vector? options)
-                   ))
+                 (let [options (assoc options ::solutions [solution])]
+                   (case (:type solution)
+                     nil (ga/gen-for-pred any?)
+                     (:int :double :number) (generator number? options)
+                     (:vector) (generator vector? options))))
                options))
 
 (defmethod -schema-generator :any [_ options] (-any-gen* options))
