@@ -1,7 +1,8 @@
 (ns malli.solver-test
   (:require [clojure.test :refer [deftest is testing]]
             [malli.core :as m]
-            [malli.solver :as solver]))
+            [malli.solver :as solver]
+            [malli.util :as mu]))
 
 (deftest solve-number-test
   (is (= [{}] (solver/solve :any nil)))
@@ -88,6 +89,13 @@
                          [::m/default
                           [:map-of :int :int]]]
                         [:map]])))
+  (is (= (solver/solve [:map
+                        [:a {:optional true} :int]
+                        [:b {:optional true} :int]])
+         (solver/solve [:merge
+                        [:map [:a {:optional true} :int]]
+                        [:map [:b {:optional true} :int]]]
+                       {:registry (merge (m/default-schemas) (mu/schemas))})))
   (testing "combine :keys and :default-keys"
     (is (= [{:type :map, :get {0 [{:type :int}]},
              :keys [{:type :int}], :vals [{:type :int}],

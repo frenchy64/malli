@@ -157,14 +157,15 @@
   Options:
   - ::mode if :gen, consider generative fields like :gen/schema and :gen/min
            as necessary to satify the schema."
-  ([schema] (solve schema nil))
-  ([schema {::keys [mode] :as options}]
-   (lazy-seq
-     (or (when (= :gen mode) ;;TODO :gen/fmap, :gen/return, :gen/elements
-           (let [props (-merge (m/type-properties schema)
-                               (m/properties schema))]
-             (-solve-from-schema props options)))
-         (-solve schema options)))))
+  ([?schema] (solve ?schema nil))
+  ([?schema {::keys [mode] :as options}]
+   (let [schema (m/schema ?schema options)]
+     (lazy-seq
+       (or (when (= :gen mode) ;;TODO :gen/fmap, :gen/return, :gen/elements
+             (let [props (-merge (m/type-properties schema)
+                                 (m/properties schema))]
+               (-solve-from-schema props options)))
+           (-solve schema options))))))
 
 (defn -union [sols] (apply concat sols))
 
@@ -218,6 +219,10 @@
 (defmethod -solve :every [schema options] (-solve-collection-schema :seqable schema options))
 (defmethod -solve :set [schema options] (-solve-collection-schema :set schema options))
 (defmethod -solve :sequential [schema options] (-solve-collection-schema :sequential schema options))
+
+(defmethod -solve :merge [schema options] (solve (m/deref schema) options))
+(defmethod -solve :union [schema options] (solve (m/deref schema) options))
+(defmethod -solve :select-keys [schema options] (solve (m/deref schema) options))
 
 (defmethod -solve :map-of [schema options]
   (let [ks (solve (mu/get schema 0) options)
