@@ -1186,12 +1186,10 @@
         #":malli\.generator/unsatisfiable-schema"
         (mg/generate [:and [:* :any] set?])))
   (is (m/validate [:and [:* :any] coll?] [1 2 ]))
-  (doseq [f [coll? vector? list? sequential? seqable?]]
-    (testing (pr-str (-> f m/schema m/form))
-      (is (every? f (mg/sample [:and [:* :any] f])))
-      (is (every? f (mg/sample [:and [:? :any] f])))
-      (is (every? f (mg/sample [:and [:+ :any] f])))
-      (is (every? f (mg/sample [:and [:repeat :any] f])))))
+  (doseq [f [coll? vector? list? sequential? seqable?]
+          re [:* :? :+ :repeat]]
+    (testing (pr-str (-> f m/schema m/form) re)
+      (is (every? f (mg/sample [:and [re :any] f])))))
   (is (mg/sample [:and [:* :any] set?]))
   (is (mg/sample [:and [:? :any] vector?]))
   (is (mg/sample [:and [:? :any] list?]))
@@ -1202,6 +1200,7 @@
         #?(:clj Exception, :cljs js/Error)
         #":malli\.generator/unsatisfiable-schema"
         (mg/generate [:and [:* :any] set?])))
+  (is (mg/sample [:and [:seqable :any] set?]))
   #_
   (is (every? vector? (mg/sample [:and [:cat [:tuple :keyword :keyword]] map?])))
 )
