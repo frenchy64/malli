@@ -1200,6 +1200,6 @@
             #":malli\.generator/unsatisfiable-schema"
             (mg/generate [:and [re :any] f])))))
   (is (every? set? (mg/sample [:and [:seqable :any] set?])))
-  ;TODO unreachable
+  ;TODO unsatisfiable
   ;(is (every? set? (mg/sample [:and [:vector :any] list?])))
 )
