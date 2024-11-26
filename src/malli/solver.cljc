@@ -53,7 +53,6 @@
 (defn- -intersect-type [all-sols] (or (-type-constraints all-sols) [{}]))
 
 (defn- -intersect-map [all-sols]
-  (prn "-intersect-map" all-sols)
   (let [keysets (keep :keyset all-sols)
         gets (keep :get all-sols)
         open-maps (keep :open-map all-sols)
@@ -97,21 +96,16 @@
                                                                     (-intersect (concat intersect-vals
                                                                                         (vals intersect-get))))
                                         ))))]
-    (prn "contradiction" contradiction)
     (cond-> []
       (not contradiction)
       (conj (cond-> {}
               (seq intersect-keyset) (assoc :keyset intersect-keyset)
               (seq intersect-get) (assoc :get intersect-get)
-              ;;TODO combine keys and default-keys
               (not= [{}] intersect-keys) (assoc :keys intersect-keys)
               (not= [{}] intersect-vals) (assoc :vals intersect-vals)
-              (not= [{}] intersect-default-keys) (assoc :default-keys intersect-default-keys)
-              (not= [{}] intersect-default-vals) (assoc :default-vals intersect-default-vals)
               (some? intersect-open-map) (assoc :open-map intersect-open-map))))))
 
 (defn -intersect [sols]
-  (prn "sols" sols)
   (letfn [(rec [cart-sols]
             (lazy-seq
               (when-some [[[sol1 & sols :as all-sols]] (seq cart-sols)]
