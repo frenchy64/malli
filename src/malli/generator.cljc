@@ -592,6 +592,7 @@
 (defmethod -schema-generator 'integer? [_ options] (-int-gen* nil options))
 (defmethod -schema-generator 'int? [_ options] (-int-gen* nil options))
 
+;;TODO solve child schema and invert solution
 (defmethod -schema-generator :not [schema options]
   (gen/such-that (m/validator schema options) (ga/gen-for-pred any?)
                  {:max-tries 100

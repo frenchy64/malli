@@ -15,66 +15,44 @@
         (<= (or min-number %) % (or max-number %))))
 
 (defn- -validate-map-linearly
-  [{get-solutions :get :keys [keyset open-map min-count max-count keys vals default-keys default-vals]} options]
-  (let [required-keys (into #{} (keep (fn [[k v]] (when (= :present v) k))) keyset)
-        forbidden-keys (into #{} (keep (fn [[k v]] (when (= :absent v) k))) keyset)
+  [{keys-solutions :keys vals-solutions :vals get-solutions :get
+    :keys [keyset open-map min-count max-count default-keys default-vals]} options]
+  (let [required-keys (into #{} (mapcat (fn [[k v]] (when (= :present v) [k]))) keyset)
+        forbidden-keys (into #{} (mapcat (fn [[k v]] (when (= :absent v) [k]))) keyset)
         default-validator (if open-map
                             (fn [_ k v]
                               (if (contains? forbidden-keys k)
                                 (reduced false)
-                                )))
+                                (assert nil)
+                                ))
+                            (if (or default-vals default-keys)
+                              (assert nil)
+                              ))
         get-validators (into {} (map (fn [[k s]]
-                                       (let [f (-solution-validator (get get-solutions k) options)]
+                                       (let [valid? (-solution-validator s options)]
                                          (fn [state _ v]
-                                           (if (f v)
-                                             (do (vswap! state disj k)
-                                                 true)
+                                           (if (valid? v)
+                                             (when state (not-empty (disj state k)))
                                              (reduced false))))))
                              get-solutions)]
     (miu/-every-pred
-      (cond-> [map?]
-        (or min-count max-count) (conj (comp
-                                         (miu/-every-pred
-                                           (cond-> []
-                                             min-count #(<= min-count %)
-                                             max-count #(<= % max-count)))
-                                         count))
-        true #(let [state (volatile! required-keys)]
-                (and (reduce-kv (fn [_ k v]
-                                  ((get-validators k default-validator) state k v))
-                                true %)
-                     (empty? @state)))))))
+      (-> [map?]
+          (cond->
+            (or min-count max-count) (conj (comp
+                                             (miu/-every-pred
+                                               (cond-> []
+                                                 min-count #(<= min-count %)
+                                                 max-count #(<= % max-count)))
+                                             count)))
+          (conj #(let [state (volatile! required-keys)]
+                   (nil? (reduce-kv (fn [_ k v]
+                                      ((get-validators k default-validator) state k v))
+                                    required-keys %))))))))
 
 (defn- -validate-map-via-lookup
-  [{get-solutions :get :keys [keyset open-map min-count max-count keys vals default-keys default-vals]} options]
-  (let [required-keys (into #{} (keep (fn [[k v]] (when (= :present v) k))) keyset)
-        forbidden-keys (into #{} (keep (fn [[k v]] (when (= :absent v) k))) keyset)
-        default-validator (if open-map
-                            (fn [_ k v]
-                              (if (contains? forbidden-keys k)
-                                (reduced false)
-                                )))
-        get-validators (into {} (map (fn [[k s]]
-                                       (let [f (-solution-validator (get get-solutions k) options)]
-                                         (fn [state _ v]
-                                           (if (f v)
-                                             (do (vswap! state disj k)
-                                                 true)
-                                             (reduced false))))))
-                             get-solutions)]
-    (miu/-every-pred
-      (cond-> [map?]
-        (or min-count max-count) (conj (comp
-                                         (miu/-every-pred
-                                           (cond-> []
-                                             min-count #(<= min-count %)
-                                             max-count #(<= % max-count)))
-                                         count))
-        true #(let [state (volatile! required-keys)]
-                (and (reduce-kv (fn [_ k v]
-                                  ((get-validators k default-validator) state k v))
-                                true %)
-                     (empty? @state)))))))
+  [{keys-solutions :keys vals-solutions :vals get-solutions :get
+    :keys [keyset open-map min-count max-count default-keys default-vals]} options]
+  (assert nil "TODO"))
 
 ;;hmm unclear which validator to use between keys vs default-keys
 (defmethod -solution-validator :map
