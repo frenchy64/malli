@@ -84,7 +84,8 @@
 (defmethod -solution-validator nil [_ _] any?)
 
 (defn -solutions-validator [solutions options]
-  (let [;;TODO group related types together
+  (let [;;TODO group related types together, maybe change defmulti to accept multiple solutions?
+        ;; could also use something smarter than -some-pred?
         ors (mapv #(-solution-validator % options) solutions)]
     (miu/-some-pred ors)))
 
@@ -101,3 +102,37 @@
   ([?schema value options]
    ((validator ?schema options) value)))
 
+(defmulti -solution-explainer (fn [solution path options] (:type solution)))
+(defn- -simple-solutions-explainer [solutions path options]
+  (let [validator (-solutions-validator solutions options)
+        ;;TODO :schema
+        this nil]
+    (fn explain [x in acc]
+      (if-not (validator x) (conj acc (miu/-error path in this x)) acc))))
+(defmethod -solution-explainer :int [solution path options] (-simple-solutions-explainer [solution] path options))
+
+(defn -solutions-explainer [solutions path options]
+  (let [;;TODO group related types together, maybe change defmulti to accept multiple solutions?
+        ;; could also use something smarter than -some-pred?
+        ors (mapv #(-solution-explainer % path options) solutions)]
+    (miu/-some-pred ors)))
+
+(defn explainer
+  ([?schema] (explainer ?schema nil))
+  ([?schema options]
+   (let [schema (m/schema ?schema options)
+         solutions (solver/solve schema options)
+         explainer' (m/-cached schema ::explainer #(-> %
+                                                       (solver/solve options)
+                                                       (-solutions-explainer [] options)))]
+     (fn explainer
+       ([value] (explainer value [] []))
+       ([value in acc]
+        (when-let [errors (seq (explainer' value in acc))]
+          {:schema schema
+           :value value
+           :errors errors}))))))
+
+(defn explain
+  ([?schema value] (explain ?schema value nil))
+  ([?schema value options] ((explainer ?schema options) value [] [])))
