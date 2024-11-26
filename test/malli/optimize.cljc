@@ -24,26 +24,26 @@
         forbidden-keys (let [phs (into #{} (mapcat (fn [[k v]] (when (= :absent v) [k]))) keyset)]
                          #?(:clj (java.util.HashSet. ^java.util.Set phs)
                             :default phs))
-        ;default-keys-validator (-)
-        default-validator (if open-map
-                            (fn [nrequired k v]
-                              (if (#?(:clj .contains :default contains?) forbidden-keys k)
-                                (reduced -1)
-                                (if (if (valid-key? k)
-                                      (valid-val? v)
-                                      false)
+        valid-key? (-solution-validator (or keys-solutions [{}]) options)
+        valid-val? (-solution-validator (or vals-solutions [{}]) options)
+        error-val (reduced -1)
+        default-validator (fn [nrequired k v]
+                            (if (#?(:clj .contains :default contains?) forbidden-keys k)
+                              error-val
+                              (if (valid-key? k)
+                                (if (valid-val? v)
                                   nrequired
-                                  (reduced -1))))
-                            (if (or default-vals default-keys)
-                              (assert nil)
-                              (assert nil)))
+                                  error-val)
+                                (if open-map
+                                  nrequired
+                                  error-val))))
         get-validators (let [phm (into {} (map (fn [[k s]]
                                                  (let [valid? (-solution-validator s options)
                                                        register-required (if (contains? required-keys k) dec identity)]
                                                    (fn [nrequired _ v]
                                                      (if (valid? v)
                                                        (register-required nrequired)
-                                                       (reduced -1))))))
+                                                       error-val)))))
                                        get-solutions)]
                          #?(:clj (java.util.HashMap. ^java.util.Map phm)
                             :default phm))]
@@ -94,5 +94,5 @@
   (assert (not (validate [:and number? [:<= 10]] 20)))
   (assert (validate [:int {:gen/max 10}] 20))
   (assert (not (validate [:int {:max 10}] 20)))
-  (validate :map 20)
+  (validate :map {})
   )

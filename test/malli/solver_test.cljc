@@ -118,9 +118,12 @@
   (is (empty? (solver/solve [:and
                              [:map [:a :int]]
                              [:map-of :int :int]])))
-  (is (seq (solver/solve [:and
-                          [:map [0 :map]]
-                          [:map-of :int :int]])))
+  (is (= [{:get {0 [{:type :map, :open-map true}]}, :type :map,
+           :vals [{:type :int}], :keys [{:type :int}],
+           :keyset {0 :present}, :min-count 1, :open-map false}]
+         (solver/solve [:and
+                        [:map [0 :map]]
+                        [:map-of :int :int]])))
   (is (empty? (solver/solve [:and [:map-of {:min 10} :any :any] empty?])))
   ;;required entry
   (is (= [{:get {:a [{:type :int}]}, :type :map, :keyset {:a :present}, :min-count 1, :open-map true}]

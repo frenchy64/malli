@@ -34,7 +34,8 @@
     [{}]))
 
 (def ^:private type-super
-  {:int #{:number}
+  {:integer #{:number}
+   :int #{:number}
    :list #{:counted :sequential :coll}
    :vector #{:counted :indexed :sequential :coll}
    :map #{:counted :indexed :coll}
@@ -172,7 +173,7 @@
 
 (defmethod -solve 'float? [schema options] [{:type :double}])
 (defmethod -solve 'int? [schema options] [{:type :int}])
-(defmethod -solve 'integer? [schema options] [{:type :int}])
+(defmethod -solve 'integer? [schema options] [{:type :integer}])
 (defmethod -solve 'nat-int? [schema options] [{:type :int :min-number 0}])
 (defmethod -solve 'neg-int? [schema options] [{:type :int :max-number -1}])
 (defmethod -solve 'neg? [schema options] [{:type :number :max-number (math/next-down 0)}])
