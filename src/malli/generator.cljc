@@ -122,21 +122,25 @@
 
 (defn- -double-gen* [goptions options]
   (-solve-each (fn [solution options]
-                 (some-> goptions (-with-number-bounds solution) -reachable-double*-options gen/double*))
+                 (some-> (or goptions {}) (-with-number-bounds solution) -reachable-double*-options gen/double*))
                options))
 
 (defn- -reachable-large-integer*-options [{:keys [min max] :as goptions}]
+  (prn "-reachable-large-integer*-options" min max)
   (when (-finite-bounds-between? min max -min-long -max-long)
     (let [imin (some-> min math/ceil long)
           imax (some-> max math/floor long)]
+      (prn "yes" imin imax)
       (when (-finite-bounds-between? imin imax min max)
+        (prn "finite yes" imin imax)
         (cond-> (or goptions {})
           imin (assoc :min imin)
           imax (assoc :max imax))))))
 
 (defn- -int-gen* [goptions options]
   (-solve-each (fn [solution options]
-                 (some-> goptions (-with-number-bounds solution) -reachable-large-integer*-options gen/large-integer*))
+                 (prn "-int-gen* solution" solution)
+                 (some-> (or goptions {}) (-with-number-bounds solution) -reachable-large-integer*-options gen/large-integer*))
                options))
 
 (defn- -number-gen* [goptions options]
