@@ -153,7 +153,7 @@
 (deftest solver-collection-test
   (is (= [{:type :seqable, :elements [{}]}] (solver/solve [:seqable :any])))
   (is (= [{:type :seqable, :elements [{}]}] (solver/solve [:and [:seqable :any] [:seqable :any]])))
-  (is (= [{:type :seqable, :elements [{}]}] (solver/solve [:and [:seqable :any] [:seqable :int]])))
+  (is (= [{:type :seqable, :elements [{:type :int}]}] (solver/solve [:and [:seqable :any] [:seqable :int]])))
   ;;TODO simplify to empty?, no overlap between :int and :vector
   (is (= [{:type :seqable, :elements [{:type :int} {:type :vector}]}] (solver/solve [:and [:seqable vector?] [:seqable :int]])))
   (is (= [{:type :seqable, :elements [{:type :vector}]}]
@@ -161,7 +161,6 @@
   (is (= [{:type :seqable, :elements [{:type :vector}] :min-count 1}
           {:type :seqable, :elements [{:type :int}] :max-count 10}]
          (solver/solve [:or [:seqable {:min 1} vector?] [:seqable {:max 10} :int]])))
-  ;;FIXME
   (is (= [{:type :seqable, :elements [{:type :vector}] :min-count 5 :max-count 5}]
          (solver/solve [:and [:seqable {:min 0 :max 5} vector?] [:seqable {:min 5 :max 10} seqable?]])))
 )

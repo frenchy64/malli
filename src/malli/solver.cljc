@@ -60,8 +60,7 @@
   (if-some [elements (some-> (seq (keep :elements all-sols)) -intersect)]
     (if (empty? all-sols)
       []
-      (cond->> all-sols
-        elements (mapv (fn [sol] (assoc sol :elements elements)))))
+      [{:elements elements}])
     [{}]))
 
 (def ^:private type-super
