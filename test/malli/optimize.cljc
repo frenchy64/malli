@@ -21,11 +21,13 @@
     :keys [keyset open-map min-count max-count default-keys default-vals]} options]
   (let [required-keys (not-empty (into #{} (mapcat (fn [[k v]] (when (= :present v) [k]))) keyset))
         nrequired (count required-keys)
-        forbidden-keys (into #{} (mapcat (fn [[k v]] (when (= :absent v) [k]))) keyset)
+        forbidden-keys (let [phs (into #{} (mapcat (fn [[k v]] (when (= :absent v) [k]))) keyset)]
+                         #?(:clj (java.util.HashSet. ^java.util.Set phs)
+                            :default phs))
         ;default-keys-validator (-)
         default-validator (if open-map
                             (fn [nrequired k v]
-                              (if (contains? forbidden-keys k)
+                              (if (#?(:clj .contains :default contains?) forbidden-keys k)
                                 (reduced -1)
                                 (if (if (valid-key? k)
                                       (valid-val? v)
@@ -34,16 +36,15 @@
                                   (reduced -1))))
                             (if (or default-vals default-keys)
                               (assert nil)
-                              (assert nil)
-                              ))
+                              (assert nil)))
         get-validators (let [phm (into {} (map (fn [[k s]]
                                                  (let [valid? (-solution-validator s options)
-                                                       required? (contains? required-keys k)]
+                                                       register-required (if (contains? required-keys k) dec identity)]
                                                    (fn [nrequired _ v]
                                                      (if (valid? v)
-                                                       (dec nrequired)
+                                                       (register-required nrequired)
                                                        (reduced -1))))))
-                                       get-solutions)] 
+                                       get-solutions)]
                          #?(:clj (java.util.HashMap. ^java.util.Map phm)
                             :default phm))]
     (miu/-every-pred

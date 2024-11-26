@@ -82,8 +82,8 @@
          (solver/solve [:map [:a {:optional true} :int]
                         [::m/default
                          [:map [:b {:optional true} :int]]]])))
-  (is (= [{:get {:a [{:type :int}]}, :type :map, :default-vals [{:type :int}],
-           :default-keys [{:type :int}], :keyset {:a :optional}, :open-map false}]
+  (is (= [{:get {:a [{:type :int}]}, :type :map, :vals [{:type :int}],
+           :keys [{:type :int}], :keyset {:a :optional}, :open-map false}]
          (solver/solve [:and
                         [:map [:a {:optional true} :int]
                          [::m/default
@@ -96,17 +96,15 @@
                         [:map [:a {:optional true} :int]]
                         [:map [:b {:optional true} :int]]]
                        {:registry (merge (m/default-schemas) (mu/schemas))})))
-  (testing "combine :keys and :default-keys"
-    (is (= [{:type :map, :get {0 [{:type :int}]},
-             :keys [{:type :int}], :vals [{:type :int}],
-             :default-keys [{:type :int}], :default-vals [{:type :int}],
-             :keyset {0 :optional},
-             :open-map false}]
-           (solver/solve [:and
-                          [:map [0 {:optional true} :int]
-                           [::m/default
-                            [:map-of :int :int]]]
-                          [:map-of :int :int]]))))
+  (is (= [{:type :map, :get {0 [{:type :int}]},
+           :keys [{:type :int}], :vals [{:type :int}],
+           :keyset {0 :optional},
+           :open-map false}]
+         (solver/solve [:and
+                        [:map [0 {:optional true} :int]
+                         [::m/default
+                          [:map-of :int :int]]]
+                        [:map-of :int :int]])))
   ;;TODO filter out impossible keys
   (is (= (solver/solve [:map-of :int :int])
          (solver/solve [:and

@@ -110,6 +110,7 @@
               (some? intersect-open-map) (assoc :open-map intersect-open-map))))))
 
 (defn -intersect [sols]
+  (prn "sols" sols)
   (letfn [(rec [cart-sols]
             (lazy-seq
               (when-some [[[sol1 & sols :as all-sols]] (seq cart-sols)]
@@ -257,21 +258,24 @@
         {base-closed :closed} (m/properties schema)
         default-solutions (when default
                             (mapv (fn [solution]
-                                    (-> solution
-                                        (set/rename-keys {:keys :default-keys
-                                                          :vals :default-vals})
-                                        (update :get #(apply dissoc % (keys base-keyset)))
-                                        (update :keyset #(apply dissoc % (keys base-keyset)))))
+                                    (cond-> solution
+                                      (:get solution) (update :get #(apply dissoc % (keys base-keyset)))
+                                      (:keyset solution) (update :keyset #(apply dissoc % (keys base-keyset)))))
                                   (solve default options)))
         closed (when-not default (-> schema m/properties :closed boolean))
         min-count (count (remove (comp :optional :props val) entries))
-        max-count (when closed (count entries))]
-    (cond-> [(cond-> {:type :map}
-               (seq base-get) (assoc :get base-get)
-               (seq base-keyset) (assoc :keyset base-keyset)
-               (some? closed) (assoc :open-map (not closed))
-               (pos? min-count) (assoc :min-count min-count)
-               max-count (assoc :max-count max-count))]
-      default-solutions (-> (vector default-solutions) -intersect))))
+        max-count (when closed (count entries))
+        base-solution (cond-> {:type :map}
+                        (seq base-get) (assoc :get base-get)
+                        (seq base-keyset) (assoc :keyset base-keyset)
+                        (some? closed) (assoc :open-map (not closed))
+                        (pos? min-count) (assoc :min-count min-count)
+                        max-count (assoc :max-count max-count))]
+    (into [] (mapcat #(-intersect
+                        [[(dissoc % :keys :vals)]
+                         [(cond-> base-solution
+                            (:keys %) (assoc :keys (:keys %))
+                            (:vals %) (assoc :vals (:vals %)))]]))
+          (or default-solutions [{}]))))
 
 (defmethod -solve :default [schema options] [{}])
