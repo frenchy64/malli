@@ -8,23 +8,25 @@
 (declare -solutions-validator)
 
 (defmulti -solution-validator (fn [solution options] (:type solution)))
-(defn- -min-max-validator [min-number max-number]
-  (when (or min-number max-number)
+(defn- -min-max-validator [{:keys [min-number max-number >-number <-number]}]
+  (when (or min-number max-number >-number <-number)
     (miu/-every-pred
-      (into (if (= min-number max-number)
+      (into (if (and min-number (= min-number max-number))
               [#(= min-number %)]
               (cond-> []
                 min-number (conj #(<= min-number %))
-                max-number (conj #(<= % max-number))))))))
+                >-number (conj #(< >-number %))
+                max-number (conj #(<= % max-number))
+                <-number (conj #(< % <-number))))))))
 (defmethod -solution-validator :number
-  [{:keys [max-number min-number] :as solution} _]
-  (let [mmv (-min-max-validator min-number max-number)]
+  [solution _]
+  (let [mmv (-min-max-validator solution)]
     (miu/-every-pred
       (cond-> [number?]
         mmv (conj mmv)))))
 (defmethod -solution-validator :int
-  [{:keys [max-number min-number] :as solution} _]
-  (let [mmv (-min-max-validator min-number max-number)]
+  [solution _]
+  (let [mmv (-min-max-validator solution)]
     (miu/-every-pred
       (cond-> [int?]
         mmv (conj mmv)))))
@@ -64,7 +66,7 @@
     (miu/-every-pred
       (-> [map?]
           (cond->
-            (or min-count max-count) (conj (comp (-min-max-validator min-count max-count) count)))
+            (or min-count max-count) (conj (comp (-min-max-validator {:min-number min-count :max-number max-count}) count)))
           (conj #(zero? (reduce-kv (fn [state k v]
                                      ((#?(:clj .getOrDefault) get-validators k default-validator) state k v))
                                    nrequired %)))))))

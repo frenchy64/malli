@@ -7,6 +7,11 @@
 (deftest solve-number-test
   (is (= [{}] (solver/solve :any nil)))
   (is (= [{:type :number, :max-number -1, :min-number -1}] (solver/solve [:and [:>= -1] [:<= -1]] nil)))
+  (is (empty? (solver/solve [:and [:> -1] [:<= -1]] nil)))
+  (is (empty? (solver/solve [:and [:> -1] [:< -1]] nil)))
+  (is (empty? (solver/solve [:and [:>= -1] [:< -1]] nil)))
+  (is (= [{:type :number, :>-number -1}] (solver/solve [:and [:> -1] [:>= -1]] nil)))
+  (is (= [{:type :number, :<-number -1}] (solver/solve [:and [:< -1] [:<= -1]] nil)))
   (is (= [{:type :number, :max-number 0, :min-number 0}] (solver/solve zero?)))
   (is (= [{:type :int, :max-number -1, :min-number -1}] (solver/solve [:and :int [:>= -1] [:<= -1]] nil)))
   (is (= [{:type :int, :max-number -1, :min-number -1}] (solver/solve [:and [:int {:gen/min -1}] [:>= -1] [:<= -1]] nil)))

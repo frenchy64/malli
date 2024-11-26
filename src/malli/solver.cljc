@@ -9,11 +9,13 @@
 
 (declare solve -intersect)
 
-(defn- -intersect-number-constraints [all-sols mink maxk]
+(defn- -child [schema] (first (m/children schema)))
+
+(defn- -intersect-number-constraints [cmp all-sols mink maxk]
   (let [maxv (some->> (seq (keep maxk all-sols)) (apply c/min))
         minv (some->> (seq (keep mink all-sols)) (apply c/max))]
     (if (and minv maxv)
-      (if (<= minv maxv)
+      (if (cmp minv maxv)
         [{mink minv
           maxk maxv}]
         [])
@@ -22,15 +24,36 @@
         (when maxv
           [{maxk maxv}])))))
 
+(defn- -merge-number-constraints [{:keys [min-number max-number >-number <-number] :as sol}]
+  (prn "-merge-number-constraints" sol)
+  (if (or min-number >-number max-number <-number)
+    (let [[min-type min] (if (and min-number >-number)
+                           (if (<= min-number >-number) [:>-number >-number] [:min-number min-number])
+                           (or (some->> >-number (vector :>-number)) (some->> min-number (vector :min-number))))
+          [max-type max] (if (and max-number <-number)
+                           (if (<= <-number max-number) [:<-number <-number] [:max-number max-number])
+                           (or (some->> <-number (vector :<-number)) (some->> max-number (vector :max-number))))]
+      (when (or (not min-type)
+                (not max-type)
+                (and (= :min-number min-type)
+                     (= :max-number max-type))
+                (< min max))
+        (cond-> (dissoc sol :min-number :max-number :>-number :<-number)
+          min (assoc min-type min)
+          max (assoc max-type max))))
+    sol))
+
 (defn- -intersect-min-max [all-sols]
   (if-some [sols (when (seq all-sols)
-                   (not-empty (into [] (keep (fn [[mink maxk]]
-                                               (-intersect-number-constraints all-sols mink maxk)))
-                                    [[:min-count :max-count]
-                                     [:min-number :max-number]])))]
+                   (not-empty
+                     (into [] (keep (fn [[cmp mink maxk]]
+                                      (-intersect-number-constraints cmp all-sols mink maxk)))
+                           [[<= :min-count :max-count]
+                            [<= :min-number :max-number]
+                            [< :>-number :<-number]])))]
     (lazy-seq
       (->> (apply comb/cartesian-product sols)
-           (map #(apply merge %))))
+           (keep (comp -merge-number-constraints #(apply merge %)))))
     [{}]))
 
 (def ^:private type-super
@@ -115,7 +138,8 @@
                                                      :keys :vals :default-keys :default-vals
                                                      :keyset :get :open-map
                                                      :max-count :min-count
-                                                     :max-number :min-number))]
+                                                     :max-number :min-number
+                                                     :<-number :>-number))]
                   (m/-fail! ::unsupported-solution {:unsupported-keys unsupported-keys}))
                 (let [type-constraints (-intersect-type all-sols)
                       number-solutions (-intersect-min-max all-sols)
@@ -170,15 +194,15 @@
 (defmethod -solve 'integer? [schema options] [{:type :integer}])
 (defmethod -solve 'nat-int? [schema options] [{:type :int :min-number 0}])
 (defmethod -solve 'neg-int? [schema options] [{:type :int :max-number -1}])
-(defmethod -solve 'neg? [schema options] [{:type :number :max-number (math/next-down 0)}])
+(defmethod -solve 'neg? [schema options] [{:type :number :<-number 0}])
 (defmethod -solve 'number? [schema options] [{:type :number}])
 (defmethod -solve 'pos-int? [schema options] [{:type :int :min-number 1}])
-(defmethod -solve 'pos? [schema options] [{:type :number :min-number (math/next-up 0)}])
+(defmethod -solve 'pos? [schema options] [{:type :number :>-number 0}])
 (defmethod -solve 'zero? [schema options] [{:type :number :min-number 0 :max-number 0}])
-(defmethod -solve :< [schema options] [{:type :number :max-number (math/next-down (first (m/children schema)))}])
-(defmethod -solve :<= [schema options] [{:type :number :max-number (first (m/children schema))}])
-(defmethod -solve :> [schema options] [{:type :number :min-number (math/next-up (first (m/children schema)))}])
-(defmethod -solve :>= [schema options] [{:type :number :min-number (first (m/children schema))}])
+(defmethod -solve :< [schema options] [{:type :number :<-number (-child schema)}])
+(defmethod -solve :<= [schema options] [{:type :number :max-number (-child schema)}])
+(defmethod -solve :> [schema options] [{:type :number :>-number (-child schema)}])
+(defmethod -solve :>= [schema options] [{:type :number :min-number (-child schema)}])
 (defmethod -solve :and [schema options] (-intersect (map #(solve % options) (m/children schema))))
 (defmethod -solve :any [schema options] [{}])
 (defmethod -solve :double [schema options] (-min-max-number :double schema options))
@@ -187,9 +211,9 @@
 (defmethod -solve :or [schema options] (-union (map #(solve % options) (m/children schema))))
 
 ;;TODO test
-(defmethod -solve := [schema options] [{:= #{(first (m/children schema))}}])
+(defmethod -solve := [schema options] [{:= #{(-child schema)}}])
 (defmethod -solve :enum [schema options] [{:= (set (m/children schema))}])
-(defmethod -solve :not= [schema options] [{:not= #{(first (m/children schema))}}])
+(defmethod -solve :not= [schema options] [{:not= #{(-child schema)}}])
 
 (defmethod -solve 'coll? [schema options] [{:type :coll}])
 (defmethod -solve 'empty? [schema options] (mapv #(do {:type % :min-count 0 :max-count 0}) [:counted :seqable]))
@@ -214,7 +238,7 @@
       :nth sols}]))
 
 (defn- -solve-collection-schema [stype schema options]
-  (mapv #(assoc % :elements (solve (mu/get schema 0) options))
+  (mapv #(assoc % :elements (solve (-child schema) options))
         (-min-max-count stype schema options)))
 
 (defmethod -solve :vector [schema options] (-solve-collection-schema :vector schema options))
@@ -228,8 +252,7 @@
 (defmethod -solve :select-keys [schema options] (solve (m/deref schema) options))
 
 (defmethod -solve :map-of [schema options]
-  (let [ks (solve (mu/get schema 0) options)
-        vs (solve (mu/get schema 1) options)
+  (let [[ks vs] (mapv #(solve % options) (m/children schema))
         extra (cond-> {:open-map false}
                 (not= ks [{}]) (assoc :keys ks)
                 (not= vs [{}]) (assoc :vals vs))]

@@ -97,15 +97,25 @@
 (def ^:private -max-long #?(:clj Long/MAX_VALUE :cljs (dec (apply * (repeat 53 2)))))
 (def ^:private -min-long #?(:clj Long/MIN_VALUE :cljs (- -max-long)))
 
-(defn- -with-number-bounds [goptions {:keys [min-number max-number] :as solution}]
+(defn- -with-number-bounds [goptions {:keys [min-number max-number >-number <-number] :as solution}]
   (cond-> goptions
     solution (cond->
                min-number (update :min #(if %
                                           (max % min-number)
                                           min-number))
+               >-number (update :min #(if %
+                                        (if (<= % >-number)
+                                          (math/next-up >-number)
+                                          %)
+                                        (math/next-up >-number)))
                max-number (update :max #(if %
                                           (min % max-number)
-                                          max-number)))))
+                                          max-number))
+               <-number (update :min #(if %
+                                        (if (<= <-number %)
+                                          (math/next-down <-number)
+                                          %)
+                                        (math/next-down <-number))))))
 
 (defn- -finite-bounds-between? [min max lb ub]
   (and (or (not min) (and (not (infinite? min))
