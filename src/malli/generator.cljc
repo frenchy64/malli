@@ -272,7 +272,7 @@
                                 (and (= :tuple (m/type el))
                                      (= 2 (count (m/children el))))
                                 (conj (let [[k v] (m/children el)]
-                                        (generator [:map-of k v] options)))))
+                                        (generator [:map-of (or (m/properties schema) {}) k v] options)))))
                           options))))))
 
 (defn -or-gen [schema options] (gen-one-of (mapv #(generator % options) (m/children schema options)) options))

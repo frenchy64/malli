@@ -1103,7 +1103,12 @@
       (is (= '({-1 false}
                {-4399 true, 59 false, -4049 false, -49 false, -1 false, 15 false, -967 false, -3 false, -674 false, 2730 true, -2104 false, 3 false, -444 true, 8 false}
                {119 true, 1324 false, 7276 false, -2410 true})
-             (filter map? (mg/sample [op [:tuple :int :boolean]] {:seed 1 :size 30})))))))
+             (filter map? (mg/sample [op [:tuple :int :boolean]] {:seed 1 :size 30}))))))
+  (is (= #{0 1 4 3 2 5}
+         (set (map count (filter map?
+                                 (mg/sample [:seqable {:max 5} [:tuple :any :any]]
+                                            {:seed 0
+                                             :size 100})))))))
 
 (deftest double-with-long-min-test
   (is (m/validate :double (shrink [:double {:min 3}])))
