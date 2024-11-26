@@ -245,7 +245,7 @@
 
 (defn -and-gen [schema options]
   (let [[gchild & schildren] (m/children schema)
-        solutions (let [options (assoc options ::gen/mode :gen)]
+        solutions (let [options (assoc options ::solver/mode :gen)]
                     (some-> (seq (cond-> (map #(solver/solve % options) schildren)
                                    (::solutions options) (conj (::solutions options))))
                             solver/-intersect))]
@@ -335,10 +335,7 @@
 
 (defn -map-of-gen [schema options]
   (->> options
-       (-intersect-solution (let [{:keys [min max]} (-min-max schema options)]
-                              (cond-> {:type :map}
-                                min (assoc :min-count min)
-                                max (assoc :max-count max))))
+       (-intersect-solution (solver/solve schema (assoc options ::solver/mode :gen)))
        (-solve-each (fn [{min :min-count max :max-count :as solution} options]
                       (let [[k-gen v-gen :as gs] (map #(generator % options) (m/children schema options))]
                         (if (some -unreachable-gen? gs)

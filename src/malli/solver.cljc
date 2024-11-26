@@ -56,6 +56,14 @@
            (keep (comp -merge-number-constraints #(apply merge %)))))
     [{}]))
 
+(defn -intersect-elements [all-sols]
+  (if-some [elements (some-> (seq (keep :elements all-sols)) -intersect)]
+    (if (empty? all-sols)
+      []
+      (cond->> all-sols
+        elements (mapv (fn [sol] (assoc sol :elements elements)))))
+    [{}]))
+
 (def ^:private type-super
   {:integer #{:number}
    :int #{:number}
@@ -139,13 +147,16 @@
                                                      :keyset :get :open-map
                                                      :max-count :min-count
                                                      :max-number :min-number
-                                                     :<-number :>-number))]
+                                                     :<-number :>-number
+                                                     :elements))]
                   (m/-fail! ::unsupported-solution {:unsupported-keys unsupported-keys}))
                 (let [type-constraints (-intersect-type all-sols)
                       number-solutions (-intersect-min-max all-sols)
                       ;;TODO contains number constraints
                       map-constraints (-intersect-map all-sols)
-                      combined-sols (comb/cartesian-product type-constraints number-solutions map-constraints)]
+                      elements-constraints (-intersect-elements all-sols)
+                      combined-sols (comb/cartesian-product type-constraints number-solutions map-constraints
+                                                            elements-constraints)]
                   (if (empty? combined-sols)
                     []
                     ;;TODO check solutions are compatible and/or merge them
