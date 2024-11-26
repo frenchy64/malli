@@ -89,6 +89,9 @@
     {:min (or gen-min min)
      :max (or gen-max max)}))
 
+(defn- -solve-schema [schema options]
+  (solver/solve schema (assoc options ::solver/mode :gen ::solver/allow-incomplete-solution true)))
+
 (defn- -solve-each [f {::keys [solutions] :as options}]
   (gen-one-of (into [] (keep #(f % (dissoc options ::solutions))) (or solutions [{}])) options))
 
@@ -165,16 +168,12 @@
                                           :generator gen
                                           :min min})))
 
-(defn- -intersect-solution [solution options]
-  (update options ::solutions (fn [solutions]
-                                (solver/-intersect [(or solutions [{}]) [solution]]))))
+(defn- -intersect-solutions [solutions options]
+  (update options ::solutions (fn [solutions']
+                                (solver/-intersect [(or solutions' [{}]) solutions]))))
 
 (defn- -string-gen [schema options]
   (->> options
-       (-intersect-solution (let [{:keys [min max]} (-min-max schema options)]
-                              (cond-> {:type :string}
-                                min (assoc :min-count min)
-                                max (assoc :max-count max))))
        (-solve-each (fn [{min :min-count max :max-count :as solution} options]
                       (cond
                         (and min (= min max)) (gen/fmap str/join (gen/vector gen/char-alphanumeric min))
@@ -196,12 +195,8 @@
     (do (println "Unknown regex result solution type" (:type solution))
         identity)))
 
-(defn- -coll-gen [schema solution options]
+(defn- -coll-gen [schema options]
   (->> options
-       (-intersect-solution (let [{:keys [min max]} (-min-max schema options)]
-                              (cond-> solution
-                                min (assoc :min-count min)
-                                max (assoc :max-count max))))
        (-solve-each (fn [{min :min-count max :max-count :as solution} options]
                       (when-some [f (-coerce-coll-result solution)]
                         (if-some [gen (-not-unreachable (-gen-child schema options))]
@@ -227,12 +222,8 @@
     (do (println "Unknown regex result solution type" (:type solution))
         identity)))
 
-(defn- -coll-distinct-gen [schema solution options]
+(defn- -coll-distinct-gen [schema options]
   (->> options
-       (-intersect-solution (let [{:keys [min max]} (-min-max schema options)]
-                              (cond-> solution
-                                min (assoc :min-count min)
-                                max (assoc :max-count max))))
        (-solve-each (fn [{min :min-count max :max-count :as solution} options]
                       (when-some [f (-coerce-coll-distinct-result solution)]
                         (if-some [gen (-not-unreachable (-gen-child schema options))]
@@ -266,25 +257,22 @@
 
 (defn- -seqable-gen [schema options]
   (->> options
-       (-intersect-solution (let [{:keys [min max]} (-min-max schema options)]
-                              (cond-> {:type :seqable}
-                                min (assoc :min-count min)
-                                max (assoc :max-count max))))
        (-solve-each (fn [{min :min-count :as solution} options]
-                      (let [el (-first-child schema options)]
+                      (let [el (-first-child schema options)
+                            type->options #(-intersect-solutions [{:type %}] (assoc options ::solutions [solution]))]
                         (gen-one-of
                           (-> []
                               (cond->
                                 (or (nil? min) (zero? min))
                                 (conj nil-gen))
-                              (into (map #(-coll-gen schema {:type %} (assoc options ::solutions [solution])))
+                              (into (map #(-coll-gen schema (type->options %)))
                                     [:vector :eduction :object-array])
-                              (conj (-coll-distinct-gen schema {:type :set} (assoc options ::solutions [solution])))
+                              (conj (-coll-distinct-gen schema (type->options :set)))
                               (cond->
                                 (and (= :tuple (m/type el))
                                      (= 2 (count (m/children el))))
                                 (conj (let [[k v] (m/children el)]
-                                        (generator [:map-of k v] (assoc options ::solutions [solution]))))))
+                                        (generator [:map-of k v] options)))))
                           options))))))
 
 (defn -or-gen [schema options] (gen-one-of (mapv #(generator % options) (m/children schema options)) options))
@@ -319,23 +307,25 @@
     (cond->> g (-not-unreachable g) (gen/fmap (fn [v] [k v])))))
 
 (defn -map-gen [schema options]
-  ;;TODO -solve-each
-  (loop [[[k s :as e] & entries] (m/entries schema)
-         gens []]
-    (if (nil? e)
-      (gen/fmap -build-map (apply gen/tuple gens))
-      (if (-> e -last m/properties :optional)
-        ;; opt
-        (recur entries (conj gens (gen-one-of [nil-gen (-value-gen k s options)])))
-        ;;; req
-        (let [g (-value-gen k s options)]
-          (if (-unreachable-gen? g)
-            (-never-gen options)
-            (recur entries (conj gens g))))))))
+  (->> options
+       (-solve-each (fn [{get-solutions :get :keys [keyset] :as solutions} options]
+                      (loop [[[k s :as e] & entries] (m/entries schema)
+                             gens []]
+                        (if (nil? e)
+                          (gen/fmap -build-map (apply gen/tuple gens))
+                          (let [vgen #(-value-gen k s (assoc options ::solutions (get-solutions k)))]
+                            (case (keyset k)
+                              :optional
+                              (recur entries (conj gens (gen-one-of [nil-gen (vgen)])))
+                              :present
+                              (if-some [g (-not-unreachable (vgen))]
+                                (recur entries (conj gens g))
+                                (-never-gen options))
+                              :absent
+                              (recur entries (conj gens nil-gen))))))))))
 
 (defn -map-of-gen [schema options]
   (->> options
-       (-intersect-solution (solver/solve schema (assoc options ::solver/mode :gen)))
        (-solve-each (fn [{min :min-count max :max-count :as solution} options]
                       (let [[k-gen v-gen :as gs] (map #(generator % options) (m/children schema options))]
                         (if (some -unreachable-gen? gs)
@@ -494,15 +484,15 @@
         identity)))
 
 (defn -cat-gen [schema options]
-  (-solve-each (fn [solution options]
-                 (let [gs (->> (m/children schema options)
-                               (map #(-regex-generator (entry->schema %) options)))]
-                   (when (not-any? -unreachable-gen? gs)
-                     (when-some [coerce (-coerce-regex-result solution)]
-                       (->> gs
-                            (apply gen/tuple)
-                            (gen/fmap (comp coerce #(apply concat %))))))))
-               options))
+  (->> options
+       (-solve-each (fn [solution options]
+                      (let [gs (->> (m/children schema options)
+                                    (map #(-regex-generator (entry->schema %) options)))]
+                        (when (not-any? -unreachable-gen? gs)
+                          (when-some [coerce (-coerce-regex-result solution)]
+                            (->> gs
+                                 (apply gen/tuple)
+                                 (gen/fmap (comp coerce #(apply concat %)))))))))))
 
 (defn -alt-gen [schema options]
   (gen-one-of (mapv #(-regex-generator (entry->schema %) options) (m/children schema options)) options))
@@ -526,10 +516,11 @@
   (let [mode (::-*-gen-mode options :*)
         options (dissoc options ::-*-gen-mode)]
     (->> options
-         (-intersect-solution {:type :sequential
-                               :min-count (case mode
-                                            :* 0
-                                            :+ 1)})
+         ;; TODO move to solver
+         (-intersect-solutions [{:type :sequential
+                                 :min-count (case mode
+                                              :* 0
+                                              :+ 1)}])
          (-solve-each (fn [solution options]
                         (let [child (m/-get schema 0 nil)]
                           (when-some [coerce (-coerce-regex-result solution)]
@@ -554,7 +545,9 @@
   (-solve-each (fn [solution options]
                  (let [child (m/-get schema 0 nil)]
                    (when-some [coerce (-coerce-regex-result solution)]
-                     (if-some [g (-not-unreachable (-coll-gen schema (if (m/-regex-op? child) {:type :sequential} solution) options))]
+                     (if-some [g (-not-unreachable
+                                   (-coll-gen schema
+                                              (-intersect-solutions [(if (m/-regex-op? child) {:type :sequential} solution)] options)))]
                        (cond->> g
                          (m/-regex-op? child)
                          (gen/fmap (comp coerce #(apply concat %))))
@@ -582,9 +575,9 @@
 (defmethod -schema-generator ::default [schema options] (ga/gen-for-pred (m/validator schema options)))
 
 (defmethod -schema-generator 'number? [schema options] (-number-gen* nil options))
-(defmethod -schema-generator :> [schema options] (-number-gen* {:min (inc (-child schema options))} options))
+(defmethod -schema-generator :> [schema options] (-number-gen* {:min (math/next-up (-child schema options))} options))
 (defmethod -schema-generator :>= [schema options] (-number-gen* {:min (-child schema options)} options))
-(defmethod -schema-generator :< [schema options] (-number-gen* {:max (dec (-child schema options))} options))
+(defmethod -schema-generator :< [schema options] (-number-gen* {:max (math/next-down (-child schema options))} options))
 (defmethod -schema-generator :<= [schema options] (-number-gen* {:max (-child schema options)} options))
 (defmethod -schema-generator := [schema options] (gen/return (-child schema options)))
 
@@ -594,8 +587,8 @@
                    {:max-tries 100
                     :ex-fn #(m/-exception ::not=-generator-failure (assoc % :schema schema))})))
 
-(defmethod -schema-generator 'pos? [_ options] (-number-gen* {:min 0.00001} options))
-(defmethod -schema-generator 'neg? [_ options] (-number-gen* {:max -0.0001} options))
+(defmethod -schema-generator 'pos? [_ options] (-number-gen* {:min (math/next-up 0)} options))
+(defmethod -schema-generator 'neg? [_ options] (-number-gen* {:max (math/next-down 0)} options))
 (defmethod -schema-generator 'pos-int? [_ options] (-int-gen* {:min 1} options))
 (defmethod -schema-generator 'neg-int? [_ options] (-int-gen* {:max -1} options))
 (defmethod -schema-generator 'nat-int? [_ options] (-int-gen* {:min 0} options))
@@ -617,9 +610,9 @@
 (defmethod -schema-generator :map [schema options] (-map-gen schema options))
 (defmethod -schema-generator :map-of [schema options] (-map-of-gen schema options))
 (defmethod -schema-generator :multi [schema options] (-multi-gen schema options))
-(defmethod -schema-generator :vector [schema options] (-coll-gen schema {:type :vector} options))
-(defmethod -schema-generator :sequential [schema options] (-coll-gen schema {:type :sequential} options))
-(defmethod -schema-generator :set [schema options] (-coll-distinct-gen schema {:type :set} options))
+(defmethod -schema-generator :vector [schema options] (-coll-gen schema options))
+(defmethod -schema-generator :sequential [schema options] (-coll-gen schema options))
+(defmethod -schema-generator :set [schema options] (-coll-distinct-gen schema options))
 (defmethod -schema-generator :enum [schema options] (gen-elements (m/children schema options)))
 (defmethod -schema-generator :seqable [schema options] (-seqable-gen schema options))
 (defmethod -schema-generator :every [schema options] (-seqable-gen schema options)) ;;infinite seqs?
@@ -693,7 +686,7 @@
 (extend-protocol Generator
   #?(:clj Object, :cljs default)
   (-generator [schema options]
-    (-schema-generator schema (assoc options ::original-generator-schema schema))))
+    (-schema-generator schema (-intersect-solutions (-solve-schema schema options) (assoc options ::original-generator-schema schema)))))
 
 (defn- -create-from-gen
   [props schema options]

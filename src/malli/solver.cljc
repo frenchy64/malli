@@ -306,4 +306,5 @@
                             (:vals %) (assoc :vals (:vals %)))]]))
           (or default-solutions [{}]))))
 
-(defmethod -solve :default [schema options] [{}])
+(defmethod -solve :default [schema options]
+  (if (::allow-incomplete-solution options) [{}] (m/-fail! ::missing-schema-solver {:schema schema})))
