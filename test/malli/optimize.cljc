@@ -4,6 +4,8 @@
             [malli.impl.util :as miu]
             [malli.solver :as solver]))
 
+(set! *warn-on-reflection* true)
+
 (defmulti -solution-validator (fn [solution options] (:type solution)))
 (defmethod -solution-validator :number
   [{:keys [max-number min-number] :as solution} _]
@@ -17,24 +19,33 @@
 (defn- -validate-map-linearly
   [{keys-solutions :keys vals-solutions :vals get-solutions :get
     :keys [keyset open-map min-count max-count default-keys default-vals]} options]
-  (let [required-keys (into #{} (mapcat (fn [[k v]] (when (= :present v) [k]))) keyset)
+  (let [required-keys (not-empty (into #{} (mapcat (fn [[k v]] (when (= :present v) [k]))) keyset))
+        nrequired (count required-keys)
         forbidden-keys (into #{} (mapcat (fn [[k v]] (when (= :absent v) [k]))) keyset)
+        ;default-keys-validator (-)
         default-validator (if open-map
-                            (fn [_ k v]
+                            (fn [nrequired k v]
                               (if (contains? forbidden-keys k)
-                                (reduced false)
-                                (assert nil)
-                                ))
+                                (reduced -1)
+                                (if (if (valid-key? k)
+                                      (valid-val? v)
+                                      false)
+                                  nrequired
+                                  (reduced -1))))
                             (if (or default-vals default-keys)
                               (assert nil)
+                              (assert nil)
                               ))
-        get-validators (into {} (map (fn [[k s]]
-                                       (let [valid? (-solution-validator s options)]
-                                         (fn [state _ v]
-                                           (if (valid? v)
-                                             (when state (not-empty (disj state k)))
-                                             (reduced false))))))
-                             get-solutions)]
+        get-validators (let [phm (into {} (map (fn [[k s]]
+                                                 (let [valid? (-solution-validator s options)
+                                                       required? (contains? required-keys k)]
+                                                   (fn [nrequired _ v]
+                                                     (if (valid? v)
+                                                       (dec nrequired)
+                                                       (reduced -1))))))
+                                       get-solutions)] 
+                         #?(:clj (java.util.HashMap. ^java.util.Map phm)
+                            :default phm))]
     (miu/-every-pred
       (-> [map?]
           (cond->
@@ -44,10 +55,9 @@
                                                  min-count #(<= min-count %)
                                                  max-count #(<= % max-count)))
                                              count)))
-          (conj #(let [state (volatile! required-keys)]
-                   (nil? (reduce-kv (fn [_ k v]
-                                      ((get-validators k default-validator) state k v))
-                                    required-keys %))))))))
+          (conj #(zero? (reduce-kv (fn [state k v]
+                                     ((#?(:clj .getOrDefault) get-validators k default-validator) state k v))
+                                   nrequired %)))))))
 
 (defn- -validate-map-via-lookup
   [{keys-solutions :keys vals-solutions :vals get-solutions :get
