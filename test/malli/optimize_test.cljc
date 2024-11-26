@@ -36,6 +36,7 @@
                                     [:core m/explainer m/explain]]]
     (testing (case kind :core "malli.core" :optimize "malli.optimize")
       (is (nil? (explain :int 1)))
+      ;;hmm by simplifying do we destroy the original schema structure?
       (when (= kind :optimize)
         (is (= {:schema :int, :value nil, :errors [{:path [], :in [], :schema nil, :value nil}]}
                (-> (explain :int nil)
