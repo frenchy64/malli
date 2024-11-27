@@ -41,19 +41,23 @@
   (let [schema (m/schema ?schema options)]
     (negated (error-message (-> error (dissoc :negated) (assoc :schema schema)) options))))
 
+(defn- -en-limits [{:keys [schema value negated]} _]
+  (let [{:keys [min max]} (m/properties schema)]
+    (cond
+      (and min (= min max)) (str "should have " min " elements")
+      (and min ((if negated >= <) (count value) min)) (str "should have at least " min " elements")
+      max (str "should have at most " max " elements"))))
+
+(defn- -en-collection [default] (fn [error options] (or (-en-limits error options) default)))
+
 (def default-errors
   {::unknown {:error/message {:en "unknown error"}}
    ::m/missing-key {:error/message {:en "missing required key"}}
-   ::m/limits {:error/fn {:en (fn [{:keys [schema value]} _]
-                                (let [{:keys [min max]} (m/properties schema)]
-                                  (cond
-                                    (and min (= min max)) (str "should have " min " elements")
-                                    (and min (< (count value) min)) (str "should have at least " min " elements")
-                                    max (str "should have at most " max " elements"))))}}
+   ::m/limits {:error/fn {:en -en-limits}}
    ::m/tuple-size {:error/fn {:en (fn [{:keys [schema value]} _]
                                     (let [size (count (m/children schema))]
                                       (str "invalid tuple size " (count value) ", expected " size)))}}
-   ::m/invalid-type {:error/message {:en "invalid type"}}
+   ::m/invalid-type {:error/fn {:en "invalid type"}}
    ::m/extra-key {:error/message {:en "disallowed key"}}
    :malli.core/invalid-dispatch-value {:error/message {:en "invalid dispatch value"}}
    ::misspelled-key {:error/fn {:en (fn [{::keys [likely-misspelling-of]} _]
@@ -141,6 +145,12 @@
    :qualified-keyword {:error/message {:en "should be a qualified keyword"}}
    :qualified-symbol {:error/message {:en "should be a qualified symbol"}}
    :uuid {:error/message {:en "should be a uuid"}}
+   :seqable {:error/fn {:en (-en-collection "should be seqable")}}
+   :every {:error/fn {:en (-en-collection "should be seqable")}}
+   :vector {:error/fn {:en (-en-collection "should be a vector")}}
+   :set {:error/fn {:en (-en-collection "should be a set")}}
+   :sequential {:error/fn {:en (-en-collection "should be sequential")}}
+   :map-of {:error/fn {:en (-en-collection "should be a map")}}
    :> {:error/fn {:en (fn [{:keys [schema value negated] :as error} options]
                         (if negated
                           (-forward-negation [:<= (first (m/children schema))] error options)

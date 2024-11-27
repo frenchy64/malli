@@ -930,3 +930,44 @@
                                                                   (negated "should not avoid being a multiple of 3")
                                                                   "should not be a multiple of 3"))}}
                                           #(not= 0 (mod % 3))]] 1))))))
+(deftest collection-negation-test
+  (testing ":seqable"
+    (is (= ["should not be seqable"] (me/humanize (m/explain [:not [:seqable :any]] ()))))
+    (is (= ["should not be seqable"] (me/humanize (m/explain [:not [:seqable :int]] [1]))))
+    (is (= ["should not have at least 1 elements"] (me/humanize (m/explain [:not [:seqable {:min 1} :any]] [1]))))
+    (is (= ["should not have 1 elements"] (me/humanize (m/explain [:not [:seqable {:min 1 :max 1} :any]] [1]))))
+    (is (= ["should not have at most 1 elements"] (me/humanize (m/explain [:not [:seqable {:max 1} :any]] [1]))))
+    (is (= [["should not be a symbol"]] (me/humanize (m/explain [:seqable [:not :symbol]] ['a])))))
+  (testing ":every"
+    (is (= ["should not be seqable"] (me/humanize (m/explain [:not [:every :any]] ()))))
+    (is (= ["should not have at least 1 elements"] (me/humanize (m/explain [:not [:every {:min 1} :any]] [1]))))
+    (is (= ["should not have 1 elements"] (me/humanize (m/explain [:not [:every {:min 1 :max 1} :any]] [1]))))
+    (is (= ["should not have at most 1 elements"] (me/humanize (m/explain [:not [:every {:max 1} :any]] [1]))))
+    (is (= [["should not be a symbol"]] (me/humanize (m/explain [:every [:not :symbol]] ['a])))))
+  (testing ":vector"
+    (is (= ["should not be a vector"] (me/humanize (m/explain [:not [:vector :any]] []))))
+    (is (= ["should not have at least 1 elements"] (me/humanize (m/explain [:not [:vector {:min 1} :any]] [1]))))
+    (is (= ["should not have 1 elements"] (me/humanize (m/explain [:not [:vector {:min 1 :max 1} :any]] [1]))))
+    (is (= ["should not have at most 1 elements"] (me/humanize (m/explain [:not [:vector {:max 1} :any]] [1]))))
+    (is (= [["should not be a symbol"]] (me/humanize (m/explain [:vector [:not :symbol]] ['a])))))
+  (testing ":set"
+    (is (= ["should not be a set"] (me/humanize (m/explain [:not [:set :any]] #{}))))
+    (is (= ["should not have at least 1 elements"] (me/humanize (m/explain [:not [:set {:min 1} :any]] #{1}))))
+    (is (= ["should not have 1 elements"] (me/humanize (m/explain [:not [:set {:min 1 :max 1} :any]] #{1}))))
+    (is (= ["should not have at most 1 elements"] (me/humanize (m/explain [:not [:set {:max 1} :any]] #{1}))))
+    (is (= #{["should not be a symbol"]} (me/humanize (m/explain [:set [:not :symbol]] #{'a})))))
+  (testing ":sequential"
+    (is (= ["should not be sequential"] (me/humanize (m/explain [:not [:sequential :any]] []))))
+    (is (= ["should not have at least 1 elements"] (me/humanize (m/explain [:not [:sequential {:min 1} :any]] [1]))))
+    (is (= ["should not have 1 elements"] (me/humanize (m/explain [:not [:sequential {:min 1 :max 1} :any]] [1]))))
+    (is (= ["should not have at most 1 elements"] (me/humanize (m/explain [:not [:sequential {:max 1} :any]] [1]))))
+    (is (= [["should not be a symbol"]] (me/humanize (m/explain [:sequential [:not :symbol]] ['a])))))
+  (testing ":map-of"
+    (is (= ["should not be a map"] (me/humanize (m/explain [:not [:map-of :any :any]] {}))))
+    (is (= ["should not have at least 1 elements"] (me/humanize (m/explain [:not [:map-of {:min 1} :any :any]] {1 1}))))
+    (is (= ["should not have 1 elements"] (me/humanize (m/explain [:not [:map-of {:min 1 :max 1} :any :any]] {1 1}))))
+    (is (= ["should not have at most 1 elements"] (me/humanize (m/explain [:not [:map-of {:max 1} :any :any]] {1 1}))))
+    (is (= {'a ["should not be a symbol"]} (me/humanize (m/explain [:map-of [:not :symbol] :any] {'a 'b}))))
+    (is (= {'a ["should not be a symbol"]} (me/humanize (m/explain [:map-of :int :int] {nil 1}))))
+    (is (= {'a ["should not be a symbol"]} (me/humanize (m/explain [:map-of :any [:not :symbol]] {'a 'a})))))
+)
