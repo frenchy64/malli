@@ -108,13 +108,13 @@
                   (me/humanize)))))
 
   (testing "top-level error"
-    (is (= ["should be an int"]
+    (is (= '("1" :-> "should be an int")
            (-> int?
                (m/explain "1")
                (me/humanize)))))
 
   (testing "vector"
-    (is (= [nil nil [nil ["should be an int"]]]
+    (is (= '[nil nil [nil ["should be an int"]]]
            (-> [:vector [:vector int?]]
                (m/explain [[1 2] [2 2] [3 "4"]])
                (me/humanize)))))
@@ -143,6 +143,15 @@
                (me/humanize)))))
 
   (testing "so nested"
+    ;; IDEA
+    #_'{:data [{:x [("1" :-> "should be an int")
+                    _
+                    ("3" :-> "should be an int")]}
+               {:x [("1" :-> "should be an int")
+                    _
+                    ("3" "should be an int")]}
+               _
+               {:x [["should be an int"]]}]}
     (is (= {:data [{:x [["should be an int"] nil ["should be an int"]]}
                    {:x [["should be an int"] nil ["should be an int"]]}
                    nil
@@ -173,7 +182,8 @@
                (me/humanize)))))
 
   (testing "maps have errors inside"
-    (is (= {:person ["should be a seq"]}
+    (is (= ;'{:person ({} :-> "should be a seq")}
+           '{:person ["should be a seq"]}
            (-> [:map [:person seq?]]
                (m/explain {:person {}})
                (me/humanize))))))
@@ -199,6 +209,12 @@
               :c ["STAY POSITIVE"],
               :d {:e ["missing required key"]
                   :f ["SHOULD BE ZIP"]}}
+             ;;IDEA
+             ;'{:a ("invalid" :-> "should be an int")
+             ;  :b ("invalid" :-> "should be a positive int")
+             ;  :c ("invalid" :-> "STAY POSITIVE"),
+             ;  :d {:e "missing required key"
+             ;      :f ("invalid" :-> "SHOULD BE ZIP")}}
              (-> (m/explain schema value)
                  (me/humanize)))))
 
@@ -248,6 +264,7 @@
 
   (testing "top-level map-schemas are written in :malli/error"
     (let [schema [:and [:map
+                        {:> [:x :y]}
                         [:x int?]
                         [:y int?]
                         [:z int?]]
@@ -543,7 +560,7 @@
              (m/explain [1 2 :foo])
              (me/humanize)))))
 
-(deftest error-definion-lookup-test
+(deftest error-definition-lookup-test
   (is (= {:foo ["should be an integer"]}
          (-> [:map
               [:foo :int]]
