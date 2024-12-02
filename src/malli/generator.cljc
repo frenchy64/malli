@@ -258,7 +258,7 @@
 (defn- -seqable-gen [schema options]
   (->> options
        (-solve-each (fn [{min :min-count :as solution} options]
-                      (let [el (-first-child schema options)
+                      (let [el (-child schema options)
                             type->options #(-intersect-solutions [{:type %}] (assoc options ::solutions [solution]))]
                         (gen-one-of
                           (-> []
