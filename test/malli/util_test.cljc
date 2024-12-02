@@ -3,10 +3,13 @@
             #?(:bb  [cheshire.core :as json]
                :clj [jsonista.core :as json])
             [malli.core :as m]
+            [malli.error :as me]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
             [malli.transform :as mt]
             [malli.util :as mu]))
+
+(defn ->options [] {:registry (merge (mu/schemas) (m/default-schemas))})
 
 #?(:clj (defn from-json [s]
           #?(:bb  (json/parse-string s)
@@ -860,7 +863,7 @@
       :altn [{:a "2"}])))
 
 (deftest declarative-schemas
-  (let [->> #(m/schema % {:registry (merge (mu/schemas) (m/default-schemas))})]
+  (let [->> #(m/schema % (->options))]
 
     (testing "merge"
       (let [s (->> [:merge
@@ -1103,12 +1106,19 @@
             [:name [:string {:default "kikka"}]]
             [:description {:optional true} [:string {:default "kikka"}]] ]
            {}
-           {:registry (merge (mu/schemas) (m/default-schemas))}
+           (->options)
            (mt/default-value-transformer {::mt/add-optional-keys true}))
          (m/decode
            [:merge
             [:map [:name [:string {:default "kikka"}]] ]
             [:map [:description {:optional true} [:string {:default "kikka"}]]]]
            {}
-           {:registry (merge (mu/schemas) (m/default-schemas))}
+           (->options)
            (mt/default-value-transformer {::mt/add-optional-keys true})))))
+
+(deftest contains-test
+  (is (m/validate [:contains :k] {:k 1} (->options)))
+  (is (not (m/validate [:contains :k] 1 (->options))))
+  (is (m/validate [:not [:contains :k]] {} (->options)))
+  (is (= ["should contain :k"] (me/humanize (m/explain [:contains :k] {} (->options)))))
+  (is (= ["should not contain :k"] (me/humanize (m/explain [:not [:contains :k]] {:k 1} (->options))))))
