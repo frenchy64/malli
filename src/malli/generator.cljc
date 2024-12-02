@@ -16,7 +16,7 @@
             [malli.impl.util :refer [-last -merge]]
             #?(:clj [borkdude.dynaload :as dynaload])))
 
-(declare generator generate -create gen-one-of)
+(declare generator generate -create ^:private gen-one-of)
 
 (defprotocol Generator
   (-generator [this options] "returns generator for schema"))
@@ -316,7 +316,7 @@
                           (let [vgen #(-value-gen k s (assoc options ::solutions (get-solutions k)))]
                             (case (keyset k)
                               :optional
-                              (recur entries (conj gens (gen-one-of [nil-gen (vgen)])))
+                              (recur entries (conj gens (gen-one-of [nil-gen (vgen)] options)))
                               :present
                               (if-some [g (-not-unreachable (vgen))]
                                 (recur entries (conj gens g))
@@ -616,7 +616,7 @@
 (defmethod -schema-generator :enum [schema options] (gen-elements (m/children schema options)))
 (defmethod -schema-generator :seqable [schema options] (-seqable-gen schema options))
 (defmethod -schema-generator :every [schema options] (-seqable-gen schema options)) ;;infinite seqs?
-(defmethod -schema-generator :maybe [schema options] (gen-one-of [nil-gen (-gen-child schema options)]))
+(defmethod -schema-generator :maybe [schema options] (gen-one-of [nil-gen (-gen-child schema options)] options))
 
 (defmethod -schema-generator :tuple [schema options]
   (let [gs (map #(generator % options) (m/children schema options))]
