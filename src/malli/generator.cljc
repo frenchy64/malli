@@ -89,7 +89,7 @@
   (solver/solve schema (assoc options ::solver/mode :gen ::solver/allow-incomplete-solution true)))
 
 (defn- -solve-each [f {::keys [solutions] :as options}]
-  (gen-one-of (into [] (keep #(f % (dissoc options ::solutions))) (or solutions [{}])) options))
+  (gen-one-of options (into [] (keep #(f % (dissoc options ::solutions))) (or solutions [{}]))))
 
 (def ^:private -max-double #?(:clj Double/MAX_VALUE :cljs (.-MAX_VALUE js/Number)))
 (def ^:private -min-double (- -max-double))
@@ -153,9 +153,9 @@
                options))
 
 (defn- -number-gen* [goptions options]
-  (gen-one-of [(-int-gen* goptions options)
-               (-double-gen* goptions options)]
-              options))
+  (gen-one-of options
+              [(-int-gen* goptions options)
+               (-double-gen* goptions options)]))
 
 (defn- gen-fmap [f gen] (or (-unreachable gen) (gen/fmap f gen)))
 (defn- gen-fcat [gen] (gen-fmap #(apply concat %) gen))
@@ -251,11 +251,6 @@
 
 (defn -and-gen [schema options]
   (gen-such-that schema (m/validator schema options) (-child-gen schema options)))
-
-(defn- gen-one-of [options gs]
-  (if-some [gs (not-empty (into [] (keep -not-unreachable) gs))]
-    (if (= 1 (count gs)) (nth gs 0) (gen/one-of gs))
-    (-never-gen options)))
 
 (defn- -seqable-gen [schema options]
   (->> options
@@ -577,8 +572,8 @@
 (defmethod -schema-generator :<= [schema options] (-number-gen* {:max (-child schema options)} options))
 (defmethod -schema-generator := [schema options] (gen/return (-child schema options)))
 (defmethod -schema-generator :not= [schema options] (gen-such-that schema #(not= % (-child schema options)) gen/any-printable))
-(defmethod -schema-generator 'pos? [_ options] (gen-one-of [(-number-gen* {:min 0.00001} options) (-int-gen* {:min 1} options)]))
-(defmethod -schema-generator 'neg? [_ options] (gen-one-of [(-number-gen* {:max -0.00001} options) (-int-gen* {:max -1} options)]))
+(defmethod -schema-generator 'pos? [_ options] (gen-one-of options [(-number-gen* {:min 0.00001} options) (-int-gen* {:min 1} options)]))
+(defmethod -schema-generator 'neg? [_ options] (gen-one-of options [(-number-gen* {:max -0.00001} options) (-int-gen* {:max -1} options)]))
 (defmethod -schema-generator :not [schema options] (gen-such-that schema (m/validator schema options) (ga/gen-for-pred any?)))
 (defmethod -schema-generator :and [schema options] (-and-gen schema options))
 (defmethod -schema-generator :or [schema options] (-or-gen schema options))
