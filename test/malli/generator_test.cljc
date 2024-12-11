@@ -1062,7 +1062,7 @@
        (mg/generate [:map-of {:min 2} [:= 1] :any])))
   (is (thrown-with-msg?
        #?(:clj Exception, :cljs js/Error)
-       #":malli\.generator/such-that-failure"
+       #":malli\.generator/unsatisfiable-schema"
        (mg/generate [:and pos? neg?]))))
 
 (deftest seqable-every-generator-test
@@ -1084,7 +1084,12 @@
       (is (= '({-1 false}
                {-4399 true, 59 false, -4049 false, -49 false, -1 false, 15 false, -967 false, -3 false, -674 false, 2730 true, -2104 false, 3 false, -444 true, 8 false}
                {119 true, 1324 false, 7276 false, -2410 true})
-             (filter map? (mg/sample [op [:tuple :int :boolean]] {:seed 1 :size 30})))))))
+             (filter map? (mg/sample [op [:tuple :int :boolean]] {:seed 1 :size 30}))))))
+  (is (= #{0 1 4 3 2 5}
+         (set (map count (filter map?
+                                 (mg/sample [:seqable {:max 5} [:tuple :any :any]]
+                                            {:seed 0
+                                             :size 100})))))))
 
 (deftest double-with-long-min-test
   (is (m/validate :double (shrink [:double {:min 3}])))
@@ -1118,6 +1123,82 @@
                   [{} :map]]]
       (is (every? #{{:type nil} {:type {}}} (mg/sample schema)))
       (is (every? (m/validator schema) (mg/sample schema))))))
+
+(deftest number-pred-generators-test
+  (doseq [f [pos? neg? pos-int? neg-int? nat-int? number? integer? int? float?]]
+    (testing (pr-str f)
+      (is (every? f (mg/sample f {:size 100}))))))
+
+(deftest and-schema-solver-test
+  (testing "numbers"
+    (is (thrown-with-msg?
+          #?(:clj Exception, :cljs js/Error)
+          #":malli\.generator/unsatisfiable-schema"
+          (dorun (mg/sample [:and :int [:>= 1.5] [:<= 1.5]] {:size 1000}))))
+    (is (= #{1} (set (mg/sample [:and :int [:>= 1] [:<= 1]] {:size 1000}))))
+    (is (= #{1 2} (set (mg/sample [:and :int [:or
+                                              [:and [:>= 1] [:<= 1]]
+                                              [:and [:>= 2] [:<= 2]]]] {:size 1000}))))
+    (is (= #{1 2} (set (mg/sample [:and :int [:or
+                                              [:and [:>= 2] [:<= 2]]
+                                              [:and [:>= 1] [:<= 1]]]] {:size 100000}))))
+    (is (= #{2 3} (set (distinct (mg/sample [:and :int [:>= 2] [:and [:or [:<= 3] [:<= 2]]]] {:size 100000})))))
+    (is (= #?(:cljs #{2.0 1.0} :default #{2 2.0 1 1.0})
+           (set (mg/sample [:or
+                            [:and [:>= 2] [:<= 2]]
+                            [:and [:>= 1] [:<= 1]]] {:size 100000}))))
+    (is (= #?(:cljs #{2.0} :default #{2 2.0}) (set (mg/sample [:and [:>= 2] [:<= 2]] {:size 100000}))))
+    (is (every? #(< 1 % 4) (mg/sample [:and [:> 1] [:< 4]] {:size 1000})))
+    ;;TODO use math/next-down in :< generator
+    ;(is (every? #(< 2 % 3) (mg/sample [:and [:> 2] [:< 3]] {:size 100000})))
+    (is (every? #(and (< 2 %) (<= % 3)) (mg/sample [:and [:> 2] [:<= 3]] {:size 100000})))
+    (is (some #{3.0} (mg/sample [:and [:> 2] [:<= 3]] {:size 100000})))
+    (is (every? #(and (<= 2 %) (< % 3)) (mg/sample [:and [:>= 2] [:< 3]] {:size 100000})))
+    (is (mg/generate [:and [:<= 3] [:fn {:gen/schema :int} int?]]))
+    (is (mg/generate [:and [:<= 3] [:fn {:gen/schema pos?} #(< 0 %)]]))
+    (is (mg/generate [:and [:<= 3] [:fn {:gen/schema neg?} #(< % 0)]] {:seed 0}))
+    (is (mg/sample [:and :int [:fn {:gen/schema neg?} #(< % 0)]]))
+    (is (mg/sample [:and :any :int]))
+    (is (mg/sample [:and :int :any])))
+
+  (testing "collections"
+    (is (every? vector? (mg/sample [:and [:cat :keyword] vector?])))
+    (is ((every-pred #(some vector? %) #(some list? %)) (mg/sample [:and [:cat :keyword] [:or list? vector?]] {:size 50})))
+    (is (every? list? (mg/sample [:and [:cat :keyword] list?])))
+    (is (every? vector? (mg/sample [:and [:cat :keyword [:* :any]] vector?])))
+    (is (every? vector? (mg/sample [:and [:* :any] vector?])))
+    (is (thrown-with-msg?
+          #?(:clj Exception, :cljs js/Error)
+          #":malli\.generator/unsatisfiable-schema"
+          (mg/generate [:and [:* :any] set?])))
+    (doseq [f [coll? vector? list? sequential? seqable?]
+            re [:* :? :+ :repeat :seqable]]
+      (testing (pr-str (-> f m/schema m/form) re)
+        (is (every? f (mg/sample [:and [re :any] f])))))
+    (doseq [f [empty?]
+            re [:* :? :repeat :seqable]]
+      (testing (pr-str (-> f m/schema m/form) re)
+        (is (every? f (mg/sample [:and [re :any] f])))))
+    (is (thrown-with-msg?
+          #?(:clj Exception, :cljs js/Error)
+          #":malli\.generator/unsatisfiable-schema"
+          (mg/generate [:and [:+ :any] empty?])))
+    (doseq [f [set? map?]
+            re [:? :repeat
+                ;;TODO
+                ;:vector
+                ;:sequential
+                ;; :* :+
+                ]]
+      (testing (pr-str (-> f m/schema m/form) re)
+        (is (thrown-with-msg?
+              #?(:clj Exception, :cljs js/Error)
+              #":malli\.generator/unsatisfiable-schema"
+              (mg/generate [:and [re :any] f])))))
+    (is (every? set? (mg/sample [:and [:seqable :any] set?]))))
+  ;TODO unsatisfiable
+  ;(is (every? set? (mg/sample [:and [:vector :any] list?])))
+)
 
 (deftest seqable-generates-non-empty-with-positive-min-test
   (is (seq (mg/generate [:seqable {:min 4 :max 4} :int] {:seed 0})))
