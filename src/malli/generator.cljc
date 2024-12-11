@@ -571,13 +571,6 @@
 
 (defmethod -schema-generator ::default [schema options] (ga/gen-for-pred (m/validator schema options)))
 
-(defmethod -schema-generator 'pos-int? [_ options] (-int-gen* {:min 1} options))
-(defmethod -schema-generator 'neg-int? [_ options] (-int-gen* {:max -1} options))
-(defmethod -schema-generator 'nat-int? [_ options] (-int-gen* {:min 0} options))
-(defmethod -schema-generator 'float? [_ options] (-double-gen* nil options))
-(defmethod -schema-generator 'integer? [_ options] (-int-gen* nil options))
-(defmethod -schema-generator 'int? [_ options] (-int-gen* nil options))
-(defmethod -schema-generator 'number? [schema options] (-number-gen* nil options))
 (defmethod -schema-generator :> [schema options] (-number-gen* {:min (inc (-child schema options))} options))
 (defmethod -schema-generator :>= [schema options] (-number-gen* {:min (-child schema options)} options))
 (defmethod -schema-generator :< [schema options] (-number-gen* {:max (dec (-child schema options))} options))
@@ -628,6 +621,13 @@
 (defmethod -schema-generator :qualified-keyword [schema _] (-qualified-keyword-gen schema))
 (defmethod -schema-generator :qualified-symbol [schema _] (-qualified-symbol-gen schema))
 (defmethod -schema-generator :uuid [_ _] gen/uuid)
+(defmethod -schema-generator 'pos-int? [_ options] (-int-gen* {:min 1} options))
+(defmethod -schema-generator 'neg-int? [_ options] (-int-gen* {:max -1} options))
+(defmethod -schema-generator 'nat-int? [_ options] (-int-gen* {:min 0} options))
+(defmethod -schema-generator 'float? [_ options] (-double-gen* nil options))
+(defmethod -schema-generator 'integer? [_ options] (-int-gen* nil options))
+(defmethod -schema-generator 'int? [_ options] (-int-gen* nil options))
+(defmethod -schema-generator 'number? [schema options] (-number-gen* nil options))
 
 (defmethod -schema-generator :=> [schema options] (-=>-gen schema options))
 (defmethod -schema-generator :-> [schema options] (-=>-gen schema options))
