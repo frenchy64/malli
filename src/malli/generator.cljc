@@ -246,6 +246,17 @@
     (if (= 1 (count gs)) (nth gs 0) (gen/one-of gs))
     (-never-gen options)))
 
+(defn- ->such-that-opts [schema] {:max-tries 100 :ex-fn #(m/-exception ::such-that-failure (assoc % :schema schema))})
+(defn- gen-such-that [schema pred gen] (or (-unreachable gen) (gen/such-that pred gen (->such-that-opts schema))))
+
+(defn -and-gen [schema options]
+  (gen-such-that schema (m/validator schema options) (-child-gen schema options)))
+
+(defn- gen-one-of [options gs]
+  (if-some [gs (not-empty (into [] (keep -not-unreachable) gs))]
+    (if (= 1 (count gs)) (nth gs 0) (gen/one-of gs))
+    (-never-gen options)))
+
 (defn- -seqable-gen [schema options]
   (->> options
        (-solve-each (fn [{min :min-count :as solution} options]
@@ -265,17 +276,6 @@
                                      (= 2 (count (m/children el))))
                                 (conj (let [[k v] (m/children el)]
                                         (generator [:map-of (or (m/properties schema) {}) k v] options)))))))))))
-
-(defn- ->such-that-opts [schema] {:max-tries 100 :ex-fn #(m/-exception ::such-that-failure (assoc % :schema schema))})
-(defn- gen-such-that [schema pred gen] (or (-unreachable gen) (gen/such-that pred gen (->such-that-opts schema))))
-
-(defn -and-gen [schema options]
-  (gen-such-that schema (m/validator schema options) (-child-gen schema options)))
-
-(defn- gen-one-of [options gs]
-  (if-some [gs (not-empty (into [] (keep -not-unreachable) gs))]
-    (if (= 1 (count gs)) (nth gs 0) (gen/one-of gs))
-    (-never-gen options)))
 
 (defn -or-gen [schema options]
   (gen-one-of options (map #(generator % options) (m/children schema options))))
