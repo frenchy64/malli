@@ -25,7 +25,6 @@
           [{maxk maxv}])))))
 
 (defn- -merge-number-constraints [{:keys [min-number max-number >-number <-number] :as sol}]
-  (prn "-merge-number-constraints" sol)
   (if (or min-number >-number max-number <-number)
     (let [[min-type min] (if (and min-number >-number)
                            (if (<= min-number >-number) [:>-number >-number] [:min-number min-number])
