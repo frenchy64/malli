@@ -24,6 +24,8 @@ Malli is in well matured [alpha](README.md#alpha).
 * `:not` humanizer [#1138](https://github.com/metosin/malli/pull/1138)
 * FIX: `:seqable` generates `nil` when `:min` is greater than 0 [#1121](https://github.com/metosin/malli/issues/1121)
 * FIX: `malli.registry/{mode,type}` not respected in Babashka [#1124](https://github.com/metosin/malli/issues/1124)
+* FIX: `:float` accepts doubles but never generates them [#1132](https://github.com/metosin/malli/issues/1132)
+* FIX: `:float` missing humanizer [#1122](https://github.com/metosin/malli/issues/1122)
 * Change `:and` generator to be more reliable
   * new function `malli.solver/solve` returns descriptions of values that satisfy schemas
   * new approach: `[:and s1 s2]` generates `s1` with `(solve s2)` narrowing `s1`'s generator by changing the arguments passed to test.check
