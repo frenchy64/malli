@@ -51,45 +51,27 @@
                     :qualified-symbol]]
       (is (every? (m/validator schema) (mg/sample schema {:size 1000})))))
 
-  (testing "double properties"
-    (let [infinity? #(or (= % ##Inf)
-                         (= % ##-Inf))
-          NaN? (fn [x]
-                 (#?(:clj  Double/isNaN
-                     :cljs js/isNaN)
-                  x))
-          special? #(or (NaN? %)
-                        (infinity? %))
-          test-presence (fn [f options]
-                          (some f (mg/sample [:double options]
-                                             {:size 1000})))]
-      (is (test-presence infinity? {:gen/infinite? true}))
-      (is (test-presence NaN? {:gen/NaN? true}))
-      (is (test-presence special? {:gen/infinite? true
-                                   :gen/NaN? true}))
-      (is (not (test-presence special? nil)))))
-
-  (testing "float properties"
-    (let [infinity? #(or (= % ##Inf)
-                         (= % ##-Inf))
-          NaN? (fn [x]
-                 (#?(:clj  Float/isNaN
-                     :cljs js/isNaN)
-                  x))
-          is-float? (fn [n]
-                      #?(:clj  (instance? Float n)
-                         :cljs (float? n)))
-          special? #(or (NaN? %)
-                        (infinity? %))
-          test-presence (fn [f options]
-                          (some f (mg/sample [:float options]
-                                             {:size 1000})))]
-      (is (test-presence #?(:clj (comp not infinity?) :cljs infinity?) {:gen/infinite? true}))
-      (is (test-presence is-float? {}))
-      (is (test-presence NaN? {:gen/NaN? true}))
-      (is (test-presence special? {:gen/infinite? true
-                                   :gen/NaN? true}))
-      (is (not (test-presence special? nil)))))
+  (doseq [s [:double :float]]
+    (testing (str s " properties")
+      (let [infinity? #(or (= % ##Inf)
+                           (= % ##-Inf))
+            NaN? (fn [x]
+                   (#?(:clj  Double/isNaN
+                       :cljs js/isNaN)
+                            x))
+            special? #(or (NaN? %)
+                          (infinity? %))
+            valid? (m/validator s)
+            test-presence (fn [f options]
+                            (let [vs (mg/sample [s options]
+                                                {:size 1000})]
+                              (and (every? valid? vs)
+                                   (some f vs))))]
+        (is (test-presence infinity? {:gen/infinite? true}))
+        (is (test-presence NaN? {:gen/NaN? true}))
+        (is (test-presence special? {:gen/infinite? true
+                                     :gen/NaN? true}))
+        (is (not (test-presence special? nil))))))
 
   (testing "qualified-keyword properties"
     (testing "no namespace => random"
@@ -708,8 +690,8 @@
                      (fn [formula]
                        (gen/one-of [gen/boolean
                                     (gen/tuple (gen/return :not) gen/boolean)
-                                    (gen/tuple (gen/return :and) (#'mg/gen-vector-min formula 1 {}))
-                                    (gen/tuple (gen/return :or) (#'mg/gen-vector-min formula 1 {}))]))
+                                    (gen/tuple (gen/return :and) (#'mg/gen-vector {:min 1} formula))
+                                    (gen/tuple (gen/return :or) (#'mg/gen-vector {:min 1} formula))]))
                      (gen/one-of [gen/boolean
                                   (gen/tuple (gen/return :not) gen/boolean)]))
                     {:seed 0}))))
@@ -902,8 +884,7 @@
          (catch #?(:clj Exception, :cljs js/Error) e
            (is (re-find #":malli\.generator/unsatisfiable-schema"
                         (ex-message e)))
-           (is (= [:map-of {:min 1} [:ref :malli.generator-test/rec] [:ref :malli.generator-test/rec]]
-                  (-> e ex-data :data :schema m/form))))))
+           (is (= [:ref :malli.generator-test/rec] (-> e ex-data :data :schema m/form))))))
   (testing "can generate empty regardless of :max"
     (is (= '({{} {}} {{} {}} {{} {}} {{} {}} {} {{} {}} {} {{} {}} {{} {}} {{{} {}} {{} {}}, {} {}})
            (mg/sample [:schema {:registry {::rec [:map-of {:max 3} [:ref ::rec] [:ref ::rec]]}} [:ref ::rec]]
@@ -1069,7 +1050,7 @@
 (deftest such-that-generator-failure-test
   (is (thrown-with-msg?
        #?(:clj Exception, :cljs js/Error)
-       #":malli\.generator/not-generator-failure"
+       #":malli\.generator/such-that-failure"
        (mg/generate [:not :any])))
   (is (thrown-with-msg?
        #?(:clj Exception, :cljs js/Error)
@@ -1218,3 +1199,9 @@
   ;TODO unsatisfiable
   ;(is (every? set? (mg/sample [:and [:vector :any] list?])))
 )
+
+(deftest seqable-generates-non-empty-with-positive-min-test
+  (is (seq (mg/generate [:seqable {:min 4 :max 4} :int] {:seed 0})))
+  (doseq [_ (range 100)
+          v (mg/sample [:seqable {:min 1} :any])]
+    (is (seq v))))
