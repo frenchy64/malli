@@ -249,9 +249,6 @@
 (defn- ->such-that-opts [schema] {:max-tries 100 :ex-fn #(m/-exception ::such-that-failure (assoc % :schema schema))})
 (defn- gen-such-that [schema pred gen] (or (-unreachable gen) (gen/such-that pred gen (->such-that-opts schema))))
 
-(defn -and-gen [schema options]
-  (gen-such-that schema (m/validator schema options) (-child-gen schema options)))
-
 (defn- -seqable-gen [schema options]
   (->> options
        (-solve-each (fn [{min :min-count :as solution} options]
