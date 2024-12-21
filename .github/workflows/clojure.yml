@@ -3,7 +3,7 @@ name: Run tests
 
 on:
   push:
-    branches: [master]
+    branches: [master, min-max-constraints-by-default]
   pull_request:
     branches: [master]
 
