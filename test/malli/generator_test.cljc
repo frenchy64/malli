@@ -898,7 +898,7 @@
                       {:seed 0})
          (is false)
          (catch #?(:clj Exception, :cljs js/Error) e
-           (is (re-find #":malli\.generator/infinitely-expanding-schema"
+           (is (re-find #":malli\.generator/unsatisfiable-schema"
                         (ex-message e)))
            (is (= [:map-of {:min 1} [:ref :malli.generator-test/rec] [:ref :malli.generator-test/rec]]
                   (-> e ex-data :data :schema m/form))))))

@@ -54,11 +54,14 @@
 
 (def nil-gen (gen/return nil))
 
+(defn- -child [schema options] (first (m/children schema options)))
+(defn- -child-gen [schema options] (generator (-child schema options) options))
+
 (defn -never-gen
   "Return a generator of no values that is compatible with -unreachable-gen?."
   [{::keys [original-generator-schema] :as _options}]
   (with-meta (gen/sized (fn [_]
-                          (m/-fail! ::infinitely-expanding-schema
+                          (m/-fail! ::unsatisfiable-schema
                                     (cond-> {}
                                       original-generator-schema (assoc :schema original-generator-schema)))))
              {::never-gen true
@@ -69,16 +72,9 @@
   [g] (-> (meta g) ::never-gen boolean))
 
 (defn -not-unreachable [g] (when-not (-unreachable-gen? g) g))
+(defn -unreachable [g] (when (-unreachable-gen? g) g))
 
 (defn- -random [seed] (if seed (random/make-random seed) (random/make-random)))
-
-(defn ^:deprecated -recur [_schema options]
-  (println (str `-recur " is deprecated, please update your generators. See instructions in malli.generator."))
-  [true options])
-
-(defn ^:deprecated -maybe-recur [_schema options]
-  (println (str `-maybe-recur " is deprecated, please update your generators. See instructions in malli.generator."))
-  options)
 
 (defn -min-max [schema options]
   (let [{:keys [min max] gen-min :gen/min gen-max :gen/max} (m/properties schema options)]
@@ -174,8 +170,9 @@
   {:pre [(-min-max schema options)]}
   (-min-max-solutions-gen schema options :min-count :max-count #(-coll-gen* % schema f options)))
 
-(defn- -coll-gen [schema f options]
-  (-constrained-or-legacy-gen -coll-gen-constrained -coll-gen-legacy schema f options))
+(defn- -coll-gen
+  ([schema options] (-coll-gen schema identity options))
+  ([schema f options] (-constrained-or-legacy-gen -coll-gen-constrained -coll-gen-legacy schema f options)))
 
 (defn- -coll-distinct-gen* [{:keys [min max]} schema f options]
   (let [child (-> schema m/children first)
@@ -533,12 +530,12 @@
 (defmethod -schema-generator :and [schema options] (-and-gen schema options))
 (defmethod -schema-generator :or [schema options] (-or-gen schema options))
 (defmethod -schema-generator :orn [schema options] (-or-gen (m/into-schema :or (m/properties schema) (map last (m/children schema)) (m/options schema)) options))
-(defmethod -schema-generator ::m/val [schema options] (generator (first (m/children schema)) options))
+(defmethod -schema-generator ::m/val [schema options] (-child-gen schema options))
 (defmethod -schema-generator :map [schema options] (-map-gen schema options))
 (defmethod -schema-generator :map-of [schema options] (-map-of-gen schema options))
 (defmethod -schema-generator :multi [schema options] (-multi-gen schema options))
-(defmethod -schema-generator :vector [schema options] (-coll-gen schema identity options))
-(defmethod -schema-generator :sequential [schema options] (-coll-gen schema identity options))
+(defmethod -schema-generator :vector [schema options] (-coll-gen schema options))
+(defmethod -schema-generator :sequential [schema options] (-coll-gen schema options))
 (defmethod -schema-generator :set [schema options] (-coll-distinct-gen schema set options))
 (defmethod -schema-generator :enum [schema options] (gen-elements (m/children schema options)))
 (defmethod -schema-generator :seqable [schema options] (-seqable-gen schema options))
