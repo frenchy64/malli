@@ -139,9 +139,6 @@
                     (min-max->gen (set/rename-keys solution {mink :min maxk :max})))
                   options))
 
-(defn -string-gen* [min-max options]
-  (gen-fmap str/join (gen-vector min-max gen/char-alphanumeric)))
-
 (defn- gen-vector-distinct-by [schema {:keys [min] :as m} f g]
   (if (-unreachable-gen? g)
     (if (= 0 (or min 0)) (gen/return []) g)
@@ -154,8 +151,8 @@
   (apply (if (mc/-constrained-schema? schema) constrained-gen legacy-gen) schema args))
 
 (defn- -string-gen [schema options]
-  {:pre [(-min-max schema options)]}
-  (-min-max-solutions-gen schema options :min-count :max-count #(-string-gen* % options)))
+  (-min-max-solutions-gen schema options :min-count :max-count
+                          #(gen-fmap str/join (gen-vector % gen/char-alphanumeric))))
 
 (defn- -coll-gen* [{:keys [min max]} schema f options]
   (let [child (-> schema m/children first)
