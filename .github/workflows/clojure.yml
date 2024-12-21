@@ -15,7 +15,7 @@ jobs:
       matrix:
         # Supported Java versions: LTS releases and latest
         jdk: [8, 11, 17, 21]
-        clojure: [11]
+        clojure: [11, 12]
 
     name: Java ${{ matrix.jdk }}
 
@@ -83,7 +83,7 @@ jobs:
         with:
           cli: latest
       - name: Setup Node.js
-        uses: actions/setup-node@v4.0.3
+        uses: actions/setup-node@v4.1.0
         with:
           node-version: 16
           cache: 'npm'

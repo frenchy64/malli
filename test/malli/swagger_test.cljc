@@ -334,8 +334,7 @@
 
 (deftest swagger-spec-test
   (testing "generates swagger for ::parameters and ::responses w/ basic schema"
-    (is (= {:definitions nil
-            :parameters [{:description ""
+    (is (= {:parameters [{:description ""
                           :in "body"
                           :name "body"
                           :required true
@@ -440,8 +439,7 @@
                                                             {:registry registry})}}})))))
 
   (testing "no schema in responses ignored"
-    (is (= {:definitions nil
-            :responses {200 {:description "" :schema {:type "string"}}
+    (is (= {:responses {200 {:description "" :schema {:type "string"}}
                         500 {:description "fail"}}}
            (swagger/swagger-spec {::swagger/responses
                                   {500 {:description "fail"}
@@ -519,8 +517,7 @@
                                   ::swagger/responses {200 {:schema #'Success}}}))))
   (testing "::parameters :query w/ var schema"
     ;; NB! all refs get inlined!
-    (is (= {:definitions nil
-            :parameters [{:description ""
+    (is (= {:parameters [{:description ""
                           :in "query"
                           :name :a
                           :required true

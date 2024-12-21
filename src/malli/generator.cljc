@@ -101,12 +101,29 @@
     max (gen/vector g 0 max)
     :else (gen/vector g)))
 
-(defn- gen-vector-min [gen min options]
-  (cond-> (gen/sized #(gen/vector gen min (+ min %)))
-    (::generator-ast options) (vary-meta assoc ::generator-ast
-                                         {:op :vector-min
-                                          :generator gen
-                                          :min min})))
+(defn- gen-fmap [f gen] (or (-unreachable gen) (gen/fmap f gen)))
+(defn- gen-fcat [gen] (gen-fmap #(apply concat %) gen))
+(defn- gen-tuple [gens] (or (some -unreachable gens) (apply gen/tuple gens)))
+(defn- gen-maybe [g] (if (-unreachable-gen? g) nil-gen (gen/one-of [nil-gen g])))
+(def ^:private double-default {:infinite? false, :NaN? false})
+(defn- gen-double [opts] (gen/double* (-> (into double-default opts) (update :min #(some-> % double)) (update :max #(some-> % double)))))
+
+(defn- gen-vector [{:keys [min max]} g]
+  (cond
+    (-unreachable-gen? g) (if (zero? (or min 0)) (gen/return []) g)
+    (and min (= min max)) (gen/vector g min)
+    (and min max) (gen/vector g min max)
+    min (vary-meta (gen/sized #(gen/vector g min (+ min %))) assoc ::generator-ast {:op :vector-min :generator g :min min})
+    max (gen/vector g 0 max)
+    :else (gen/vector g)))
+
+(defn- gen-vector-distinct-by [schema {:keys [min] :as m} f g]
+  (if (-unreachable-gen? g)
+    (if (= 0 (or min 0)) (gen/return []) g)
+    (gen/vector-distinct-by f g (-> (assoc (if (and min (= min max))
+                                             {:num-elements min}
+                                             (set/rename-keys m {:min :min-elements :max :max-elements}))
+                                           :ex-fn #(m/-exception ::distinct-generator-failure (assoc % :schema schema)))))))
 
 (defn- -constraint-solutions [constraint constraint-opts options]
   (solver/-constraint-solutions
@@ -154,19 +171,12 @@
   (-min-max-solutions-gen schema options :min-count :max-count
                           #(gen-fmap str/join (gen-vector % gen/char-alphanumeric))))
 
-(defn- -coll-gen* [{:keys [min max]} schema f options]
-  (let [child (-> schema m/children first)
-        gen (generator child options)]
-    (if (-unreachable-gen? gen)
-      (if (= 0 (or min 0))
-        (gen/fmap f (gen/return []))
-        (-never-gen options))
-      (gen/fmap f (cond
-                    (and min (= min max)) (gen/vector gen min)
-                    (and min max) (gen/vector gen min max)
-                    min (gen-vector-min gen min options)
-                    max (gen/vector gen 0 max)
-                    :else (gen/vector gen))))))
+(defn- -coll-gen* [min-max schema f options]
+  (->> (-child-gen schema options)
+       (gen-vector min-max)
+       (gen-fmap f)))
+
+(defn- gen-vector-distinct [schema m g] (gen-vector-distinct-by schema m identity g))
 
 (defn- -coll-gen-legacy [schema f options]
   (-coll-gen* (-min-max schema options) schema f options))
@@ -180,8 +190,6 @@
 (defn- -coll-gen
   ([schema options] (-coll-gen schema identity options))
   ([schema f options] (-constrained-or-legacy-gen -coll-gen-constrained -coll-gen-legacy schema f options)))
-
-(defn- gen-vector-distinct [schema m g] (gen-vector-distinct-by schema m identity g))
 
 (defn- -coll-distinct-gen* [min-max schema f options]
   (gen-fmap f (gen-vector-distinct schema min-max (-child-gen schema options))))
