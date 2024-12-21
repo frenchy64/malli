@@ -61,70 +61,34 @@
           (mg/generate [:int {:min 10 :max 9}]))))))
 
 (deftest double-constraint-generate-test
-  (testing ":and + :min + :max"
-    (is (= [-1.0 2.0 -0.0 1.0 -1.0 1.0 3.25 -3.0 -0.9375 -2.0]
-           (mg/sample [:double {}] options)
-           (mg/sample [:double {:and []}] options)))
-    (is (= [10.0 16.0 16.0 24.0 16.0 16.0 16.0 10.0 22.0 13.5]
-           (mg/sample [:double {:min 10}] options)
-           (mg/sample [:double {:and [[:min 10]]}] options)
-           (mg/sample [:double {:and [[:min 10] [:min 5]]}] options)))
-    (is (= [0.5 -2.0 -0.0 -3.0 3.0 -0.78125 1.75 1.0 1.10546875 -6.0]
-           (mg/sample [:double {:max 10}] options)
-           (mg/sample [:double {:and [[:max 10]]}] options)
-           (mg/sample [:double {:and [[:max 15] [:max 10]]}] options)))
-    (is (= [4.0 4.0 4.0 6.0 4.0 4.0 4.0 4.0 5.5 5.375]
-           (mg/sample [:double {:min 4 :max 6}] options)
-           (mg/sample [:double {:and [[:min 4] [:max 6]]}] options)
-           (mg/sample [:double {:and [[:min 4] [:max 6] [:min 3] [:max 7]]}] options)))
-    (is (= [-7.999999999999998 -8.0 -8.0 -9.0 -8.0 -8.0 -8.0 -7.999999999999998 -9.25 -6.75]
-           (mg/sample [:double {:min -10 :max -5}] options)
-           (mg/sample [:double {:and [[:min -10] [:max -5]]}] options)
-           (mg/sample [:double {:and [[:min -10] [:max -5] [:min -11] [:max -4]]}] options)))
-    (is (every? pos? (mg/sample [:double {:min 0.0000001}])))
-    (is (every? neg? (mg/sample [:double {:max -0.0000001}])))
-    (testing "with constraints the solver signals unsatisfiability with zero solutions"
-      (is (thrown-with-msg?
-          #?(:clj Exception, :cljs js/Error)
-          #":malli\.generator/unsatisfiable-constraint"
-          (mg/generate [:double {:min 10 :max 9}]))))))
-
-(deftest float-constraint-generate-test
-  (testing ":and + :min + :max"
-    (is (= #?(:cljs [-1 2 0 1 -1 1 3.25 -3 -0.9375 -2]
-              :default (mapv float [0.5 -2.0 -0.0 -3.0 3.0 -0.78125 1.75 1.0 1.1054688 -6.0]))
-           (mg/sample [:float {}] options)
-           (mg/sample [:float {:and []}] options)))
-    (is (= (mapv float [10.0 16.0 16.0 24.0 16.0 16.0 16.0 10.0 22.0 13.5])
-           (mg/sample [:float {:min 10}] options)
-           (mg/sample [:float {:and [[:min 10]]}] options)
-           (mg/sample [:float {:and [[:min 10] [:min 5]]}] options)))
-    (is (= (mapv float [0.5 -2.0 -0.0 -3.0 3.0 -0.78125 1.75 1.0 1.10546875 -6.0])
-           (mg/sample [:float {:max 10}] options)
-           (mg/sample [:float {:and [[:max 10]]}] options)
-           (mg/sample [:float {:and [[:max 15] [:max 10]]}] options)))
-    (is (= (mapv float [4.0 4.0 4.0 6.0 4.0 4.0 4.0 4.0 5.5 5.375])
-           (mg/sample [:float {:min 4 :max 6}] options)
-           (mg/sample [:float {:and [[:min 4] [:max 6]]}] options)
-           (mg/sample [:float {:and [[:min 4] [:max 6] [:min 3] [:max 7]]}] options)))
-    (is (= (mapv float [-7.999999999999998 -8.0 -8.0 -9.0 -8.0 -8.0 -8.0 -7.999999999999998 -9.25 -6.75])
-           (mg/sample [:float {:min -10 :max -5}] options)
-           (mg/sample [:float {:and [[:min -10] [:max -5]]}] options)
-           (mg/sample [:float {:and [[:min -10] [:max -5] [:min -11] [:max -4]]}] options)))
-    (is (every? (every-pred pos? float?) (mg/sample [:float {:min 0.0000001}])))
-    (is (every? (every-pred neg? float?) (mg/sample [:float {:max -0.0000001}])))
-    ;#?(:clj (testing "without constraints properties are checked for satisfiability"
-    ;          (is (thrown-with-msg?
-    ;                AssertionError
-    ;                (-> "(or (nil? lower-bound) (nil? upper-bound) (<= lower-bound upper-bound))"
-    ;                    java.util.regex.Pattern/quote
-    ;                    re-pattern)
-    ;                (mg/generate [:float {:min 10 :max 9}] {})))))
-    (testing "with constraints the solver signals unsatisfiability with zero solutions"
-      (is (thrown-with-msg?
-          #?(:clj Exception, :cljs js/Error)
-          #":malli\.generator/unsatisfiable-constraint"
-          (mg/generate [:float {:min 10 :max 9}]))))))
+  (doseq [t [:double :float]]
+    (testing ":and + :min + :max"
+      (is (= [-1.0 2.0 -0.0 1.0 -1.0 1.0 3.25 -3.0 -0.9375 -2.0]
+             (mg/sample [t {}] options)
+             (mg/sample [t {:and []}] options)))
+      (is (= [10.0 16.0 16.0 24.0 16.0 16.0 16.0 10.0 22.0 13.5]
+             (mg/sample [t {:min 10}] options)
+             (mg/sample [t {:and [[:min 10]]}] options)
+             (mg/sample [t {:and [[:min 10] [:min 5]]}] options)))
+      (is (= [0.5 -2.0 -0.0 -3.0 3.0 -0.78125 1.75 1.0 1.10546875 -6.0]
+             (mg/sample [t {:max 10}] options)
+             (mg/sample [t {:and [[:max 10]]}] options)
+             (mg/sample [t {:and [[:max 15] [:max 10]]}] options)))
+      (is (= [4.0 4.0 4.0 6.0 4.0 4.0 4.0 4.0 5.5 5.375]
+             (mg/sample [t {:min 4 :max 6}] options)
+             (mg/sample [t {:and [[:min 4] [:max 6]]}] options)
+             (mg/sample [t {:and [[:min 4] [:max 6] [:min 3] [:max 7]]}] options)))
+      (is (= [-7.999999999999998 -8.0 -8.0 -9.0 -8.0 -8.0 -8.0 -7.999999999999998 -9.25 -6.75]
+             (mg/sample [t {:min -10 :max -5}] options)
+             (mg/sample [t {:and [[:min -10] [:max -5]]}] options)
+             (mg/sample [t {:and [[:min -10] [:max -5] [:min -11] [:max -4]]}] options)))
+      (is (every? pos? (mg/sample [t {:min 0.0000001}])))
+      (is (every? neg? (mg/sample [t {:max -0.0000001}])))
+      (testing "with constraints the solver signals unsatisfiability with zero solutions"
+        (is (thrown-with-msg?
+              #?(:clj Exception, :cljs js/Error)
+              #":malli\.generator/unsatisfiable-constraint"
+              (mg/generate [t {:min 10 :max 9}])))))))
 
 (deftest vector+sequential-constraint-generate-test
   (doseq [type [:vector :sequential]]

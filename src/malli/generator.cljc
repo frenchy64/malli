@@ -450,6 +450,12 @@
     (gen/return (first es))
     (gen/elements es)))
 
+(defn- double-gen [props min-max]
+  (gen/double* (merge {:infinite? (get props :gen/infinite? false)
+                       :NaN? (get props :gen/NaN? false)}
+                      (-> min-max
+                          (update :min #(some-> % double))
+                          (update :max #(some-> % double))))))
 (defmulti -schema-generator (fn [schema options] (m/type schema options)) :default ::default)
 
 (defmethod -schema-generator ::default [schema options] (ga/gen-for-pred (m/validator schema options)))
@@ -484,45 +490,8 @@
 (defmethod -schema-generator :nil [_ _] nil-gen)
 (defmethod -schema-generator :string [schema options] (-string-gen schema options))
 (defmethod -schema-generator :int [schema options] (-min-max-solutions-gen schema options :min-range :max-range gen/large-integer*))
-
-(defn -double-gen* [props min-max]
-  (gen/double* (merge {:infinite? (get props :gen/infinite? false)
-                       :NaN? (get props :gen/NaN? false)}
-                      (-> min-max
-                          (update :min #(some-> % double))
-                          (update :max #(some-> % double))))))
-
-(defn -double-gen-constrained [schema options]
-  {:pre [(-min-max schema options)]}
-  (-min-max-solutions-gen schema options :min-range :max-range #(-double-gen* (m/properties schema options) %)))
-
-(defmethod -schema-generator :double [schema options] (-double-gen-constrained schema options))
-
-(defn -float-gen* [props min-max]
-  (let [max-float #?(:clj Float/MAX_VALUE :cljs (.-MAX_VALUE js/Number))
-        min-float (- max-float)
-        infinite? #?(:clj false :cljs (get props :gen/infinite? false))]
-    (->> (merge {:infinite? infinite?
-                 :NaN? (get props :gen/NaN? false)}
-                (-> min-max
-                    (update :min #(or (some-> % float)
-                                      #?(:clj min-float :cljs nil)))
-                    (update :max #(or (some-> % float)
-                                      #?(:clj max-float :cljs nil)))))
-         (gen/double*)
-         (gen/fmap float))))
-
-(defn -float-gen-legacy [schema options]
-  (-float-gen* (m/properties schema options) (-min-max schema options)))
-
-(defn -float-gen-constrained [schema options]
-  {:pre [(-min-max schema options)]}
-  (-min-max-solutions-gen schema options :min-range :max-range 
-                          #(-float-gen* (select-keys (m/properties schema options) [:gen/NaN? :gen/infinite?]) %)))
-
-(defmethod -schema-generator :float [schema options]
-  (-constrained-or-legacy-gen -float-gen-constrained -float-gen-legacy schema options))
-
+(defmethod -schema-generator :double [schema options] (-min-max-solutions-gen schema options :min-range :max-range #(double-gen (m/properties schema options) %)))
+(defmethod -schema-generator :float [schema options] (-min-max-solutions-gen schema options :min-range :max-range #(double-gen (m/properties schema options) %)))
 (defmethod -schema-generator :boolean [_ _] gen/boolean)
 (defmethod -schema-generator :keyword [_ _] gen/keyword)
 (defmethod -schema-generator :symbol [_ _] gen/symbol)
