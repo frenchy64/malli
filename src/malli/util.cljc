@@ -378,8 +378,10 @@
 ;;
 
 (defn -reducing [f]
-  (fn [_ [first & rest :as children] options]
-    (let [children (mapv #(m/schema % options) children)]
+  (fn [_ children options]
+    (when (empty? children)
+      (m/-fail! ::reducing-children-must-be-non-empty))
+    (let [[first & rest :as children] (mapv #(m/schema % options) children)]
       [children (mapv m/form children) (delay (reduce #(f %1 %2 options) first rest))])))
 
 (defn -applying [f]
@@ -392,8 +394,8 @@
 
 (defn- -safe-contains? [k] (m/-safe-pred #(contains? % k)))
 
-(defn -merge [] (-util-schema {:type :merge, :fn (-reducing merge)}))
-(defn -union [] (-util-schema {:type :union, :fn (-reducing union)}))
+(defn -merge [] (-util-schema {:type :merge, :fn (-reducing merge), :min 1}))
+(defn -union [] (-util-schema {:type :union, :fn (-reducing union), :min 1}))
 (defn -select-keys [] (-util-schema {:type :select-keys, :childs 1, :min 2, :max 2, :fn (-applying select-keys)}))
 (defn -contains [] (m/-proxy-schema {:type :contains, :childs 1, :min 1, :max 1,
                                      :fn (fn [_ [k :as children] options]

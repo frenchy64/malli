@@ -1122,3 +1122,15 @@
   (is (m/validate [:not [:contains :k]] {} (->options)))
   (is (= ["should contain :k"] (me/humanize (m/explain [:contains :k] {} (->options)))))
   (is (= ["should not contain :k"] (me/humanize (m/explain [:not [:contains :k]] {:k 1} (->options))))))
+
+(deftest -reducing-test
+  (is (= :map (m/form (m/deref-all (m/schema [:merge [:merge :map]] {:registry (merge (mu/schemas) (m/default-schemas))})))))
+  (is (= :map (m/form (m/deref-all (m/schema [:union [:union :map]] {:registry (merge (mu/schemas) (m/default-schemas))})))))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.core/child-error"
+        (m/schema :merge {:registry (merge (mu/schemas) (m/default-schemas))})))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.core/child-error"
+        (m/schema :union {:registry (merge (mu/schemas) (m/default-schemas))}))))
