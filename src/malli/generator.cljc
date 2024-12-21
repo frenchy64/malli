@@ -153,10 +153,7 @@
 (defn -constrained-or-legacy-gen [constrained-gen legacy-gen schema & args]
   (apply (if (mc/-constrained-schema? schema) constrained-gen legacy-gen) schema args))
 
-(defn- -string-gen-legacy [schema options]
-  (-string-gen* (-min-max schema options) options))
-
-(defn- -string-gen-constrained [schema options]
+(defn- -string-gen [schema options]
   {:pre [(-min-max schema options)]}
   (-min-max-solutions-gen schema options :min-count :max-count #(-string-gen* % options)))
 
@@ -485,21 +482,16 @@
 (defmethod -schema-generator :any [_ _] (ga/gen-for-pred any?))
 (defmethod -schema-generator :some [_ _] gen/any-printable)
 (defmethod -schema-generator :nil [_ _] nil-gen)
-(defmethod -schema-generator :string [schema options]
-  (-constrained-or-legacy-gen -string-gen-constrained -string-gen-legacy schema options))
+(defmethod -schema-generator :string [schema options] (-string-gen schema options))
 
 (defn -int-gen* [min-max]
   (gen/large-integer* min-max))
-
-(defn -int-gen-legacy [schema options]
-  (-int-gen* (-min-max schema options)))
 
 (defn -int-gen-constrained [schema options]
   {:pre [(-min-max schema options)]}
   (-min-max-solutions-gen schema options :min-range :max-range -int-gen*))
 
-(defmethod -schema-generator :int [schema options]
-  (-constrained-or-legacy-gen -int-gen-constrained -int-gen-legacy schema options))
+(defmethod -schema-generator :int [schema options] (-int-gen-constrained schema options))
 
 (defn -double-gen* [props min-max]
   (gen/double* (merge {:infinite? (get props :gen/infinite? false)
@@ -508,15 +500,11 @@
                           (update :min #(some-> % double))
                           (update :max #(some-> % double))))))
 
-(defn -double-gen-legacy [schema options]
-  (-double-gen* (m/properties schema options) (-min-max schema options)))
-
 (defn -double-gen-constrained [schema options]
   {:pre [(-min-max schema options)]}
   (-min-max-solutions-gen schema options :min-range :max-range #(-double-gen* (m/properties schema options) %)))
 
-(defmethod -schema-generator :double [schema options]
-  (-constrained-or-legacy-gen -double-gen-constrained -double-gen-legacy schema options))
+(defmethod -schema-generator :double [schema options] (-double-gen-constrained schema options))
 
 (defn -float-gen* [props min-max]
   (let [max-float #?(:clj Float/MAX_VALUE :cljs (.-MAX_VALUE js/Number))
