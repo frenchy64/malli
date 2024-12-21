@@ -483,15 +483,7 @@
 (defmethod -schema-generator :some [_ _] gen/any-printable)
 (defmethod -schema-generator :nil [_ _] nil-gen)
 (defmethod -schema-generator :string [schema options] (-string-gen schema options))
-
-(defn -int-gen* [min-max]
-  (gen/large-integer* min-max))
-
-(defn -int-gen-constrained [schema options]
-  {:pre [(-min-max schema options)]}
-  (-min-max-solutions-gen schema options :min-range :max-range -int-gen*))
-
-(defmethod -schema-generator :int [schema options] (-int-gen-constrained schema options))
+(defmethod -schema-generator :int [schema options] (-min-max-solutions-gen schema options :min-range :max-range gen/large-integer*))
 
 (defn -double-gen* [props min-max]
   (gen/double* (merge {:infinite? (get props :gen/infinite? false)
