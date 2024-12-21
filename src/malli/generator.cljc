@@ -450,12 +450,17 @@
     (gen/return (first es))
     (gen/elements es)))
 
-(defn- double-gen [props min-max]
-  (gen/double* (merge {:infinite? (get props :gen/infinite? false)
-                       :NaN? (get props :gen/NaN? false)}
-                      (-> min-max
-                          (update :min #(some-> % double))
-                          (update :max #(some-> % double))))))
+(defn- -int-gen [schema options] (-min-max-solutions-gen schema options :min-range :max-range gen/large-integer*))
+(defn- -double-gen [schema options]
+  (-min-max-solutions-gen schema options :min-range :max-range
+                          (fn [min-max]
+                            (gen/double* (merge (let [props (m/properties schema options)]
+                                                  {:infinite? (get props :gen/infinite? false)
+                                                   :NaN? (get props :gen/NaN? false)})
+                                                (-> min-max
+                                                    (update :min #(some-> % double))
+                                                    (update :max #(some-> % double))))))))
+
 (defmulti -schema-generator (fn [schema options] (m/type schema options)) :default ::default)
 
 (defmethod -schema-generator ::default [schema options] (ga/gen-for-pred (m/validator schema options)))
@@ -489,9 +494,9 @@
 (defmethod -schema-generator :some [_ _] gen/any-printable)
 (defmethod -schema-generator :nil [_ _] nil-gen)
 (defmethod -schema-generator :string [schema options] (-string-gen schema options))
-(defmethod -schema-generator :int [schema options] (-min-max-solutions-gen schema options :min-range :max-range gen/large-integer*))
-(defmethod -schema-generator :double [schema options] (-min-max-solutions-gen schema options :min-range :max-range #(double-gen (m/properties schema options) %)))
-(defmethod -schema-generator :float [schema options] (-min-max-solutions-gen schema options :min-range :max-range #(double-gen (m/properties schema options) %)))
+(defmethod -schema-generator :int [schema options] (-int-gen schema options))
+(defmethod -schema-generator :double [schema options] (-double-gen schema options))
+(defmethod -schema-generator :float [schema options] (-double-gen schema options))
 (defmethod -schema-generator :boolean [_ _] gen/boolean)
 (defmethod -schema-generator :keyword [_ _] gen/keyword)
 (defmethod -schema-generator :symbol [_ _] gen/symbol)
