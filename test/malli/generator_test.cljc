@@ -1063,7 +1063,7 @@
 (deftest such-that-generator-failure-test
   (is (thrown-with-msg?
        #?(:clj Exception, :cljs js/Error)
-       #":malli\.generator/not-generator-failure"
+       #":malli\.generator/such-that-failure"
        (mg/generate [:not :any])))
   (is (thrown-with-msg?
        #?(:clj Exception, :cljs js/Error)
