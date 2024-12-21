@@ -3,7 +3,6 @@
    [clojure.pprint :refer [pprint]]
    [clojure.test :as test]
    [clojure.tools.namespace.repl :as r]
-   malli.constraint
    [clojure.walk :refer [macroexpand-all]]))
 
 (r/set-refresh-dirs "src/malli" "dev" "test/malli")

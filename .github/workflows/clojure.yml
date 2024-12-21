@@ -3,21 +3,19 @@ name: Run tests
 
 on:
   push:
-    branches: [master, min-max-constraints-by-default]
+    branches: [master]
   pull_request:
     branches: [master]
 
 jobs:
   build-clj:
-    timeout-minutes: 5
-
     strategy:
       matrix:
         # Supported Java versions: LTS releases and latest
         jdk: [8, 11, 17, 21]
         clojure: [11, 12]
 
-    name: Java ${{ matrix.jdk }}
+    name: Clojure ${{ matrix.clojure }} (Java ${{ matrix.jdk }})
 
     runs-on: ubuntu-latest
 
@@ -28,34 +26,23 @@ jobs:
         with:
           distribution: zulu
           java-version: ${{ matrix.jdk }}
-      - uses: actions/cache/restore@v4
-        id: cache-restore
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.m2/repository
             ~/.gitlibs
-          key: ${{ runner.os }}-build-clj-${{ hashFiles('**/deps.edn') }}-${{ matrix.jdk }}
+          key: ${{ runner.os }}-test-deps-${{ hashFiles('**/deps.edn') }}-${{ matrix.clojure }}-${{ matrix.jdk }}
           restore-keys: |
-            ${{ runner.os }}-build-clj-${{ hashFiles('**/deps.edn') }}-
-            ${{ runner.os }}-build-clj-
+            ${{ runner.os }}-test-deps-${{ hashFiles('**/deps.edn') }}-${{ matrix.clojure }}-
+            ${{ runner.os }}-test-deps-
       - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@master
         with:
           cli: latest
       - name: Run tests
-        run: bin/kaocha
-      - name: Always Save Cache
-        id: cache-save
-        if: always() && steps.cache-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
-          path: |
-            ~/.m2/repository
-            ~/.gitlibs
+        run: CLOJURE_ALIAS=clojure-${{ matrix.clojure }} bin/kaocha
 
   build-cljs:
-    timeout-minutes: 5
     name: ClojureScript
     strategy:
       matrix:
@@ -69,15 +56,14 @@ jobs:
         with:
           distribution: zulu
           java-version: 11
-      - uses: actions/cache/restore@v4
-        id: cache-restore
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.m2/repository
             ~/.gitlibs
-          key: ${{ runner.os }}-build-cljs-${{ hashFiles('**/deps.edn') }}
+          key: ${{ runner.os }}-test-deps-${{ hashFiles('**/deps.edn') }}
           restore-keys: |
-            ${{ runner.os }}-build-cljs-
+            ${{ runner.os }}-test-deps-
       - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@master
         with:
@@ -86,23 +72,12 @@ jobs:
         uses: actions/setup-node@v4.1.0
         with:
           node-version: 16
-          cache: 'npm'
       - name: Install dependencies
         run: npm ci
       - name: Run tests on ${{ matrix.mode }}
         run: bin/node ${{ matrix.mode }}
-      - name: Always Save Cache
-        id: cache-save
-        if: always() && steps.cache-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
-          path: |
-            ~/.m2/repository
-            ~/.gitlibs
 
   build-bb:
-    timeout-minutes: 5
     name: Babashka
 
     runs-on: ubuntu-latest
@@ -113,17 +88,16 @@ jobs:
         with:
           distribution: zulu
           java-version: 11
-      - uses: actions/cache/restore@v4
-        id: cache-restore
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.m2/repository
             ~/.deps.clj
             ~/.gitlibs
-          key: ${{ runner.os }}-build-bb-${{ hashFiles('**/deps.edn') }}-${{ hashFiles('**/bb.edn') }}
+          key: ${{ runner.os }}-test-deps-${{ hashFiles('**/deps.edn') }}-${{ hashFiles('**/bb.edn') }}
           restore-keys: |
-            ${{ runner.os }}-build-bb-${{ hashFiles('**/deps.edn') }}-
-            ${{ runner.os }}-build-bb-
+            ${{ runner.os }}-test-deps-${{ hashFiles('**/deps.edn') }}-
+            ${{ runner.os }}-test-deps-
       - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@master
         with:
@@ -131,13 +105,3 @@ jobs:
           bb: latest
       - name: Run tests
         run: bb test-bb
-      - name: Always Save Cache
-        id: cache-save
-        if: always() && steps.cache-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
-          path: |
-            ~/.m2/repository
-            ~/.deps.clj
-            ~/.gitlibs
