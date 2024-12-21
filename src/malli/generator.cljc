@@ -139,13 +139,8 @@
                     (min-max->gen (set/rename-keys solution {mink :min maxk :max})))
                   options))
 
-(defn -string-gen* [{:keys [min max]} options]
-  (cond
-    (and min (= min max)) (gen/fmap str/join (gen/vector gen/char-alphanumeric min))
-    (and min max) (gen/fmap str/join (gen/vector gen/char-alphanumeric min max))
-    min (gen/fmap str/join (gen-vector-min gen/char-alphanumeric min options))
-    max (gen/fmap str/join (gen/vector gen/char-alphanumeric 0 max))
-    :else gen/string-alphanumeric))
+(defn -string-gen* [min-max options]
+  (gen-fmap str/join (gen-vector min-max gen/char-alphanumeric)))
 
 (defn- gen-vector-distinct-by [schema {:keys [min] :as m} f g]
   (if (-unreachable-gen? g)
