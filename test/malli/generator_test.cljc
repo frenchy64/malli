@@ -223,12 +223,14 @@
 
   (testing "generator override"
     (testing "without generator"
-      (let [schema [:fn {:gen/return 5
-                         :gen/fmap '(fn [_] (rand-int 10))}
+      (let [schema [:fn {:gen/elements [5]
+                         :gen/fmap '(fn [i] (rand-int i))}
                     '(fn [x] (<= 0 x 10))]
             generator (mg/generator schema)]
         (dotimes [_ 100]
-          (m/validate schema (mg/generate generator)))))
+          (let [v (mg/generate generator)]
+            (is (m/validate schema v))
+            (is (<= 0 v 5))))))
     (testing "with generator"
       (is (re-matches #"kikka_\d+" (mg/generate [:and {:gen/fmap '(partial str "kikka_")} pos-int?])))))
 
@@ -688,8 +690,8 @@
                      (fn [formula]
                        (gen/one-of [gen/boolean
                                     (gen/tuple (gen/return :not) gen/boolean)
-                                    (gen/tuple (gen/return :and) (#'mg/gen-vector-min formula 1 {}))
-                                    (gen/tuple (gen/return :or) (#'mg/gen-vector-min formula 1 {}))]))
+                                    (gen/tuple (gen/return :and) (#'mg/gen-vector {:min 1} formula))
+                                    (gen/tuple (gen/return :or) (#'mg/gen-vector {:min 1} formula))]))
                      (gen/one-of [gen/boolean
                                   (gen/tuple (gen/return :not) gen/boolean)]))
                     {:seed 0}))))
@@ -989,34 +991,37 @@
         (<= (int \A) i (int \Z))
         (<= (int \0) i (int \9)))))
 
+(deftest alphanumeric-char?-test
+  (is (alphanumeric-char? \a))
+  (is (not (alphanumeric-char? \-))))
+
 (defn alphanumeric-string? [s]
   {:pre [(string? s)]}
   (every? alphanumeric-char? s))
 
 (deftest string-gen-alphanumeric-test
-  (doseq [seed (range 100)
-          :let [options {:seed seed}]]
+  (dotimes [seed 100]
     (testing (pr-str seed)
       (testing "(and min (= min max))"
         (is (alphanumeric-string?
              (mg/generate [:string {:min 10, :max 10}]
-                          options))))
+                          {:seed seed}))))
       (testing "(and min max)"
         (is (alphanumeric-string?
              (mg/generate [:string {:min 10, :max 20}]
-                          options))))
+                          {:seed seed}))))
       (testing "min"
         (is (alphanumeric-string?
              (mg/generate [:string {:min 10}]
-                          options))))
+                          {:seed seed}))))
       (testing "max"
         (is (alphanumeric-string?
              (mg/generate [:string {:max 20}]
-                          options))))
+                          {:seed seed}))))
       (testing ":else"
         (is (alphanumeric-string?
              (mg/generate [:string {}]
-                          options)))))))
+                          {:seed seed})))))))
 
 (deftest non-empty-vector-generator-test
   (is (= [:.+ [1]]
@@ -1113,3 +1118,9 @@
                   [{} :map]]]
       (is (every? #{{:type nil} {:type {}}} (mg/sample schema)))
       (is (every? (m/validator schema) (mg/sample schema))))))
+
+(deftest seqable-generates-non-empty-with-positive-min-test
+  (is (seq (mg/generate [:seqable {:min 4 :max 4} :int] {:seed 0})))
+  (doseq [_ (range 100)
+          v (mg/sample [:seqable {:min 1} :any])]
+    (is (seq v))))
