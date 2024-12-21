@@ -189,16 +189,8 @@
 
 (defn- gen-vector-distinct [schema m g] (gen-vector-distinct-by schema m identity g))
 
-(defn- -coll-distinct-gen* [{:keys [min max]} schema f options]
-  (let [child (-> schema m/children first)
-        gen (generator child options)]
-    (if (-unreachable-gen? gen)
-      (if (= 0 (or min 0))
-        (gen/return (f []))
-        (-never-gen options))
-      (gen/fmap f (gen/vector-distinct gen {:min-elements min, :max-elements max, :max-tries 100
-                                            :ex-fn #(m/-exception ::distinct-generator-failure
-                                                                  (assoc % :schema schema))})))))
+(defn- -coll-distinct-gen* [min-max schema f options]
+  (gen-fmap f (gen-vector-distinct schema min-max (-child-gen schema options))))
 
 (defn- -coll-distinct-legacy-gen [schema f options]
   (-coll-distinct-gen* (-min-max schema options) schema f options))
