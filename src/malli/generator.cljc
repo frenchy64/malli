@@ -184,6 +184,8 @@
   ([schema options] (-coll-gen schema identity options))
   ([schema f options] (-constrained-or-legacy-gen -coll-gen-constrained -coll-gen-legacy schema f options)))
 
+(defn- gen-vector-distinct [schema m g] (gen-vector-distinct-by schema m identity g))
+
 (defn- -coll-distinct-gen* [{:keys [min max]} schema f options]
   (let [child (-> schema m/children first)
         gen (generator child options)]
@@ -217,7 +219,7 @@
     (-never-gen options)))
 
 (defn- -seqable-gen* [{:keys [min] :as props} schema options]
-  (let [el (-> schema m/children first)]
+  (let [el (-child schema options)]
     (gen-one-of
      options
      (-> []
@@ -410,23 +412,12 @@
   (gen/return (m/-instrument {:schema schema, :gen #(generate % options)} nil options)))
 
 (defn -regex-generator [schema options]
-  (if (m/-regex-op? schema)
-    (generator schema options)
-    (let [g (generator schema options)]
-      (cond-> g
-        (-not-unreachable g) gen/tuple))))
+  (cond-> (generator schema options) (not (m/-regex-op? schema)) (-> vector gen-tuple)))
 
 (defn- -re-entry-gen [e options] (-regex-generator (if (vector? e) (get e 2) e) options))
-(defn- entry->schema [e] (if (vector? e) (get e 2) e))
 
 (defn -cat-gen [schema options]
-  (let [gs (->> (m/children schema options)
-                (map #(-regex-generator (entry->schema %) options)))]
-    (if (some -unreachable-gen? gs)
-      (-never-gen options)
-      (->> gs
-           (apply gen/tuple)
-           (gen/fmap #(apply concat %))))))
+  (->> (m/children schema options) (map #(-re-entry-gen % options)) gen-tuple gen-fcat))
 
 (defn -alt-gen [schema options]
   (->> (m/children schema options) (map #(-re-entry-gen % options)) (gen-one-of options)))
