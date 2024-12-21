@@ -590,8 +590,7 @@
                 (-create-from-schema props options)
                 (-create-from-gen props schema options)
                 (m/-fail! ::no-generator {:options options
-                                          :schema schema
-                                          :form (m/form schema)}))]
+                                          :schema schema}))]
     (or (-create-from-fmap gen props schema options)
         gen)))
 
