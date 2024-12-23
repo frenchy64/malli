@@ -281,6 +281,8 @@
               (-fail! ::infinitely-expanding-schema {:schema ?schema})))
           (-into-schema p nil [?schema] options)))))
 
+;FIXME difference between (m/schema [:schema {::foo ...} [:foo {:prop ...}]]) and (m/schema [:foo {:prop ...}] {:registry {::foo ...}})
+;; see registry tests, they should both work
 (defn- -lookup! [?schema ?form f rec options]
   (or (and f (f ?schema) ?schema)
       (if-let [?schema (-lookup ?schema options)]
