@@ -2179,7 +2179,7 @@
      (schema? ?schema) ?schema
      (into-schema? ?schema) (-into-schema ?schema nil nil options)
      (vector? ?schema) (let [v #?(:clj ^IPersistentVector ?schema, :cljs ?schema)
-                             v0 #?(:clj (.nth v 0), :cljs (nth v 0))
+                             t #?(:clj (.nth v 0), :cljs (nth v 0))
                              n #?(:bb (count v) :clj (.count v), :cljs (count v))
                              ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
                              props? (or (nil? ?p) (map? ?p))
@@ -2187,14 +2187,14 @@
                              children (if props?
                                         (when (< 2 n) (subvec ?schema 2 n))
                                         (when (< 1 n) (subvec ?schema 1 n)))]
-                         (if-some [t (-lookup-into-schema v0 options)]
+                         (if (into-schema? t)
                            (into-schema t properties children options)
-                           (if-let [?schema' (and (-reference? v0) (-lookup v0 options))]
-                             (let [inner (schema ?schema' options)]
-                               (when (seq (-children inner))
-                                 (when (seq children)
-                                   (-fail! ::cannot-provide-children-to-schema {:schema ?schema})))
-                               (-pointer v0 (-set-children inner children) properties options))
+                           (if-let [?schema' (mr/-schema (-registry options) t)]
+                             (let [inner (schema (if (schema? ?schema')
+                                                   ?schema'
+                                                   (into [?schema' nil] children))
+                                                 options)]
+                               (-pointer t inner properties options))
                              (-fail! ::invalid-schema {:schema ?schema}))))
      :else (if-let [?schema' (and (-reference? ?schema) (-lookup ?schema options))]
              (-pointer ?schema (schema ?schema' options) nil options)
