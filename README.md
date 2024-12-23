@@ -20,7 +20,7 @@ Data-driven Schemas for Clojure/Script and [babashka](#babashka).
 - [Inferring Schemas](#inferring-schemas) from sample values and [Destructuring](#destructuring).
 - Tools for [Programming with Schemas](#programming-with-schemas)
 - [Parsing](#parsing-values) and [Unparsing](#unparsing-values) values
-- [Sequence](#sequence-schemas), [Vector](#vector-schemas), and [Set](#set-schemas) Schemas
+- [Enumeration](#enumeration-schemas), [Sequence](#sequence-schemas), [Vector](#vector-schemas), and [Set](#set-schemas) Schemas
 - [Persisting schemas](#persisting-schemas), even [function schemas](#serializable-functions)
 - Immutable, Mutable, Dynamic, Lazy and Local [Schema Registries](#schema-registry)
 - [Schema Transformations](#schema-Transformation) to [JSON Schema](#json-schema), [Swagger2](#swagger2), and [descriptions in english](#description)
@@ -48,6 +48,10 @@ Want to contribute? See the [Development](#development) guide.
 
 <img src="https://raw.githubusercontent.com/metosin/malli/master/docs/img/malli-defn.png" width="600" />
 
+> Hi! We are [Metosin](https://metosin.fi), a consulting company. These libraries have evolved out of the work we do for our clients.
+> We maintain & develop this project, for you, for free. Issues and pull requests welcome!
+> However, if you want more help using the libraries, or want us to build something as cool for you, consider our [commercial support](https://www.metosin.fi/en/open-source-support).
+
 ## Motivation
 
 We are building dynamic multi-tenant systems where data models should be first-class: they should drive the runtime value transformations, forms and processes. We should be able to edit the models at runtime, persist them and load them back from a database and over the wire, for both Clojure and ClojureScript. Think of [JSON Schema](https://json-schema.org/), but for Clojure/Script.
@@ -68,7 +72,7 @@ So, we decided to spin out our own library, which would do all the things we fee
 
 [![Clojars Project](http://clojars.org/metosin/malli/latest-version.svg)](http://clojars.org/metosin/malli)
 
-Malli requires Clojure 1.11.
+Malli requires Clojure 1.11 or ClojureScript 1.11.51.
 
 Malli is tested with the LTS releases Java 8, 11, 17 and 21.
 
@@ -329,6 +333,32 @@ Most core-predicates are mapped to Schemas:
 
 See [the full list of default schemas](#schema-registry).
 
+## Enumeration schemas
+
+`:enum` schemas `[:enum V1 V2 ...]` represent an enumerated set of values `V1 V2 ...`.
+
+This mostly works as you'd expect, with values passing the schema if it is contained in the set and generators returning one of the values,
+shrinking to the left-most value.
+
+There are some special cases to keep in mind around syntax. Since schema properties can be specified with a map or nil, enumerations starting with
+a map or nil must use slightly different syntax.
+
+If your `:enum` does not have properties, you must provide `nil` as the properties.
+
+```clojure
+[:enum nil {}]  ;; singleton schema of {}
+[:enum nil nil] ;; singleton schema of nil
+```
+
+If your `:enum` has properties, the leading map with be interpreted as properties, not an enumerated value.
+
+```clojure
+[:enum {:foo :bar} {}]  ;; singleton schema of {}, with properties {:foo :bar}
+[:enum {:foo :bar} nil] ;; singleton schema of nil, with properties {:foo :bar}
+```
+
+In fact, these syntax rules apply to all schemas, but `:enum` is the most common schema where this is relevant so it deserves a special mention.
+
 ## Qualified keys in a map
 
 You can also use [decomplected maps keys and values](https://clojure.org/about/spec#_decomplect_mapskeysvalues) using registry references. References must be either qualified keywords or strings.
@@ -382,6 +412,51 @@ default branching can be arbitrarily nested:
  {:x 1, :y 2, 1 1, 2 2})
 ; => true
 ```
+
+## Seqable schemas
+
+The `:seqable` and `:every` schemas describe `seqable?` collections. They
+differ in their handling of collections that are neither `counted?` nor `indexed?`, and their
+[parsers](#parsing-values):
+1. `:seqable` parses its elements but `:every` does not and returns the identical input, and
+2. valid unparsed `:seqable` values lose the original collection type while `:every`
+   returns the identical input.
+
+`:seqable` validates the entire collection, while `:every` checks only the
+largest of `:min`, `(inc :max)`, and `(::m/coll-check-limit options 101)`, or
+the entire collection if the input is `counted?` or `indexed?`.
+
+```clojure
+;; :seqable and :every validate identically with small, counted, or indexed collections.
+(m/validate [:seqable :int] #{1 2 3})
+;=> true
+(m/validate [:seqable :int] [1 2 3])
+;=> true
+(m/validate [:seqable :int] (sorted-set 1 2 3))
+;=> true
+(m/validate [:seqable :int] (range 1000))
+;=> true
+(m/validate [:seqable :int] (conj (vec (range 1000)) nil))
+;=> false
+
+(m/validate [:every :int] #{1 2 3})
+;=> true
+(m/validate [:every :int] [1 2 3])
+;=> true
+(m/validate [:every :int] (sorted-set 1 2 3))
+;=> true
+(m/validate [:every :int] (vec (range 1000)))
+;=> true
+(m/validate [:every :int] (conj (vec (range 1000)) nil))
+;=> false
+
+;; for large uncounted and unindexed collections, :every only checks a certain length
+(m/validate [:seqable :int] (concat (range 1000) [nil]))
+;=> false
+(m/validate [:every :int] (concat (range 1000) [nil]))
+;=> true
+```
+
 
 ## Sequence schemas
 
@@ -742,7 +817,50 @@ Or if you already have a malli validation exception (e.g. in a catch form):
 
 ## Custom error messages
 
-Error messages can be customized with `:error/message` and `:error/fn` properties:
+Error messages can be customized with `:error/message` and `:error/fn` properties.
+
+If `:error/message` is of a predictable structure, it will automatically support custom `[:not schema]` failures for the following locales:
+- `:en` if message starts with `should` or `should not` then they will be swapped automatically. Otherwise, message is ignored.
+```clojure
+;; e.g.,
+(me/humanize
+  (m/explain
+    [:not
+     [:fn {:error/message {:en "should be a multiple of 3"}}
+      #(= 0 (mod % 3))]]
+    3))
+; => ["should not be a multiple of 3"]
+```
+
+The first argument to `:error/fn` is a map with keys:
+- `:schema`, the schema to explain
+- `:value` (optional), the value to explain
+- `:negated` (optional), a function returning the explanation of `(m/explain [:not schema] value)`.
+  If provided, then we are explaining the failure of negating this schema via `(m/explain [:not schema] value)`.
+  Note in this scenario, `(m/validate schema value)` is true.
+  If returning a string, 
+  the resulting error message will be negated by the `:error/fn` caller in the same way as `:error/message`.
+  Returning `(negated string)` disables this behavior and `string` is used as the negated error message.
+```clojure
+;; automatic negation
+(me/humanize
+  (m/explain
+    [:not [:fn {:error/fn {:en (fn [_ _] "should not be a multiple of 3")}}
+           #(not= 0 (mod % 3))]]
+    1))
+; => ["should be a multiple of 3"]
+
+;; manual negation
+(me/humanize
+  (m/explain [:not [:fn {:error/fn {:en (fn [{:keys [negated]} _]
+                                          (if negated
+                                            (negated "should not avoid being a multiple of 3")
+                                            "should not be a multiple of 3"))}}
+                    #(not= 0 (mod % 3))]] 1))
+; => ["should not avoid being a multiple of 3"]
+```
+
+Here are some basic examples of `:error/message` and `:error/fn`:
 
 ```clojure
 (-> [:map
@@ -1383,10 +1501,22 @@ Making keys optional or required:
 ; [:x {:optional true} int?]
 ; [:y {:optional true} int?]]
 
-(mu/required-keys [:map [:x {:optional true} int?] [:y int?]])
+(mu/optional-keys [:map [:x int?] [:y int?]]
+                  [:x])
+;[:map
+; [:x {:optional true} int?]
+; [:y int?]]
+
+(mu/required-keys [:map [:x {:optional true} int?] [:y {:optional true} int?]])
 ;[:map
 ; [:x int?]
 ; [:y int?]]
+
+(mu/required-keys [:map [:x {:optional true} int?] [:y {:optional true} int?]]
+                  [:x])
+;[:map
+; [:x int?]
+; [:y {:optional true} int?]]
 ```
 
 Closing and opening all `:map` schemas recursively:
@@ -1696,6 +1826,71 @@ is equivalent to `[:map [:x [:or :string :int]]]`.
 ; => true
 ```
 
+### Distributive schemas
+
+`:merge` also distributes over `:multi` in a [similar way](https://en.wikipedia.org/wiki/Distributive_property) to how multiplication
+distributes over addition in arithmetic. There are two transformation rules, applied in the following order:
+
+```clojure
+;; right-distributive
+[:merge [:multi M1 M2 ...] M3]
+=>
+[:multi [:merge M1 M3] [:merge M2 M3] ...]
+
+;; left-distributive
+[:merge M1 [:multi M2 M3 ...]]
+=>
+[:multi [:merge M1 M2] [:merge M1 M3] ...]
+```
+
+For `:merge` with more than two arguments, the rules are applied iteratively left-to-right
+as if the following transformation was applied:
+
+```clojure
+[:merge M1 M2 M3 M4 ...]
+=>
+[:merge
+ [:merge
+  [:merge M1 M2]
+  M3]
+ M4]
+...
+```
+
+The distributive property of `:multi` is useful combined with `:merge`
+if you want all clauses of a `:multi` to share extra entries.
+
+Here are concrete examples of applying the rules:
+
+```clojure
+;; left-distributive
+(m/deref
+ [:merge
+  [:map [:x :int]]
+  [:multi {:dispatch :y}
+   [1 [:map [:y [:= 1]]]]
+   [2 [:map [:y [:= 2]]]]]]
+ {:registry registry})
+; => [:multi {:dispatch :y}
+;     [1 [:map [:x :int] [:y [:= 1]]]]
+;     [2 [:map [:x :int] [:y [:= 2]]]]]
+
+;; right-distributive
+(m/deref
+ [:merge
+  [:multi {:dispatch :y}
+   [1 [:map [:y [:= 1]]]]
+   [2 [:map [:y [:= 2]]]]]
+  [:map [:x :int]]]
+ {:registry registry})
+; => [:multi {:dispatch :y}
+;     [1 [:map [:y [:= 1]] [:x :int]]]
+;     [2 [:map [:y [:= 2]] [:x :int]]]]
+```
+
+It is not recommended to use local registries in schemas that are transformed.
+Also be aware that merging non-maps via the distributive property inherits
+the same semantics as `:merge`, which is based on [meta-merge](https://github.com/weavejester/meta-merge).
 
 ## Persisting schemas
 
@@ -2623,7 +2818,7 @@ You can also build content-dependent schemas by using a callback function `:comp
     :compile (fn [_properties [min max] _options]
                (when-not (and (int? min) (int? max))
                  (m/-fail! ::invalid-children {:min min, :max max}))
-               {:pred #(and (int? %) (>= min % max))
+               {:pred #(and (int? %) (<= min % max))
                 :min 2 ;; at least 1 child
                 :max 2 ;; at most 1 child
                 :type-properties {:error/fn (fn [error _] (str "should be between " min " and " max ", was " (:value error)))
@@ -3277,19 +3472,19 @@ The transformation engine is smart enough to just transform parts of the schema 
 
 ## Built-in schemas
 
-#### `malli.core/predicate-schemas`
+### `malli.core/predicate-schemas`
 
 Contains both function values and unqualified symbol representations for all relevant core predicates. Having both representations enables reading forms from both code (function values) and EDN-files (symbols): `any?`, `some?`, `number?`, `integer?`, `int?`, `pos-int?`, `neg-int?`, `nat-int?`, `pos?`, `neg?`, `float?`, `double?`, `boolean?`, `string?`, `ident?`, `simple-ident?`, `qualified-ident?`, `keyword?`, `simple-keyword?`, `qualified-keyword?`, `symbol?`, `simple-symbol?`, `qualified-symbol?`, `uuid?`, `uri?`, `decimal?`, `inst?`, `seqable?`, `indexed?`, `map?`, `vector?`, `list?`, `seq?`, `char?`, `set?`, `nil?`, `false?`, `true?`, `zero?`, `rational?`, `coll?`, `empty?`, `associative?`, `sequential?`, `ratio?`, `bytes?`, `ifn?` and `fn?`.
 
-#### `malli.core/class-schemas`
+### `malli.core/class-schemas`
 
 Class-based schemas, contains `java.util.regex.Pattern` & `js/RegExp`.
 
-#### `malli.core/comparator-schemas`
+### `malli.core/comparator-schemas`
 
 Comparator functions as keywords: `:>`, `:>=`, `:<`, `:<=`, `:=` and `:not=`.
 
-#### `malli.core/type-schemas`
+### `malli.core/type-schemas`
 
 Type-like schemas: `:any`, `:some`, `:nil`, `:string`, `:int`, `:double`, `:boolean`, `:keyword`, `:qualified-keyword`, `:symbol`, `:qualified-symbol`, and `:uuid`.
 

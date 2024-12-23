@@ -49,47 +49,29 @@
                     :symbol
                     :qualified-keyword
                     :qualified-symbol]]
-      (is (every? (partial m/validate schema) (mg/sample schema {:size 1000})))))
+      (is (every? (m/validator schema) (mg/sample schema {:size 1000})))))
 
-  (testing "double properties"
-    (let [infinity? #(or (= % ##Inf)
-                         (= % ##-Inf))
-          NaN? (fn [x]
-                 (#?(:clj  Double/isNaN
-                     :cljs js/isNaN)
-                  x))
-          special? #(or (NaN? %)
-                        (infinity? %))
-          test-presence (fn [f options]
-                          (some f (mg/sample [:double options]
-                                             {:size 1000})))]
-      (is (test-presence infinity? {:gen/infinite? true}))
-      (is (test-presence NaN? {:gen/NaN? true}))
-      (is (test-presence special? {:gen/infinite? true
-                                   :gen/NaN? true}))
-      (is (not (test-presence special? nil)))))
-
-  (testing "float properties"
-    (let [infinity? #(or (= % ##Inf)
-                         (= % ##-Inf))
-          NaN? (fn [x]
-                 (#?(:clj  Float/isNaN
-                     :cljs js/isNaN)
-                  x))
-          is-float? (fn [n]
-                      #?(:clj  (instance? Float n)
-                         :cljs (float? n)))
-          special? #(or (NaN? %)
-                        (infinity? %))
-          test-presence (fn [f options]
-                          (some f (mg/sample [:float options]
-                                             {:size 1000})))]
-      (is (test-presence #?(:clj (comp not infinity?) :cljs infinity?) {:gen/infinite? true}))
-      (is (test-presence is-float? {}))
-      (is (test-presence NaN? {:gen/NaN? true}))
-      (is (test-presence special? {:gen/infinite? true
-                                   :gen/NaN? true}))
-      (is (not (test-presence special? nil)))))
+  (doseq [s [:double :float]]
+    (testing (str s " properties")
+      (let [infinity? #(or (= % ##Inf)
+                           (= % ##-Inf))
+            NaN? (fn [x]
+                   (#?(:clj  Double/isNaN
+                       :cljs js/isNaN)
+                            x))
+            special? #(or (NaN? %)
+                          (infinity? %))
+            valid? (m/validator s)
+            test-presence (fn [f options]
+                            (let [vs (mg/sample [s options]
+                                                {:size 1000})]
+                              (and (every? valid? vs)
+                                   (some f vs))))]
+        (is (test-presence infinity? {:gen/infinite? true}))
+        (is (test-presence NaN? {:gen/NaN? true}))
+        (is (test-presence special? {:gen/infinite? true
+                                     :gen/NaN? true}))
+        (is (not (test-presence special? nil))))))
 
   (testing "qualified-keyword properties"
     (testing "no namespace => random"
@@ -165,16 +147,16 @@
     (testing "recursion"
       (let [schema [:schema {:registry {::cons [:maybe [:tuple int? [:ref ::cons]]]}}
                     ::cons]]
-        (is (every? (partial m/validate schema) (mg/sample schema {:size 100})))))
+        (is (every? (m/validator schema) (mg/sample schema {:size 100})))))
     (testing "mutual recursion"
       (let [schema [:schema
                     {:registry {::ping [:maybe [:tuple [:= "ping"] [:ref ::pong]]]
                                 ::pong [:maybe [:tuple [:= "pong"] [:ref ::ping]]]}}
                     ::ping]]
-        (is (every? (partial m/validate schema) (mg/sample schema {:size 100})))))
+        (is (every? (m/validator schema) (mg/sample schema {:size 100})))))
     (testing "recursion limiting"
       (are [schema]
-        (every? (partial m/validate schema) (mg/sample schema {:size 100}))
+        (every? (m/validator schema) (mg/sample schema {:size 100}))
 
         [:schema {:registry {::rec [:maybe [:ref ::rec]]}} ::rec]
         [:schema {:registry {::rec [:map [:rec {:optional true} [:ref ::rec]]]}} ::rec]
@@ -241,11 +223,14 @@
 
   (testing "generator override"
     (testing "without generator"
-      (let [schema [:fn {:gen/fmap '(fn [_] (rand-int 10))}
+      (let [schema [:fn {:gen/elements [5]
+                         :gen/fmap '(fn [i] (rand-int i))}
                     '(fn [x] (<= 0 x 10))]
             generator (mg/generator schema)]
         (dotimes [_ 100]
-          (m/validate schema (mg/generate generator)))))
+          (let [v (mg/generate generator)]
+            (is (m/validate schema v))
+            (is (<= 0 v 5))))))
     (testing "with generator"
       (is (re-matches #"kikka_\d+" (mg/generate [:and {:gen/fmap '(partial str "kikka_")} pos-int?])))))
 
@@ -369,7 +354,7 @@
                      [:map [:x int?] [:y int?]]
                      [:x]]]
             :let [schema (m/schema schema {:registry registry})]]
-      (is (every? (partial m/validate schema) (mg/sample schema {:size 1000}))))))
+      (is (every? (m/validator schema) (mg/sample schema {:size 1000}))))))
 
 #?(:clj
    (deftest function-schema-test
@@ -705,8 +690,8 @@
                      (fn [formula]
                        (gen/one-of [gen/boolean
                                     (gen/tuple (gen/return :not) gen/boolean)
-                                    (gen/tuple (gen/return :and) (#'mg/gen-vector-min formula 1 {}))
-                                    (gen/tuple (gen/return :or) (#'mg/gen-vector-min formula 1 {}))]))
+                                    (gen/tuple (gen/return :and) (#'mg/gen-vector {:min 1} formula))
+                                    (gen/tuple (gen/return :or) (#'mg/gen-vector {:min 1} formula))]))
                      (gen/one-of [gen/boolean
                                   (gen/tuple (gen/return :not) gen/boolean)]))
                     {:seed 0}))))
@@ -897,10 +882,9 @@
                       {:seed 0})
          (is false)
          (catch #?(:clj Exception, :cljs js/Error) e
-           (is (re-find #":malli\.generator/infinitely-expanding-schema"
+           (is (re-find #":malli\.generator/unsatisfiable-schema"
                         (ex-message e)))
-           (is (= [:map-of {:min 1} [:ref :malli.generator-test/rec] [:ref :malli.generator-test/rec]]
-                  (-> e ex-data :data :schema m/form))))))
+           (is (= [:ref :malli.generator-test/rec] (-> e ex-data :data :schema m/form))))))
   (testing "can generate empty regardless of :max"
     (is (= '({{} {}} {{} {}} {{} {}} {{} {}} {} {{} {}} {} {{} {}} {{} {}} {{{} {}} {{} {}}, {} {}})
            (mg/sample [:schema {:registry {::rec [:map-of {:max 3} [:ref ::rec] [:ref ::rec]]}} [:ref ::rec]]
@@ -999,10 +983,17 @@
 
 (defn alphanumeric-char? [c]
   {:pre [(char? c)]}
-  (let [i (int c)]
+  (let [int (fn [c]
+              #?(:clj (int c)
+                 :cljs (.charCodeAt c 0)))
+        i (int c)]
     (or (<= (int \a) i (int \z))
         (<= (int \A) i (int \Z))
         (<= (int \0) i (int \9)))))
+
+(deftest alphanumeric-char?-test
+  (is (alphanumeric-char? \a))
+  (is (not (alphanumeric-char? \-))))
 
 (defn alphanumeric-string? [s]
   {:pre [(string? s)]}
@@ -1045,18 +1036,21 @@
 (deftest map-of-min-max-test
   (is (empty? (remove #(<= 2 (count %))
                       (mg/sample [:map-of {:min 2} [:enum 1 2 3] :any]
-                                 {:size 100}))))
+                                 {:size 100
+                                  :seed 3}))))
   (is (empty? (remove #(<= (count %) 2)
                       (mg/sample [:map-of {:max 2} [:enum 1 2 3] :any]
-                                 {:size 100}))))
+                                 {:size 100
+                                  :seed 3}))))
   (is (empty? (remove #(<= 2 (count %) 3)
                       (mg/sample [:map-of {:min 2 :max 3} [:enum 1 2 3] :any]
-                                 {:size 100})))))
+                                 {:size 100
+                                  :seed 3})))))
 
 (deftest such-that-generator-failure-test
   (is (thrown-with-msg?
        #?(:clj Exception, :cljs js/Error)
-       #":malli\.generator/not-generator-failure"
+       #":malli\.generator/such-that-failure"
        (mg/generate [:not :any])))
   (is (thrown-with-msg?
        #?(:clj Exception, :cljs js/Error)
@@ -1068,9 +1062,65 @@
        (mg/generate [:map-of {:min 2} [:= 1] :any])))
   (is (thrown-with-msg?
        #?(:clj Exception, :cljs js/Error)
-       #":malli\.generator/and-generator-failure"
+       #":malli\.generator/such-that-failure"
        (mg/generate [:and pos? neg?]))))
+
+(deftest seqable-every-generator-test
+  (doseq [op [:seqable :every]]
+    (testing op
+      #?(:clj  (is (= '[[nil ()]
+                        ["Eduction" (0)]
+                        ["PersistentHashSet" ()]
+                        ["Object[]" (0)]
+                        ["PersistentVector" (-2 2 0 1)]
+                        ["PersistentVector" (1 -2)]
+                        ["PersistentVector" (-9)]
+                        ["PersistentVector" (3 -49 -4)]
+                        ["PersistentVector" (-23 1 82)]
+                        ["Eduction" (126 -24 -236 0 -18 0 0 2 -1)]]
+                      (mapv (juxt #(some-> (class %) .getSimpleName) sequence) (mg/sample [op :int] {:seed 0}))))
+         :cljs (is (= '[() (0) () (0) (-2 2 0 1) (1 -2) (-9) (3 -49 -4) (-23 1 82) (126 -24 -236 0 -18 0 0 2 -1)]
+                      (mapv sequence (mg/sample [op :int] {:seed 0})))))
+      (is (= '({-1 false}
+               {-4399 true, 59 false, -4049 false, -49 false, -1 false, 15 false, -967 false, -3 false, -674 false, 2730 true, -2104 false, 3 false, -444 true, 8 false}
+               {119 true, 1324 false, 7276 false, -2410 true})
+             (filter map? (mg/sample [op [:tuple :int :boolean]] {:seed 1 :size 30})))))))
 
 (deftest double-with-long-min-test
   (is (m/validate :double (shrink [:double {:min 3}])))
   (is (= 3.0 (shrink [:double {:min 3}]))))
+
+(deftest multi-keyword-dispatch-test
+  (testing "keyword dispatch value accumulates to generated value"
+    (let [schema [:multi {:dispatch :type}
+                  ["duck" :map]
+                  ["boss" :map]]]
+      (is (every? #{{:type "duck"} {:type "boss"}} (mg/sample schema)))
+      (is (every? (m/validator schema) (mg/sample schema)))))
+
+  (testing "non keyword doesn't accumulate data"
+    (let [schema [:multi {:dispatch (fn [x] (:type x))}
+                  ["duck" :map]
+                  ["boss" :map]]]
+      (is (every? #{{}} (mg/sample schema)))
+      (is (not (every? (m/validator schema) (mg/sample schema))))))
+
+  (testing "::m/default works too"
+    (let [schema [:multi {:dispatch :type}
+                  ["duck" :map]
+                  [::m/default [:= "boss"]]]]
+      (is (every? #{{:type "duck"} "boss"} (mg/sample schema)))
+      (is (every? (m/validator schema) (mg/sample schema)))))
+
+  (testing "works with nil & {} too"
+    (let [schema [:multi {:dispatch :type}
+                  [nil :map]
+                  [{} :map]]]
+      (is (every? #{{:type nil} {:type {}}} (mg/sample schema)))
+      (is (every? (m/validator schema) (mg/sample schema))))))
+
+(deftest seqable-generates-non-empty-with-positive-min-test
+  (is (seq (mg/generate [:seqable {:min 4 :max 4} :int] {:seed 0})))
+  (doseq [_ (range 100)
+          v (mg/sample [:seqable {:min 1} :any])]
+    (is (seq v))))

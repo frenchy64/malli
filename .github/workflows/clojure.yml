@@ -13,7 +13,7 @@ jobs:
       matrix:
         # Supported Java versions: LTS releases and latest
         jdk: [8, 11, 17, 21]
-        clojure: [11]
+        clojure: [11, 12]
 
     name: Clojure ${{ matrix.clojure }} (Java ${{ matrix.jdk }})
 
@@ -69,7 +69,7 @@ jobs:
         with:
           cli: latest
       - name: Setup Node.js
-        uses: actions/setup-node@v4.0.2
+        uses: actions/setup-node@v4.1.0
         with:
           node-version: 16
       - name: Install dependencies
@@ -102,8 +102,6 @@ jobs:
         uses: DeLaGuardo/setup-clojure@master
         with:
           cli: latest
-          # bb: latest
-      - name: Download bb master
-        run: bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install) --version 0.8.157-SNAPSHOT
+          bb: latest
       - name: Run tests
         run: bb test-bb

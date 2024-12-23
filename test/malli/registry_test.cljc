@@ -24,7 +24,13 @@
                  m/form)))
       (is (= [::bare {:doc ""}]
              (-> (m/schema [::bare {:doc ""}] {:registry registry})
-                 m/form))))))
+                 m/form))))
+    (register! ::int-pair (m/schema [:tuple :int :int]))
+    (is (thrown-with-msg?
+          #?(:clj Exception, :cljs js/Error)
+          #?(:clj #":malli\.core/infinitely-expanding-schema"
+             :cljs #":malli\.core/invalid-schema")
+          (m/schema [::int-pair {:foo :bar}] {:registry registry})))))
 
 (deftest composite-test
   (let [registry* (atom {})

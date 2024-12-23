@@ -14,9 +14,52 @@ We use [Break Versioning][breakver]. The version numbers follow a `<major>.<mino
 
 Malli is in well matured [alpha](README.md#alpha).
 
-## UNRELEASED
+## 0.17.0 (2024-12-08)
 
-* `:->` added to dedault registry, also to [documentation](docs/function-schemas.md#flat-arrow-function-schemas).
+* Don't output `:definitions nil` in swagger. [#1134](https://github.com/metosin/malli/issues/1134)
+* **BREAKING**: `:gen/fmap` property requires its schema to create a generator.
+  * previous behavior defaulted to a `nil`-returning generator, even if the schema doesn't accept `nil`
+  * use `:gen/return nil` property to restore this behavior
+* Support decoding map keys into keywords for `[:map` schemas in `json-transformer` [#1135](https://github.com/metosin/malli/issues/1135)
+* `:not` humanizer [#1138](https://github.com/metosin/malli/pull/1138)
+* FIX: `:seqable` generates `nil` when `:min` is greater than 0 [#1121](https://github.com/metosin/malli/issues/1121)
+* FIX: `malli.registry/{mode,type}` not respected in Babashka [#1124](https://github.com/metosin/malli/issues/1124)
+* FIX: `:float` accepts doubles but never generates them [#1132](https://github.com/metosin/malli/issues/1132)
+* FIX: `:float` missing humanizer [#1122](https://github.com/metosin/malli/issues/1122)
+* Updated dependencies:
+
+```
+fipp/fipp '0.6.26' to '0.6.27'
+```
+
+## 0.16.4 (2024-08-30)
+
+* Distribute `:merge` over `:multi` [#1086](https://github.com/metosin/malli/pull/1086), see [documentation](README.md#distributive-schemas)
+* `:multi` with keyword `:dispatch` accumulates data to generated values [#1095](https://github.com/metosin/malli/pull/1095)
+* Allow `m/-proxy-schema` child to be a `delay` [#1090](https://github.com/metosin/malli/pull/1090)
+* `json-transformer` decodes 123.0 into 123 for schemas like `:int`, `pos-int?` etc. [#986](https://github.com/metosin/malli/issues/986)
+* Fix `malli.dev.pretty` throws when explaining errors in nested maps [#1094](https://github.com/metosin/malli/issues/1096)
+* Fix ClojureScript [arithmetic warning](https://github.com/metosin/malli/issues/1093)
+* Fix `(-some-pred [])` should return `false` [#1101](https://github.com/metosin/malli/pull/1101)
+* Doc `mu/assoc` and `mu/dissoc` only handle one key at a time [#1099](https://github.com/metosin/malli/pull/1099)
+* Try to make `map-of-min-max-test` less flaky by fixing seed [#1098](https://github.com/metosin/malli/pull/1098)
+* Updated dependencies:
+
+```
+borkdude/edamame '1.4.25' to '1.4.27'
+```
+
+## 0.16.3 (2024-08-05)
+
+* `:->` added to default registry, see [documentation](https://github.com/metosin/malli/blob/master/docs/function-schemas.md#flat-arrow-function-schemas).
+* New `:seqable` and `:every` schemas [#1041](https://github.com/metosin/malli/pull/1041), see [docs](https://github.com/metosin/malli#seqable-schemas)
+* Fix OOM error with infinitely expanding schema [#1069](https://github.com/metosin/malli/pull/1069)
+* Correctly form prop-less schemas that have map/nil as first child [#1071](https://github.com/metosin/malli/pull/1071)
+* Support min/max on uncountables like eductions [#1075](https://github.com/metosin/malli/pull/1075)
+* Fix clj-kondo can't parse config.edn written by `(malli.dev/start!)` [#1083](https://github.com/metosin/malli/issues/1083)
+* unstrument before instrumenting [#1081](https://github.com/metosin/malli/pull/1081)
+* Replace `.entryAt` with `.valAt` during validation [#1079](https://github.com/metosin/malli/pull/1079)
+* Corrected DEPRECATED warning for `m/-simple-schema` [#1077](https://github.com/metosin/malli/pull/1077)
 
 ## 0.16.2 (2024-06-30)
 

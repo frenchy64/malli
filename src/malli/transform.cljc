@@ -1,6 +1,8 @@
 (ns malli.transform
   #?(:cljs (:refer-clojure :exclude [Inst Keyword UUID]))
   (:require [malli.core :as m]
+            [malli.util :as mu]
+            [clojure.math :as math]
             #?(:cljs [goog.date.UtcDateTime])
             #?(:cljs [goog.date.Date]))
   #?(:clj (:import (java.time Instant ZoneId)
@@ -94,6 +96,12 @@
 (defn -number->double [x]
   (if (number? x) (double x) x))
 
+(defn -number->long [x]
+  (cond
+    (integer? x) x
+    (and (number? x) (== x (math/round x))) (math/round x)
+    :else x))
+
 (defn -string->keyword [x]
   (if (string? x) (keyword x) x))
 
@@ -184,8 +192,11 @@
          (catch #?(:clj Exception, :cljs js/Error) _ x))
     x))
 
-(defn -transform-map-keys [f]
-  #(cond->> % (map? %) (into {} (map (fn [[k v]] [(f k) v])))))
+(defn -transform-map-keys
+  ([f]
+   #(cond->> % (map? %) (into {} (map (fn [[k v]] [(f k) v])))))
+  ([ks f]
+   #(cond->> % (map? %) (into {} (map (fn [[k v]] [(cond-> k (contains? ks k) f) v]))))))
 
 (defn -transform-if-valid [f schema]
   (let [validator (m/-validator schema)]
@@ -254,6 +265,13 @@
    'float? -number->float
    'double? -number->double
    'inst? -string->date
+   'integer? -number->long
+   'int? -number->long
+   'pos-int? -number->long
+   'neg-int? -number->long
+   'nat-int? -number->long
+   'zero? -number->long
+
    #?@(:clj ['uri? -string->uri])
 
    :enum {:compile (-infer-child-compiler :decode)}
@@ -261,6 +279,7 @@
 
    :float -number->float
    :double -number->double
+   :int -number->long
    :keyword -string->keyword
    :symbol -string->symbol
    :qualified-keyword -string->keyword
@@ -388,7 +407,9 @@
 
 (defn json-transformer
   ([] (json-transformer nil))
-  ([{::keys [json-vectors map-of-key-decoders] :or {map-of-key-decoders (-string-decoders)}}]
+  ([{::keys [json-vectors
+             keywordize-map-keys
+             map-of-key-decoders] :or {map-of-key-decoders (-string-decoders)}}]
    (transformer
     {:name :json
      :decoders (-> (-json-decoders)
@@ -400,6 +421,13 @@
                                                             (-transform-if-valid key-schema)
                                                             (-transform-map-keys))
                                                     (-transform-map-keys m/-keyword->string))))})
+                   (cond-> keywordize-map-keys
+                     (assoc :map {:compile (fn [schema _]
+                                             (let [keyword-keys (->> (mu/keys schema)
+                                                                     (filter keyword?)
+                                                                     (map name)
+                                                                     set)]
+                                               (-transform-map-keys keyword-keys -string->keyword)))}))
                    (cond-> json-vectors (assoc :vector -sequential->vector)))
      :encoders (-json-encoders)})))
 

@@ -545,10 +545,36 @@
       #_(is (= 1 (m/decode schema "1" mt/string-transformer)))
       #_(is (= "1" (m/decode schema "1" mt/json-transformer)))
 
-      (testing "map enums require nil properties"
-        (let [schema [:enum nil {:a 1} {:b 2}]]
-          (is (= nil (m/properties schema)))
-          (is (= [{:a 1} {:b 2}] (m/children schema)))))
+      (testing "nil enums without properties require empty properties"
+        (let [schema [:enum nil nil]]
+          (testing (pr-str schema)
+            (is (= nil (m/properties schema)))
+            (is (= [nil] (m/children schema)))
+            (is (= schema (m/form schema)))
+            (is (= schema (-> schema m/form m/schema m/form))))))
+
+      (testing "nil nums support properties"
+        (let [schema [:enum {:foo :bar} nil]]
+          (is (= {:foo :bar} (m/properties schema)))
+          (is (= [nil] (m/children schema)))
+          (is (= schema (m/form schema)))
+          (is (= schema (-> schema m/form m/schema m/form)))))
+
+      (testing "map enums without properties require empty properties"
+        (doseq [schema [[:enum nil {:a 1} {:b 2}]
+                        [:enum {} {:a 1} {:b 2}]]]
+          (testing (pr-str schema)
+            (is (= nil (m/properties schema)))
+            (is (= [{:a 1} {:b 2}] (m/children schema)))
+            (is (= [:enum nil {:a 1} {:b 2}] (m/form schema)))
+            (is (= [:enum nil {:a 1} {:b 2}] (-> schema m/form m/schema m/form))))))
+
+      (testing "map enums support properties"
+        (let [schema [:enum {:foo :bar} {:a 1} {:b 2}]]
+          (is (= {:foo :bar} (m/properties schema)))
+          (is (= [{:a 1} {:b 2}] (m/children schema)))
+          (is (= schema (m/form schema)))
+          (is (= schema (-> schema m/form m/schema m/form)))))
 
       (is (true? (m/validate (over-the-wire schema) 1)))
 
@@ -970,6 +996,24 @@
       (is (= {:x_key true, :y_key 2} (m/decode schema {:x true, :y 2}
                                                (mt/key-transformer
                                                 {:decode #(-> % name (str "_key") keyword)}))))
+
+      (testing "JSON transformer can decode map schema keys"
+        (let [schema
+              [:map
+               [:a :uuid]
+               [:b [:enum :x :y :z]]
+               ["s" :boolean [:enum :f1 :f2]]]
+              value
+              {"a" "b699671c-d34d-b33f-1337-dbdbfd337e73"
+               "b" "x"
+               "s" "f1"}
+              expected-decoded-value
+              {:a #uuid "b699671c-d34d-b33f-1337-dbdbfd337e73"
+               :b :x
+               "s" :f1}
+              decoded-value (m/decode schema value (mt/json-transformer {::mt/keywordize-map-keys true}))]
+          (is (= expected-decoded-value decoded-value))
+          (is (m/validate schema decoded-value))))
 
       (is (= {:x 32}
              (m/decode
@@ -3358,6 +3402,96 @@
                          ::xymap]
                         {:registry registry, ::m/ref-key :id}))))))))
 
+(deftest seqable-schema-test
+  (is (m/validate [:seqable :int] nil))
+  (is (m/validate [:seqable :int] #{1 2 3}))
+  (is (m/validate [:seqable :int] [1 2 3]))
+  (is (m/validate [:seqable :int] (sorted-set 1 2 3)))
+  (is (m/validate [:seqable :int] #{1 2 3}))
+  (is (m/validate [:seqable :int] (range 1000)))
+  (is (not (m/validate [:seqable :int] (conj (vec (range 1000)) nil))))
+  (is (not (m/validate [:seqable :int] (concat (range 1000) [nil]))))
+  (is (not (m/validate [:seqable :int] (eduction (concat (range 1000) [nil])))))
+  (is (not (m/validate [:seqable {:min 1000} :int] (eduction (concat (range 1000) [nil])))))
+  (is (not (m/validate [:seqable {:min 1000} :int] (concat (range 1000) [nil]))))
+  (is (nil? (m/explain [:seqable :int] #{1 2 3})))
+  (is (not (m/validate [:seqable :int] #{1 nil 3})))
+  (is (= #{["should be an integer"]}
+         (me/humanize (m/explain [:seqable :int] #{1 nil 3}))))
+  (let [original (interleave (range 10) (cycle [true false]))
+        parsed (m/parse [:seqable [:orn [:l :int] [:r :boolean]]] original)
+        unparsed (m/unparse [:seqable [:orn [:l :int] [:r :boolean]]] parsed)]
+    (is (= original unparsed))
+    (is (= [[:l 0] [:r true] [:l 1] [:r false] [:l 2] [:r true] [:l 3] [:r false] [:l 4] [:r true] [:l 5]
+            [:r false] [:l 6] [:r true] [:l 7] [:r false] [:l 8] [:r true] [:l 9] [:r false]]
+           parsed)))
+  (let [original (sorted-set 1 2 3)
+        parsed (m/parse [:seqable [:orn [:a :int]]] original)
+        unparsed (m/unparse [:seqable [:orn [:a :int]]] parsed)]
+    (is (= unparsed [1 2 3]))
+    (is (= parsed [[:a 1] [:a 2] [:a 3]]))))
+
+(deftest every-schema-test
+  (is (m/validate [:every :int] nil))
+  (is (m/validate [:every :int] #{1 2 3}))
+  (is (m/validate [:every :int] [1 2 3]))
+  (is (m/validate [:every :int] (sorted-set 1 2 3)))
+  (is (not (m/validate [:every :int] (conj (vec (range 1000)) nil))))
+  (is (nil? (m/explain [:every :int] #{1 2 3})))
+  (is (not (m/validate [:every :int] #{1 nil 3})))
+  (is (m/validate [:every :int] (concat (range 1000) [nil])))
+  (is (m/validate [:every :int] (eduction (concat (range 1000) [nil]))))
+  ;; counted/indexed colls have everything validated
+  (is (not (m/validate [:every :int] (vec (concat (range 1000) [nil])))))
+  (is (m/validate [:every :int] (concat (range 1000) [nil])))
+  (is (m/validate [:every :int] (eduction (concat (range 1000) [nil]))))
+  (is (m/validate [:every {:min 1000} :int] (concat (range 1000) [nil])))
+  (is (m/validate [:every :int] (concat (range 1000) [nil]) {::m/coll-check-limit 1000}))
+  (is (m/validate [:every {:min 1000} :int] (eduction (concat (range 1000) [nil]))))
+  ;; counted/indexed colls have everything validated
+  (is (not (m/validate [:every {:min 1000} :int] (vec (concat (range 1000) [nil])))))
+  (is (not (m/validate [:every {:min 1001} :int] (concat (range 1000) [nil]))))
+  (is (not (m/validate [:every {:min 1001} :int] (eduction (concat (range 1000) [nil])))))
+  (is (m/validate [:every {:max 1000} :int] (range 1000)))
+  (is (not (m/validate [:every {:max 1000} :int] (range 1001))))
+  (is (not (m/validate [:every {:max 1001} :int] (concat (range 1000) [nil]))))
+  (is (not (m/validate [:every {:max 1001} :int] (eduction (concat (range 1000) [nil])))))
+  (is (= #{["should be an integer"]}
+         (me/humanize (m/explain [:every :int] #{1 nil 3}))))
+  (is (nil? (m/explain [:every :int] (concat (range 1000) [nil]))))
+  (is (nil? (m/explain [:every :int] (eduction (concat (range 1000) [nil])))))
+  (is (= (concat (repeat 1000 nil) [["should be an integer"]])
+         (me/humanize (m/explain [:every {:min 1001} :int] (concat (range 1000) [nil])))))
+  (is (= (concat (repeat 1000 nil) [["should be an integer"]])
+         (me/humanize (m/explain [:every {:min 1001} :int] (eduction (concat (range 1000) [nil]))))))
+  (is (= (concat (repeat 1000 nil) [["should be an integer"]])
+         (me/humanize (m/explain [:every {:max 1001} :int] (concat (range 1000) [nil])))))
+  (is (= (concat (repeat 1000 nil) [["should be an integer"]])
+         (me/humanize (m/explain [:every {:max 1001} :int] (eduction (concat (range 1000) [nil]))))))
+  (doseq [parse [#'m/parse #'m/unparse]]
+    (testing parse
+      (let [good-sequence (interleave (range 10) (cycle [true false]))]
+        (is (identical? good-sequence
+                        (parse [:every [:orn [:l :int] [:r :boolean]]]
+                               good-sequence))))
+      (is (= ::m/invalid
+             (parse [:every [:orn [:l :int] [:r :boolean]]]
+                    (interleave (range 10) (cycle [true false nil])))))
+      (doseq [coerce [#'identity #?(:clj #'eduction
+                                    ;;TODO :cljs ?
+                                    )]]
+        (testing coerce
+          (let [bad-but-too-big (coerce
+                                 (concat (interleave (range 1000) (cycle [true false]))
+                                         [nil]))
+                bad-indexed-seq (vec bad-but-too-big)]
+            (is (identical? bad-but-too-big
+                            (parse [:every [:orn [:l :int] [:r :boolean]]]
+                                   bad-but-too-big)))
+            (is (= ::m/invalid
+                   (parse [:every [:orn [:l :int] [:r :boolean]]]
+                          bad-indexed-seq)))))))))
+
 (deftest proxy-schema-explain-path
   (let [y-schema [:int {:doc "int"}]
         schema (m/schema [(mu/-select-keys)
@@ -3419,3 +3553,18 @@
            (-> [::string {:foo :bar}]
                (m/schema options)
                m/properties)))))
+
+(deftest catch-infinitely-expanding-schema
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #?(:clj #":malli\.core/infinitely-expanding-schema"
+           :cljs #":malli\.core/invalid-schema")
+        (m/schema [(m/schema :any)]))))
+
+(deftest eduction-test
+  (is (m/validate [:sequential {:min 0} :int] (eduction identity (range 10))))
+  (is (m/validate [:sequential {:max 0} :int] (eduction)))
+  (is (not (m/validate [:sequential {:max 0} :int] (eduction [1]))))
+  (is (not (m/validate [:sequential {:min 11} :int] (eduction identity (range 10)))))
+  (is (not (m/validate [:seqable {:min 11} :int] (eduction identity (range 10)))))
+  (is (nil? (m/explain [:sequential {:min 9} :int] (eduction identity (range 10))))))
