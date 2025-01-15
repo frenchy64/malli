@@ -76,10 +76,15 @@
          (solver/solve [:map {:closed true} [::m/default [:map]]])))
   (is (= [{:type :map, :open-map false}]
          (solver/solve [:map [::m/default [:map-of :any :any]]])
-         (solver/solve [:map {:closed true} [::m/default [:map-of :any :any]]])
+         (solver/solve [:map {:closed true} [::m/default [:map-of :any :any]]])))
+  (is (= [{:type :map, :open-map false, :max-count 0}]
          (solver/solve [:map [::m/default [:map {:closed true}]]])))
-  (is (= [{:type :map, :get {:a [{:type :int}]}, :keyset {:a :optional}, :open-map false
-           :default-keys [{:type :int}] :default-vals [{:type :int}]}]
+  (is (= [{:get {:a ({:type :int})},
+           :type :map,
+           :vals [{:type :int}],
+           :keys [{:type :int}],
+           :keyset {:a :optional},
+           :open-map false}]
          (solver/solve [:map [:a {:optional true} :int]
                         [::m/default
                          [:map-of :int :int]]])))
@@ -110,8 +115,17 @@
                          [::m/default
                           [:map-of :int :int]]]
                         [:map-of :int :int]])))
-  ;;TODO filter out impossible keys
-  (is (= (solver/solve [:map-of :int :int])
+  (is (= [{:type :map,
+           :open-map false,
+           :keys [{:type :int}],
+           :vals [{:type :int}]}]
+         (solver/solve [:map-of :int :int])))
+  (is (= [{:get {:a [{:type :int}]},
+           :type :map,
+           :vals [{:type :int}],
+           :keys [{:type :int}],
+           :keyset {:a :optional},
+           :open-map false}]
          (solver/solve [:and
                         [:map [:a {:optional true} :int]]
                         [:map-of :int :int]])))
