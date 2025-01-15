@@ -176,7 +176,7 @@
 
 (defn- -min-max-number [stype schema options] (-min-max-* stype schema :min-number :max-number options))
 
-(defmulti -solve (fn [schema options] (m/type schema)))
+(defmulti -solve (fn [schema options] (m/type schema)) :default ::default)
 
 (defn- -solve-from-schema [props options] (some-> (:gen/schema props) (solve options)))
 
@@ -305,5 +305,5 @@
                             (:vals %) (assoc :vals (:vals %)))]]))
           (or default-solutions [{}]))))
 
-(defmethod -solve :default [schema options]
+(defmethod -solve ::default [schema options]
   (if (::allow-incomplete-solution options) [{}] (m/-fail! ::missing-schema-solver {:schema schema})))
