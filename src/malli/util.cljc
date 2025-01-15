@@ -397,15 +397,7 @@
 (defn -merge [] (-util-schema {:type :merge, :fn (-reducing merge), :min 1}))
 (defn -union [] (-util-schema {:type :union, :fn (-reducing union), :min 1}))
 (defn -select-keys [] (-util-schema {:type :select-keys, :childs 1, :min 2, :max 2, :fn (-applying select-keys)}))
-(defn -contains [] (m/-proxy-schema {:type :contains, :childs 1, :min 1, :max 1,
-                                     :fn (fn [_ [k :as children] options]
-                                           [children children (m/schema [:fn {:error/message
-                                                                              {:en (str "should contain "
-                                                                                        #?(:cljs (str k)
-                                                                                           :default (pr-str k)))}}
-                                                                         (-safe-contains? k)] options)])}))
 
 (defn schemas [] {:merge (-merge)
                   :union (-union)
-                  :select-keys (-select-keys)
-                  :contains (-contains)})
+                  :select-keys (-select-keys)})
