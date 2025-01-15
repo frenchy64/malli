@@ -19,6 +19,7 @@ Malli is in well matured [alpha](README.md#alpha).
 * Docs: elaborate optional-keys and required-keys [#1117](https://github.com/metosin/malli/pull/1117)
 * **BREAKING** Output of `parse` now uses new `malli.core.Tag` and `malli.core.Tags` records for `:orn`, `:multi`, `:altn`, `:catn` etc. [#1123](https://github.com/metosin/malli/issues/1123) [#1153](https://github.com/metosin/malli/issues/1153)
   * See [Parsing](#parsing-values) and [Unparsing](#unparsing-values) for docs.
+* Introduce new schemas for map key constraints: `:xor`, `:disjoint`, `:if`, `:iff`, `:implies`, and `:has`
 
 ## 0.17.0 (2024-12-08)
 
@@ -32,6 +33,14 @@ Malli is in well matured [alpha](README.md#alpha).
 * FIX: `malli.registry/{mode,type}` not respected in Babashka [#1124](https://github.com/metosin/malli/issues/1124)
 * FIX: `:float` accepts doubles but never generates them [#1132](https://github.com/metosin/malli/issues/1132)
 * FIX: `:float` missing humanizer [#1122](https://github.com/metosin/malli/issues/1122)
+* Change `:and` generator to be more reliable
+  * new function `malli.solver/solve` returns descriptions of values that satisfy schemas
+  * new approach: `[:and s1 s2]` generates `s1` with `(solve s2)` narrowing `s1`'s generator by changing the arguments passed to test.check
+    * e.g., `[:and [:<= 5] [:>= 5]]` combines `(gen/double* {:max 5})` with solution `{:min-number 5}` giving `(gen/double* {:min 5 :max 5})`
+  * extend `malli.solver/-solve` to extend solver to new schemas
+  * mechanism for adding new solution constraints tbd
+  * note: will change seeds for some `:and` generators
+    * those that used to be prone to certain `gen/such-that` failures
 * Updated dependencies:
 
 ```

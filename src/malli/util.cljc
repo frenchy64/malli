@@ -392,6 +392,8 @@
 
 (defn -util-schema [m] (m/-proxy-schema m))
 
+(defn- -safe-contains? [k] (m/-safe-pred #(contains? % k)))
+
 (defn -merge [] (-util-schema {:type :merge, :fn (-reducing merge), :min 1}))
 (defn -union [] (-util-schema {:type :union, :fn (-reducing union), :min 1}))
 (defn -select-keys [] (-util-schema {:type :select-keys, :childs 1, :min 2, :max 2, :fn (-applying select-keys)}))
