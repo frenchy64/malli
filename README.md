@@ -331,6 +331,8 @@ Most core-predicates are mapped to Schemas:
 ; => true
 ```
 
+*NOTE*: Predicate Schemas do not cover any schema properties, e.g. `string?` can't be modified with properties like `:min` and `:max`. If you want to use the schema properties, use real schema types instead, e.g. `:string` over `string?`.
+
 See [the full list of default schemas](#schema-registry).
 
 ## Enumeration schemas
@@ -411,6 +413,224 @@ default branching can be arbitrarily nested:
                 [::m/default [:map-of :int :int]]]]]
  {:x 1, :y 2, 1 1, 2 2})
 ; => true
+```
+
+## Constraining keys
+
+_Note_: the schemas in this section may not yet yield reliable generators. This is under development.
+However, it is recommended to use these schemas over `:fn` whenever possible to support future enhancements.
+
+The `:and` schema can be used to constrain an existing schema to be more specific.
+In this section we show how to constrain a `:map` schema with more specific keys.
+
+The schema `[:has K]` asserts the key `K` must be present.
+This is the main building block for key constraints that will be combined
+with other schemas.
+
+```clojure
+(me/humanize
+  (m/explain
+    [:and :map [:has :x]]
+    {}))
+; => {:x ["missing required key"]}
+
+(me/humanize
+  (m/explain
+    [:and :map [:has nil nil] [:has []]]
+    {}))
+; => ["missing required key"]
+```
+
+The `:or` schema asserts that at least one of its children is satisfied.
+
+```clojure
+;; at least one padding direction must be provided
+(def Padding
+  [:and
+   [:map
+    [:top {:optional true} number?]
+    [:bottom {:optional true} number?]
+    [:left {:optional true} number?]
+    [:right {:optional true} number?]]
+   [:or
+    [:has :top]
+    [:has :bottom]
+    [:has :left]
+    [:has :right]])
+
+(m/validate Padding {:left 1 :right 10 :up 25 :down 50}) ;=> true
+(me/humanize
+  (m/explain Padding {}))
+; => {:top ["missing required key"],
+;     :bottom ["missing required key"],
+;     :left ["missing required key"],
+;     :right ["missing required key"]}
+```
+
+The `:xor` schema requires exactly one of its children to be satisfied.
+
+```clojure
+;; :mvn/version or :git/sha must be provided, but not both
+(def GitOrMvn
+  [:and
+   [:map
+    [:mvn/version {:optional true} :string]
+    [:git/sha {:optional true} :string]]
+   [:xor
+    [:has :mvn/version]
+    [:has :git/sha]]])
+
+(m/validate GitOrMvn {:mvn/version "1.0.0"}) ; => true
+
+(m/validate GitOrMvn {:mvn/version "1.0.0" :git/sha "123"})) ; => false
+
+(me/humanize
+  (m/explain GitOrMvn
+             {:mvn/version "1.0.0"
+              :git/sha "123"}))
+; => ["should not have key :git/sha"]
+
+(me/humanize
+  (m/explain GitOrMvn
+             {}))
+; => {:mvn/version ["missing required key"],
+;     :git/sha ["missing required key"]}
+```
+
+The `:iff` schema requires either all or none of its children to be satisfied.
+
+```clojure
+;; either both :user and :pass are provided, or neither
+(def UserPass
+  [:and
+   [:map
+    [:user {:optional true} string?]
+    [:pass {:optional true} string?]]
+   [:iff [:has :user] [:has :pass]]])
+
+(m/validate UserPass {}) ; => true
+(m/validate UserPass {:user "a" :pass "b"}) ; => true
+
+(me/humanize
+  (m/explain UserPass {:user "a"}))
+; => {:pass ["missing required key"]}
+```
+
+The `:implies` schema is satisfied if either its first child is _not_ satisfied or
+all of its children are satisfied.
+
+
+```clojure
+;; if :git/tag is provided, then so should :git/sha
+(def TagImpliesSha
+  [:and
+   [:map
+    [:git/sha {:optional true} :string]
+    [:git/tag {:optional true} :string]]
+   [:implies [:has :git/tag] [:has :git/sha]]])
+
+(m/validate TagImpliesSha {:git/sha "abc123"}) ;=> true
+(m/validate TagImpliesSha {:git/tag "v1.0.0" :git/sha "abc123"}) ; => true
+
+(me/humanize
+  (m/explain TagImpliesSha {:git/tag "v1.0.0"}))
+; => {:git/sha ["missing required key"]}
+```
+
+The `:disjoint` schema is similar to `:xor` but also permits zero schemas to match.
+
+```clojure
+;; :mvn/* and :git/* keys should not coexist
+(def SeparateMvnGit
+  [:and
+   [:map
+    [:mvn/version {:optional true} :string]
+    [:git/sha {:optional true} :string]
+    [:git/tag {:optional true} :string]
+    [:git/url {:optional true} :string]]
+   [:disjoint
+    [:has :mvn/version]
+    [:or
+     [:has :git/sha]
+     [:has :git/url]
+     [:has :git/tag]]]])
+
+(m/validate SeparateMvnGit {}) ; => true
+(m/validate SeparateMvnGit {:mvn/version "1.0.0"}) ; => true
+(m/validate SeparateMvnGit {:git/sha "1.0.0"}) ; => true
+(m/validate SeparateMvnGit {:mvn/version "1.0.0" :git/sha "abc123"}) ; => false
+
+(me/humanize
+  (m/explain SeparateMvnGit
+             {:mvn/version "1.0.0"
+              :git/sha "abc123"}))
+; => ["should not have key :git/sha"]
+```
+
+For multiple sets of disjoint keys, use multiple `:disjoint` schemas.
+
+```clojure
+;; cannot hold :up + :down or :left + :right
+(def DPad
+  [:and
+   [:map
+    [:down {:optional true} [:= 1]]
+    [:left {:optional true} [:= 1]]
+    [:right {:optional true} [:= 1]]
+    [:up {:optional true} [:= 1]]]
+   [:disjoint [:has :down] [:has :up]]
+   [:disjoint [:has :left] [:has :right]]])
+
+(m/validate DPad {}) ; => true
+(m/validate DPad {:up 1}) ; => true
+(m/validate DPad {:down 1}) ; => true
+(m/validate DPad {:right 1}) ; => true
+(m/validate DPad {:left 1}) ; => true
+(m/validate DPad {:up 1 :left 1}) ; => true
+(m/validate DPad {:down 1 :left 1}) ; => true
+(m/validate DPad {:up 1 :right 1}) ; => true
+(m/validate DPad {:down 1 :right 1}) ; => true
+
+(me/humanize
+  (m/explain DPad {:up 1 :down 1}))
+; => ["should not have key :up"]
+
+(me/humanize
+  (m/explain DPad {:left 1 :right 1}))
+; => ["should not have key :right"]
+```
+
+In this example, we nest `:and` in `:or` to assert that either a secret or
+user/pass must be provided. The `:disjoint` schema is used to ensure
+both are not provided. Even if we used `:xor` instead of `:or`, it
+would still be legal to provide `{:secret "1234" :user "user"}` without
+this additional constraint.
+
+```clojure
+(def SecretOrCreds
+  [:and
+   [:map
+    [:secret {:optional true} string?]
+    [:user {:optional true} string?]
+    [:pass {:optional true} string?]]
+   [:or
+    [:has :secret]
+    [:and [:has :user] [:has :pass]]]
+   [:disjoint
+    [:has :secret]
+    [:or [:has :user] [:has :pass]]]])
+
+(m/validate SecretOrCreds {:secret "1234"}) ; => true
+(m/validate SecretOrCreds {:user "user" :pass "hello"}) ; => true
+
+(me/humanize
+  (m/explain SecretOrCreds {:user "user"}))
+; => {:secret ["missing required key"], :pass ["missing required key"]}
+
+;; combining :or with :disjoint helps enforce this case
+(me/humanize
+  (m/explain SecretOrCreds {:secret "1234" :user "user"}))
+; => ["should not have key :user"]
 ```
 
 ## Seqable schemas
@@ -2443,9 +2663,10 @@ Schemas can be used to parse values using `m/parse` and `m/parser`:
               [:s string?]
               [:b boolean?]]]]]
   ["-server" "foo" "-verbose" true "-user" "joe"])
-;[{:prop "-server", :val [:s "foo"]}
-; {:prop "-verbose", :val [:b true]}
-; {:prop "-user", :val [:s "joe"]}]
+;[#malli.core.Tags{:values {:prop "-server", :val #malli.core.Tag{:key :s, :value "foo"}}}
+; #malli.core.Tags{:values {:prop "-verbose", :val #malli.core.Tag{:key :b, :value true}}}
+; #malli.core.Tags{:values {:prop "-user", :val #malli.core.Tag{:key :s, :value "joe"}}}]
+
 ```
 
 `m/parser` to create an optimized parser:
@@ -2469,13 +2690,25 @@ Schemas can be used to parse values using `m/parse` and `m/parser`:
 (parse-hiccup
   [:div {:class [:foo :bar]}
    [:p "Hello, world of data"]])
-;[:node
-; {:name :div
-;  :props {:class [:foo :bar]}
-;  :children [[:node
-;              {:name :p
-;               :props nil
-;               :children [[:primitive [:text "Hello, world of data"]]]}]]}]
+
+;#malli.core.Tag
+;{:key :node,
+; :value
+; #malli.core.Tags
+; {:values {:name :div,
+;           :props {:class [:foo :bar]},
+;           :children [#malli.core.Tag
+;                      {:key :node,
+;                       :value
+;                       #malli.core.Tags
+;                       {:values {:name :p,
+;                                 :props nil,
+;                                 :children [#malli.core.Tag
+;                                            {:key :primitive,
+;                                             :value
+;                                             #malli.core.Tag
+;                                             {:key :text,
+;                                              :value "Hello, world of data"}}]}}}]}}}
 ```
 
 Parsing returns tagged values for `:orn`, `:catn`, `:altn` and `:multi`.
@@ -2487,10 +2720,10 @@ Parsing returns tagged values for `:orn`, `:catn`, `:altn` and `:multi`.
    [::m/default :any]])
 
 (m/parse Multi {:type :user, :size 1})
-; => [:user {:type :user, :size 1}]
+; => #malli.core.Tag{:key :user, :value {:type :user, :size 1}}
 
 (m/parse Multi {:type "sized", :size 1})
-; => [:malli.core/default {:type "sized", :size 1}]
+; => #malli.core.Tag{:key :malli.core/default, :value {:type "sized", :size 1}}
 ```
 
 ## Unparsing values
@@ -2504,6 +2737,17 @@ The inverse of parsing, using `m/unparse` and `m/unparser`:
      (m/unparse Hiccup))
 ;[:div {:class [:foo :bar]}
 ; [:p "Hello, world of data"]]
+```
+
+```clojure
+(m/unparse [:orn [:name :string] [:id :int]]
+           (m/tagged :name "x"))
+; => "x"
+
+(m/unparse [:* [:catn [:name :string] [:id :int]]]
+           [(m/tags {:name "x" :id 1})
+            (m/tags {:name "y" :id 2})])
+; => ["x" 1 "y" 2]
 ```
 
 ## Serializable functions
@@ -3475,6 +3719,8 @@ The transformation engine is smart enough to just transform parts of the schema 
 ### `malli.core/predicate-schemas`
 
 Contains both function values and unqualified symbol representations for all relevant core predicates. Having both representations enables reading forms from both code (function values) and EDN-files (symbols): `any?`, `some?`, `number?`, `integer?`, `int?`, `pos-int?`, `neg-int?`, `nat-int?`, `pos?`, `neg?`, `float?`, `double?`, `boolean?`, `string?`, `ident?`, `simple-ident?`, `qualified-ident?`, `keyword?`, `simple-keyword?`, `qualified-keyword?`, `symbol?`, `simple-symbol?`, `qualified-symbol?`, `uuid?`, `uri?`, `decimal?`, `inst?`, `seqable?`, `indexed?`, `map?`, `vector?`, `list?`, `seq?`, `char?`, `set?`, `nil?`, `false?`, `true?`, `zero?`, `rational?`, `coll?`, `empty?`, `associative?`, `sequential?`, `ratio?`, `bytes?`, `ifn?` and `fn?`.
+
+*NOTE*: Predicate Schemas do not cover any schema properties, e.g. `string?` can't be modified with properties like `:min` and `:max`. If you want to use the schema properties, use real schema types instead, e.g. `:string` over `string?`.
 
 ### `malli.core/class-schemas`
 
