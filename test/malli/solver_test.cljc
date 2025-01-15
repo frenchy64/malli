@@ -79,7 +79,7 @@
          (solver/solve [:map {:closed true} [::m/default [:map-of :any :any]]])))
   (is (= [{:type :map, :open-map false, :max-count 0}]
          (solver/solve [:map [::m/default [:map {:closed true}]]])))
-  (is (= [{:get {:a ({:type :int})},
+  (is (= [{:get {:a [{:type :int}]},
            :type :map,
            :vals [{:type :int}],
            :keys [{:type :int}],
