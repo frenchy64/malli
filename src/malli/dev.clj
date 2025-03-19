@@ -43,6 +43,17 @@
         original
         (with-meta (f original) {::original original})))))
 
+(defn -reloading-schema! []
+  (-reloading-op!
+    #'m/schema
+    (fn [schema]
+      (fn reloading-schema
+        ([?schema] (reloading-schema ?schema nil))
+        ([?schema options] (or (when-some [f (-> ?schema meta ::recreator)]
+                                 (f))
+                               (vary-meta (schema ?schema options) assoc ::recreator #(reloading-schema ?schema options))))))))
+(defn -unreloading-schema! [] (-unwrap-original! #'m/schema))
+
 (defn -reloading-validator! []
   (-reloading-op!
     #'m/validator
@@ -111,6 +122,60 @@
                                #(@vol %))))))))
 (defn -unreloading-unparser! [] (-unwrap-original! #'m/unparser))
 
+(defn -reloading-decoder! []
+  (-reloading-op!
+    #'m/decoder
+    (fn [decoder]
+      (fn reloading-decoder
+        ([?schema value t] (reloading-decoder ?schema value t nil))
+        ([?schema value t options] (if (m/schema? ?schema)
+                                     ;; only reloadable if ?schema not already a Schema, so don't even bother.
+                                     (decoder ?schema value t options)
+                                     (let [v (decoder ?schema value t options)
+                                           vol (volatile! v)]
+                                       (swap! reloading-fs
+                                              conj (java.lang.ref.WeakReference.
+                                                     #(vreset! vol (decoder ?schema value t options))))
+                                       #(@vol %))))))))
+(defn -unreloading-decoder! [] (-unwrap-original! #'m/decoder))
+
+(defn -reloading-encoder! []
+  (-reloading-op!
+    #'m/encoder
+    (fn [encoder]
+      (fn reloading-encoder
+        ([?schema value t] (reloading-encoder ?schema value nil t))
+        ([?schema value options t] (if (m/schema? ?schema)
+                                     ;; only reloadable if ?schema not already a Schema, so don't even bother.
+                                     (encoder ?schema value options t)
+                                     (let [v (encoder ?schema value options t)
+                                           vol (volatile! v)]
+                                       (swap! reloading-fs
+                                              conj (java.lang.ref.WeakReference.
+                                                     #(vreset! vol (encoder ?schema value options t))))
+                                       #(@vol %))))))))
+(defn -unreloading-encoder! [] (-unwrap-original! #'m/encoder))
+
+(defn -reloading-coercer! []
+  (-reloading-op!
+    #'m/coercer
+    (fn [coercer]
+      (fn reloading-coercer
+        ([?schema] (reloading-coercer ?schema nil nil))
+        ([?schema transformer] (reloading-coercer ?schema transformer nil))
+        ([?schema transformer options] (reloading-coercer ?schema transformer nil nil options))
+        ([?schema transformer respond raise] (reloading-coercer ?schema transformer respond raise nil))
+        ([?schema transformer respond raise options] (if (m/schema? ?schema)
+                                                       ;; only reloadable if ?schema not already a Schema, so don't even bother.
+                                                       (coercer ?schema transformer respond raise options)
+                                                       (let [v (coercer ?schema transformer respond raise options)
+                                                             vol (volatile! v)]
+                                                         (swap! reloading-fs
+                                                                conj (java.lang.ref.WeakReference.
+                                                                       #(vreset! vol (coercer ?schema transformer respond raise options))))
+                                                         #(@vol %))))))))
+(defn -unreloading-coercer! [] (-unwrap-original! #'m/coercer))
+
 (m/-register-global-cache-invalidation-watcher!
   ::dev-reloading
   #(swap! reloading-fs
@@ -122,16 +187,24 @@
                   vs))))
 
 (defn -reloading-ops! []
+  (-reloading-schema!)
   (-reloading-validator!)
   (-reloading-explainer!)
   (-reloading-parser!)
-  (-reloading-unparser!))
+  (-reloading-unparser!)
+  (-reloading-decoder!)
+  (-reloading-encoder!)
+  (-reloading-coercer!))
 
 (defn -unreloading-ops! []
+  (-unreloading-schema!)
   (-unreloading-validator!)
   (-unreloading-explainer!)
   (-unreloading-parser!)
-  (-unreloading-unparser!))
+  (-unreloading-unparser!)
+  (-unreloading-decoder!)
+  (-unreloading-encoder!)
+  (-unreloading-coercer!))
 
 ;;
 ;; Public API
