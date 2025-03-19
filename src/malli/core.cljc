@@ -2768,9 +2768,8 @@
                                                             (if (get (:cache m) type)
                                                               m
                                                               (if-some [[_ s] (find m type)]
-                                                                (if (into-schema? s)
-                                                                  s
-                                                                  (assoc-in m [:cache type] (schema s)))
+                                                                (assoc-in m [:cache type] (cond-> s (not (into-schema? s)) schema))
+
                                                                 m))))
                                     :cache
                                     (get type)))))))
@@ -2876,6 +2875,7 @@
 
 (defn- -reg*
   [k v]
+  (prn "global" @global-schemas)
   (let [[{prev :cache}] (swap-vals! global-schemas (fn [m]
                                                      (-> m
                                                          (assoc k v)
