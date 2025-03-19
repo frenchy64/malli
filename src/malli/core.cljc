@@ -2746,12 +2746,46 @@
 (defn default-schemas []
   (merge (predicate-schemas) (class-schemas) (comparator-schemas) (type-schemas) (sequence-schemas) (base-schemas)))
 
+(def ^:private global-schemas (atom {}))
+
+(defn -register-global-cache-invalidation-watcher! [k f]
+  (swap! global-schemas assoc-in [:watchers k] f))
+
+(defn -unregister-global-cache-invalidation-watcher! [k]
+  (swap! global-schemas update :watchers dissoc k))
+
+(defn- -notify-global-cache-invalidation []
+  (run! (fn [f] (f)) (:watchers @global-schemas)))
+
+(defn- -global-registry []
+  (reify
+    mr/Registry
+    (-schema [_ type] (when (qualified-keyword? type)
+                        (let [glo @global-schemas]
+                          (or (-> glo :cache (get type))
+                              (when (get glo type)
+                                (-> (swap! global-schemas (fn [m]
+                                                            (if (get (:cache m) type)
+                                                              m
+                                                              (if-some [[_ s] (find m type)]
+                                                                (if (into-schema? s)
+                                                                  s
+                                                                  (assoc-in m [:cache type] (schema s)))
+                                                                m))))
+                                    :cache
+                                    (get type)))))))
+    (-schemas [_] (dissoc @global-schemas :cache))))
+
 (def default-registry
   (let [strict #?(:cljs (identical? mr/mode "strict")
                   :default (= mr/mode "strict"))
         custom #?(:cljs (identical? mr/type "custom")
                   :default (= mr/type "custom"))
-        registry (if custom (mr/fast-registry {}) (mr/composite-registry (mr/fast-registry (default-schemas)) (mr/var-registry)))]
+        registry (if custom
+                   (mr/fast-registry {})
+                   (mr/composite-registry (mr/fast-registry (default-schemas))
+                                          (-global-registry)
+                                          (mr/var-registry)))]
     (when-not strict (mr/set-default-registry! registry))
     (mr/registry (if strict registry (mr/custom-default-registry)))))
 
@@ -2839,3 +2873,88 @@
          s (-> props :schema (schema options))]
      (or (-instrument-f s props f options)
          (-fail! ::instrument-requires-function-schema {:schema s})))))
+
+(defn- -reg*
+  [k v]
+  (let [[{prev :cache}] (swap-vals! global-schemas (fn [m]
+                                                     (-> m
+                                                         (assoc k v)
+                                                         (assoc :cache {}))))]
+    (when (seq prev)
+      (-notify-global-cache-invalidation)))
+  k)
+
+(defn -reg!
+  "Register a schema form under a qualified keyword in the global registry.
+  Returns the keyword."
+  [qkw sform]
+  (when-not (qualified-keyword? qkw)
+    (-fail! ::reg-key-must-be-qualified-keyword))
+  (when (or (schema? sform)
+            (into-schema? sform))
+    (-fail! ::reg-schema-must-be-schema-form))
+  (-reg* qkw sform))
+
+(defn -reg-ctor!
+  "Register an IntoSchema under a qualified keyword in the global registry.
+  Returns the keyword."
+  [qkw sform]
+  (when-not (qualified-keyword? qkw)
+    (-fail! ::reg-ctor-key-must-be-qualified-keyword))
+  (when-not (into-schema? sform)
+    (-fail! ::reg-ctor-must-be-into-schema))
+  (-reg* qkw sform))
+
+#?(:clj
+   (defn- -reg-macro [qkw args mode extra at-form at-env]
+     (let [file *file*
+           nsym (ns-name *ns*)
+           line (.deref clojure.lang.Compiler/LINE)
+           column (.deref clojure.lang.Compiler/COLUMN)
+           _ (when-not (qualified-keyword? qkw)
+               (-fail! ::reg-qualified-keywords-only))
+           [m args] (if (and (string? (first args))
+                             (next args))
+                      [{:doc (first args)} (next args)]
+                      [{} args])
+           [m args] (if (and (map? (first args))
+                             (next args))
+                      [(conj m (first args)) (next args)]
+                      [m args])
+           s (first args)
+           m (-> m
+                 (assoc :file *file*)
+                 (assoc :ns nsym)
+                 (assoc :line line)
+                 (assoc :column column)
+                 (assoc :form at-form)
+                 (assoc :schema-form s)
+                 (into extra))
+           _ (when-not (seq args)
+               (-fail! ::reg-missing-schema))
+           _ (when (next args)
+               (-fail! ::reg-too-many-args))
+           platform (if (:ns at-env) :cljs :clj)]
+       ((requiring-resolve 'malli.doc/-register-schema-meta!) qkw m platform)
+       `(~(case mode :reg `-reg! :reg-ctor `-reg-ctor!) ~qkw ~s))))
+
+#?(:clj
+   (defmacro reg
+     "Register a global schema under a qualified keyword.
+     
+     Supports defn-like metadata which can be looked up with `doc`."
+     [qkw & args]
+     (-reg-macro qkw args :reg {} &form &env)))
+
+#?(:clj
+   (defmacro reg-ctor
+     "Register a global schema constructor under a qualified keyword.
+     
+     Supports defn-like metadata which can be looked up with `doc`."
+     [qkw & args]
+     (-reg-macro qkw args :reg-ctor {:into-schema true} &form &env)))
+
+#?(:clj
+   (defmacro doc [qkw]
+     (let [platform (if (:ns &env) :cljs :clj)]
+       ((requiring-resolve 'malli.doc/print-doc) qkw platform))))
