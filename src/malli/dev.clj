@@ -25,7 +25,7 @@
 
 (defn -uncapture-fail! [] (-unwrap-original! #'m/-fail!))
 
-(defonce reloading-fs (atom []))
+(defonce reloading-fs (java.util.WeakHashMap.))
 
 (defn -reloading-op! [v f]
   (alter-var-root
@@ -43,6 +43,9 @@
         original
         (with-meta (f original) {::original original})))))
 
+;;TODO share reloading validators by adding them to the cache
+
+;;FIXME this doesn't work
 (defn -reloading-schema! []
   (-reloading-op!
     #'m/schema
@@ -51,7 +54,11 @@
         ([?schema] (reloading-schema ?schema nil))
         ([?schema options] (or (when-some [f (-> ?schema meta ::recreator)]
                                  (f))
-                               (vary-meta (schema ?schema options) assoc ::recreator #(reloading-schema ?schema options))))))))
+                               (let [s (schema ?schema options)
+                                     recreator (fn recreator []
+                                                 (vary-meta (reloading-schema ?schema options)
+                                                            assoc ::recreator recreator))]
+                                 (recreator))))))))
 (defn -unreloading-schema! [] (-unwrap-original! #'m/schema))
 
 (defn -reloading-validator! []
@@ -60,15 +67,12 @@
     (fn [validator]
       (fn reloading-validator
         ([?schema] (reloading-validator ?schema nil))
-        ([?schema options] (if (m/schema? ?schema)
-                             ;; only reloadable if ?schema not already a Schema, so don't even bother.
-                             (validator ?schema options)
-                             (let [v (validator ?schema options)
-                                   vol (volatile! v)]
-                               (swap! reloading-fs
-                                      conj (java.lang.ref.WeakReference.
-                                             #(vreset! vol (validator ?schema options))))
-                               #(@vol %))))))))
+        ([?schema options] (let [v (validator ?schema options)
+                                 vol (volatile! v)]
+                             (swap! reloading-fs
+                                    conj (java.lang.ref.WeakReference.
+                                           #(vreset! vol (validator ?schema options))))
+                             #(@vol %)))))))
 (defn -unreloading-validator! [] (-unwrap-original! #'m/validator))
 
 (defn -reloading-explainer! []
@@ -77,15 +81,12 @@
     (fn [explainer]
       (fn reloading-explainer
         ([?schema] (reloading-explainer ?schema nil))
-        ([?schema options] (if (m/schema? ?schema)
-                             ;; only reloadable if ?schema not already a Schema, so don't even bother.
-                             (explainer ?schema options)
-                             (let [v (explainer ?schema options)
-                                   vol (volatile! v)]
-                               (swap! reloading-fs
-                                      conj (java.lang.ref.WeakReference.
-                                             #(vreset! vol (explainer ?schema options))))
-                               #(@vol %))))))))
+        ([?schema options] (let [v (explainer ?schema options)
+                                 vol (volatile! v)]
+                             (swap! reloading-fs
+                                    conj (java.lang.ref.WeakReference.
+                                           #(vreset! vol (explainer ?schema options))))
+                             #(@vol %)))))))
 (defn -unreloading-explainer! [] (-unwrap-original! #'m/explainer))
 
 (defn -reloading-parser! []
@@ -94,15 +95,12 @@
     (fn [parser]
       (fn reloading-parser
         ([?schema value] (reloading-parser ?schema value nil))
-        ([?schema value options] (if (m/schema? ?schema)
-                                   ;; only reloadable if ?schema not already a Schema, so don't even bother.
-                                   (parser ?schema value options)
-                                   (let [v (parser ?schema value options)
-                                         vol (volatile! v)]
-                                     (swap! reloading-fs
-                                            conj (java.lang.ref.WeakReference.
-                                                   #(vreset! vol (parser ?schema value options))))
-                                     #(@vol %))))))))
+        ([?schema value options] (let [v (parser ?schema value options)
+                                       vol (volatile! v)]
+                                   (swap! reloading-fs
+                                          conj (java.lang.ref.WeakReference.
+                                                 #(vreset! vol (parser ?schema value options))))
+                                   #(@vol %)))))))
 (defn -unreloading-parser! [] (-unwrap-original! #'m/parser))
 
 (defn -reloading-unparser! []
@@ -111,15 +109,12 @@
     (fn [unparser]
       (fn reloading-unparser
         ([?schema] (reloading-unparser ?schema nil))
-        ([?schema options] (if (m/schema? ?schema)
-                             ;; only reloadable if ?schema not already a Schema, so don't even bother.
-                             (unparser ?schema options)
-                             (let [v (unparser ?schema options)
-                                   vol (volatile! v)]
-                               (swap! reloading-fs
-                                      conj (java.lang.ref.WeakReference.
-                                             #(vreset! vol (unparser ?schema options))))
-                               #(@vol %))))))))
+        ([?schema options] (let [v (unparser ?schema options)
+                                 vol (volatile! v)]
+                             (swap! reloading-fs
+                                    conj (java.lang.ref.WeakReference.
+                                           #(vreset! vol (unparser ?schema options))))
+                             #(@vol %)))))))
 (defn -unreloading-unparser! [] (-unwrap-original! #'m/unparser))
 
 (defn -reloading-decoder! []
@@ -128,15 +123,12 @@
     (fn [decoder]
       (fn reloading-decoder
         ([?schema value t] (reloading-decoder ?schema value t nil))
-        ([?schema value t options] (if (m/schema? ?schema)
-                                     ;; only reloadable if ?schema not already a Schema, so don't even bother.
-                                     (decoder ?schema value t options)
-                                     (let [v (decoder ?schema value t options)
-                                           vol (volatile! v)]
-                                       (swap! reloading-fs
-                                              conj (java.lang.ref.WeakReference.
-                                                     #(vreset! vol (decoder ?schema value t options))))
-                                       #(@vol %))))))))
+        ([?schema value t options] (let [v (decoder ?schema value t options)
+                                         vol (volatile! v)]
+                                     (swap! reloading-fs
+                                            conj (java.lang.ref.WeakReference.
+                                                   #(vreset! vol (decoder ?schema value t options))))
+                                     #(@vol %)))))))
 (defn -unreloading-decoder! [] (-unwrap-original! #'m/decoder))
 
 (defn -reloading-encoder! []
@@ -145,15 +137,12 @@
     (fn [encoder]
       (fn reloading-encoder
         ([?schema value t] (reloading-encoder ?schema value nil t))
-        ([?schema value options t] (if (m/schema? ?schema)
-                                     ;; only reloadable if ?schema not already a Schema, so don't even bother.
-                                     (encoder ?schema value options t)
-                                     (let [v (encoder ?schema value options t)
-                                           vol (volatile! v)]
-                                       (swap! reloading-fs
-                                              conj (java.lang.ref.WeakReference.
-                                                     #(vreset! vol (encoder ?schema value options t))))
-                                       #(@vol %))))))))
+        ([?schema value options t] (let [v (encoder ?schema value options t)
+                                         vol (volatile! v)]
+                                     (swap! reloading-fs
+                                            conj (java.lang.ref.WeakReference.
+                                                   #(vreset! vol (encoder ?schema value options t))))
+                                     #(@vol %)))))))
 (defn -unreloading-encoder! [] (-unwrap-original! #'m/encoder))
 
 (defn -reloading-coercer! []
@@ -165,15 +154,12 @@
         ([?schema transformer] (reloading-coercer ?schema transformer nil))
         ([?schema transformer options] (reloading-coercer ?schema transformer nil nil options))
         ([?schema transformer respond raise] (reloading-coercer ?schema transformer respond raise nil))
-        ([?schema transformer respond raise options] (if (m/schema? ?schema)
-                                                       ;; only reloadable if ?schema not already a Schema, so don't even bother.
-                                                       (coercer ?schema transformer respond raise options)
-                                                       (let [v (coercer ?schema transformer respond raise options)
-                                                             vol (volatile! v)]
-                                                         (swap! reloading-fs
-                                                                conj (java.lang.ref.WeakReference.
-                                                                       #(vreset! vol (coercer ?schema transformer respond raise options))))
-                                                         #(@vol %))))))))
+        ([?schema transformer respond raise options] (let [v (coercer ?schema transformer respond raise options)
+                                                           vol (volatile! v)]
+                                                       (swap! reloading-fs
+                                                              conj (java.lang.ref.WeakReference.
+                                                                     #(vreset! vol (coercer ?schema transformer respond raise options))))
+                                                       #(@vol %)))))))
 (defn -unreloading-coercer! [] (-unwrap-original! #'m/coercer))
 
 (m/-register-global-cache-invalidation-watcher!

@@ -121,12 +121,12 @@
   (-regex-validator [this]
     (if (-ref-schema? this)
       (-regex-validator (-deref this))
-      (re/item-validator (-validator this))))
+      (re/item-validator (malli.core/validator this))))
 
   (-regex-explainer [this path]
     (if (-ref-schema? this)
       (-regex-explainer (-deref this) path)
-      (re/item-explainer path this (-explainer this path))))
+      (re/item-explainer path this (malli.core/explainer this path))))
 
   (-regex-parser [this]
     (if (-ref-schema? this)
@@ -141,7 +141,7 @@
   (-regex-transformer [this transformer method options]
     (if (-ref-schema? this)
       (-regex-transformer (-deref this) transformer method options)
-      (re/item-transformer method (-validator this) (or (-transformer this transformer method options) identity))))
+      (re/item-transformer method (malli.core/validator this) (or (-transformer this transformer method options) identity))))
 
   (-regex-min-max [_ _] {:min 1, :max 1}))
 
@@ -598,7 +598,7 @@
   (let [this-transformer (-value-transformer transformer this method options)]
     (if (seq child-schemas)
       (let [transformers (-vmap #(or (-transformer % transformer method options) identity) child-schemas)
-            validators (-vmap -validator child-schemas)]
+            validators (-vmap malli.core/validator child-schemas)]
         (-intercepting this-transformer
                        (if (= :decode method)
                          (fn [x]
@@ -735,13 +735,13 @@
                   (if-let [pvalidator (when property-pred (property-pred properties))]
                     (fn [x] (and (pred x) (pvalidator x))) pred))
                 (-explainer [this path]
-                  (let [validator (-validator this)]
+                  (let [validator (malli.core/validator this)]
                     (fn explain [x in acc]
                       (if-not (validator x) (conj acc (miu/-error path in this x)) acc))))
                 (-parser [this]
-                  (let [validator (-validator this)]
+                  (let [validator (malli.core/validator this)]
                     (fn [x] (if (validator x) x ::invalid))))
-                (-unparser [this] (-parser this))
+                (-unparser [this] (malli.core/parser this))
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
                 (-walk [this walker path options] (-walk-leaf this walker path options))
@@ -789,12 +789,12 @@
         (reify
           Schema
           (-validator [_]
-            (let [validators (-vmap -validator children)] (miu/-every-pred validators)))
+            (let [validators (-vmap malli.core/validator children)] (miu/-every-pred validators)))
           (-explainer [_ path]
-            (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
+            (let [explainers (-vmap (fn [[i c]] (malli.core/explainer c (conj path i))) (map-indexed vector children))]
               (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
-          (-parser [_] (->parser -parser seq))
-          (-unparser [_] (->parser -unparser rseq))
+          (-parser [_] (->parser malli.core/parser seq))
+          (-unparser [_] (->parser malli.core/unparser rseq))
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
@@ -828,17 +828,17 @@
         (reify
           Schema
           (-validator [_]
-            (let [validators (-vmap -validator children)] (miu/-some-pred validators)))
+            (let [validators (-vmap malli.core/validator children)] (miu/-some-pred validators)))
           (-explainer [_ path]
-            (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
+            (let [explainers (-vmap (fn [[i c]] (malli.core/explainer c (conj path i))) (map-indexed vector children))]
               (fn explain [x in acc]
                 (reduce
                  (fn [acc' explainer]
                    (let [acc'' (explainer x in acc')]
                      (if (identical? acc' acc'') (reduced acc) acc'')))
                  acc explainers))))
-          (-parser [_] (->parser -parser))
-          (-unparser [_] (->parser -unparser))
+          (-parser [_] (->parser malli.core/parser))
+          (-unparser [_] (->parser malli.core/unparser))
           (-transformer [this transformer method options]
             (-or-transformer this transformer children method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
@@ -874,9 +874,9 @@
           AST
           (-to-ast [this _] (-entry-ast this (-entry-keyset entry-parser)))
           Schema
-          (-validator [this] (miu/-some-pred (-vmap (fn [[_ _ c]] (-validator c)) (-children this))))
+          (-validator [this] (miu/-some-pred (-vmap (fn [[_ _ c]] (malli.core/validator c)) (-children this))))
           (-explainer [this path]
-            (let [explainers (-vmap (fn [[k _ c]] (-explainer c (conj path k))) (-children this))]
+            (let [explainers (-vmap (fn [[k _ c]] (malli.core/explainer c (conj path k))) (-children this))]
               (fn explain [x in acc]
                 (reduce
                  (fn [acc' explainer]
@@ -885,12 +885,12 @@
                  acc explainers))))
           (-parser [this]
             (let [parsers (-vmap (fn [[k _ c]]
-                                   (let [c (-parser c)]
+                                   (let [c (malli.core/parser c)]
                                      (fn [x] (miu/-map-valid #(reduced (tag k %)) (c x)))))
                                  (-children this))]
               (fn [x] (reduce (fn [_ parser] (parser x)) x parsers))))
           (-unparser [this]
-            (let [unparsers (into {} (map (fn [[k _ c]] [k (-unparser c)])) (-children this))]
+            (let [unparsers (into {} (map (fn [[k _ c]] [k (malli.core/unparser c)])) (-children this))]
               (fn [x]
                 (if (tag? x)
                   (if-some [unparse (get unparsers (:key x))]
@@ -935,15 +935,15 @@
           AST
           (-to-ast [this _] (-to-child-ast this))
           Schema
-          (-validator [_] (complement (-validator schema)))
+          (-validator [_] (complement (malli.core/validator schema)))
           (-explainer [this path]
-            (let [validator (-validator this)]
+            (let [validator (malli.core/validator this)]
               (fn explain [x in acc]
                 (if-not (validator x) (conj acc (miu/-error (conj path 0) in this x)) acc))))
           (-parser [this]
-            (let [validator (-validator this)]
+            (let [validator (malli.core/validator this)]
               (fn [x] (if (validator x) x ::invalid))))
-          (-unparser [this] (-parser this))
+          (-unparser [this] (malli.core/parser this))
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
@@ -983,10 +983,10 @@
            AST
            (-to-ast [this _] (-to-child-ast this))
            Schema
-           (-validator [_] (-validator schema))
-           (-explainer [_ path] (-explainer schema path))
-           (-parser [_] (-parser schema))
-           (-unparser [_] (-unparser schema))
+           (-validator [_] (malli.core/validator schema))
+           (-explainer [_ path] (malli.core/explainer schema path))
+           (-parser [_] (malli.core/parser schema))
+           (-unparser [_] (malli.core/unparser schema))
            (-transformer [this transformer method options]
              (-parent-children-transformer this (list schema) transformer method options))
            (-walk [this walker path options]
@@ -1066,10 +1066,10 @@
            Schema
            (-validator [this]
              (let [keyset (-entry-keyset (-entry-parser this))
-                   default-validator (some-> @default-schema (-validator))
+                   default-validator (some-> @default-schema (malli.core/validator))
                    validators (cond-> (-vmap
                                        (fn [[key {:keys [optional]} value]]
-                                         (let [valid? (-validator value)
+                                         (let [valid? (malli.core/validator value)
                                                default (boolean optional)]
                                            #?(:bb   (fn [m] (if-let [map-entry (find m key)] (valid? (val map-entry)) default))
                                               :clj  (let [not-found (Object.)]
@@ -1088,10 +1088,10 @@
                (fn [m] (and (pred? m) (validate m)))))
            (-explainer [this path]
              (let [keyset (-entry-keyset (-entry-parser this))
-                   default-explainer (some-> @default-schema (-explainer (conj path ::default)))
+                   default-explainer (some-> @default-schema (malli.core/explainer (conj path ::default)))
                    explainers (cond-> (-vmap
                                        (fn [[key {:keys [optional]} schema]]
-                                         (let [explainer (-explainer schema (conj path key))]
+                                         (let [explainer (malli.core/explainer schema (conj path key))]
                                            (fn [x in acc]
                                              (if-let [e (find x key)]
                                                (explainer (val e) (conj in key) acc)
@@ -1119,8 +1119,8 @@
                     (fn [acc explainer]
                       (explainer x in acc))
                     acc explainers)))))
-           (-parser [this] (->parser this -parser))
-           (-unparser [this] (->parser this -unparser))
+           (-parser [this] (->parser this malli.core/parser))
+           (-unparser [this] (->parser this malli.core/unparser))
            (-transformer [this transformer method options]
              (let [keyset (-entry-keyset (-entry-parser this))
                    this-transformer (-value-transformer transformer this method options)
@@ -1190,8 +1190,8 @@
              (-ast {:type :map-of, :key (ast key-schema), :value (ast value-schema)} properties options))
            Schema
            (-validator [_]
-             (let [key-valid? (-validator key-schema)
-                   value-valid? (-validator value-schema)]
+             (let [key-valid? (malli.core/validator key-schema)
+                   value-valid? (malli.core/validator value-schema)]
                (fn [m]
                  (and (map? m)
                       (validate-limits m)
@@ -1200,8 +1200,8 @@
                          (or (and (key-valid? key) (value-valid? value)) (reduced false)))
                        true m)))))
            (-explainer [this path]
-             (let [key-explainer (-explainer key-schema (conj path 0))
-                   value-explainer (-explainer value-schema (conj path 1))]
+             (let [key-explainer (malli.core/explainer key-schema (conj path 0))
+                   value-explainer (malli.core/explainer value-schema (conj path 1))]
                (fn explain [m in acc]
                  (if-not (map? m)
                    (conj acc (miu/-error path in this m ::invalid-type))
@@ -1214,8 +1214,8 @@
                                (key-explainer key in)
                                (value-explainer value in))))
                       acc m))))))
-           (-parser [_] (->parser -parser))
-           (-unparser [_] (->parser -unparser))
+           (-parser [_] (->parser malli.core/parser))
+           (-unparser [_] (->parser malli.core/unparser))
            (-transformer [this transformer method options]
              (let [this-transformer (-value-transformer transformer this method options)
                    ->key (-transformer key-schema transformer method options)
@@ -1314,7 +1314,7 @@
                 (-to-ast [this _] (-to-child-ast this))
                 Schema
                 (-validator [_]
-                  (let [validator (-validator schema)]
+                  (let [validator (malli.core/validator schema)]
                     (fn [x] (and (fpred x)
                                  (validate-limits x)
                                  (reduce (fn [acc v] (if (validator v) acc (reduced false))) true
@@ -1322,7 +1322,7 @@
                                            (and bounded (not (-safely-countable? x)))
                                            (eduction (take bounded))))))))
                 (-explainer [this path]
-                  (let [explainer (-explainer schema (conj path 0))]
+                  (let [explainer (malli.core/explainer schema (conj path 0))]
                     (fn [x in acc]
                       (cond
                         (not (fpred x)) (conj acc (miu/-error path in this x ::invalid-type))
@@ -1334,8 +1334,8 @@
                                                                      :default size))))
                                     (cond-> (or (explainer x (conj in (fin i x)) acc) acc) xs (recur (inc i) xs))
                                     acc)))))))
-                (-parser [_] (->parser (if bounded -validator -parser) (if bounded identity parse)))
-                (-unparser [_] (->parser (if bounded -validator -unparser) (if bounded identity unparse)))
+                (-parser [_] (->parser (if bounded malli.core/validator malli.core/parser) (if bounded identity parse)))
+                (-unparser [_] (->parser (if bounded malli.core/validator malli.core/unparser) (if bounded identity unparse)))
                 (-transformer [this transformer method options]
                   (let [collection? #(or (sequential? %) (set? %))
                         this-transformer (-value-transformer transformer this method options)
@@ -1393,14 +1393,14 @@
          (reify
            Schema
            (-validator [_]
-             (let [validators (into (array-map) (map-indexed vector (mapv -validator children)))]
+             (let [validators (into (array-map) (map-indexed vector (mapv malli.core/validator children)))]
                (fn [x] (and (vector? x)
                             (= (count x) size)
                             (reduce-kv
                              (fn [acc i validator]
                                (if (validator (nth x i)) acc (reduced false))) true validators)))))
            (-explainer [this path]
-             (let [explainers (-vmap (fn [[i s]] (-explainer s (conj path i))) (map-indexed vector children))]
+             (let [explainers (-vmap (fn [[i s]] (malli.core/explainer s (conj path i))) (map-indexed vector children))]
                (fn [x in acc]
                  (cond
                    (not (vector? x)) (conj acc (miu/-error path in this x ::invalid-type))
@@ -1409,8 +1409,8 @@
                            acc
                            (loop [acc acc, i 0, [x & xs] x, [e & es] explainers]
                              (cond-> (e x (conj in i) acc) xs (recur (inc i) xs es))))))))
-           (-parser [_] (->parser -parser))
-           (-unparser [_] (->parser -unparser))
+           (-parser [_] (->parser malli.core/parser))
+           (-unparser [_] (->parser malli.core/unparser))
            (-transformer [this transformer method options]
              (let [this-transformer (-value-transformer transformer this method options)
                    ->children (into {} (comp (map-indexed vector)
@@ -1455,11 +1455,11 @@
           (-validator [_]
             (fn [x] (contains? schema x)))
           (-explainer [this path]
-            (let [validator (-validator this)]
+            (let [validator (malli.core/validator this)]
               (fn explain [x in acc]
                 (if-not (validator x) (conj acc (miu/-error path in this x)) acc))))
           (-parser [_] (fn [x] (if (contains? schema x) x ::invalid)))
-          (-unparser [this] (-parser this))
+          (-unparser [this] (malli.core/parser this))
           ;; TODO: should we try to derive the type from values? e.g. [:enum 1 2] ~> int?
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
@@ -1512,9 +1512,9 @@
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
           (-parser [this]
-            (let [valid? (-validator this)]
+            (let [valid? (malli.core/validator this)]
               (fn [x] (if (valid? x) x ::invalid))))
-          (-unparser [this] (-parser this))
+          (-unparser [this] (malli.core/parser this))
           (-walk [this walker path options] (-walk-leaf this walker path options))
           (-properties [_] properties)
           (-options [_] options)
@@ -1557,9 +1557,9 @@
                 (catch #?(:clj Exception, :cljs js/Error) e
                   (conj acc (miu/-error path in this x (:type (ex-data e))))))))
           (-parser [this]
-            (let [validator (-validator this)]
+            (let [validator (malli.core/validator this)]
               (fn [x] (if (validator x) x ::invalid))))
-          (-unparser [this] (-parser this))
+          (-unparser [this] (malli.core/parser this))
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
           (-walk [this walker path options] (-walk-leaf this walker path options))
@@ -1597,14 +1597,14 @@
           (-to-ast [this _] (-to-child-ast this))
           Schema
           (-validator [_]
-            (let [validator (-validator schema)]
+            (let [validator (malli.core/validator schema)]
               (fn [x] (or (nil? x) (validator x)))))
           (-explainer [_ path]
-            (let [explainer (-explainer schema (conj path 0))]
+            (let [explainer (malli.core/explainer schema (conj path 0))]
               (fn explain [x in acc]
                 (if (nil? x) acc (explainer x in acc)))))
-          (-parser [_] (->parser -parser))
-          (-unparser [_] (->parser -unparser))
+          (-parser [_] (->parser malli.core/parser))
+          (-unparser [_] (->parser malli.core/unparser))
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
@@ -1658,21 +1658,21 @@
                            options))
            Schema
            (-validator [_]
-             (let [find (finder (reduce-kv (fn [acc k s] (assoc acc k (-validator s))) {} @dispatch-map))]
+             (let [find (finder (reduce-kv (fn [acc k s] (assoc acc k (malli.core/validator s))) {} @dispatch-map))]
                (fn [x] (if-let [validator (find (dispatch x))] (validator x) false))))
            (-explainer [this path]
-             (let [find (finder (reduce (fn [acc [k s]] (assoc acc k (-explainer s (conj path k)))) {} (-entries this)))]
+             (let [find (finder (reduce (fn [acc [k s]] (assoc acc k (malli.core/explainer s (conj path k)))) {} (-entries this)))]
                (fn [x in acc]
                  (if-let [explainer (find (dispatch x))]
                    (explainer x in acc)
                    (let [->path (if (and (map? x) (keyword? dispatch)) #(conj % dispatch) identity)]
                      (conj acc (miu/-error (->path path) (->path in) this x ::invalid-dispatch-value)))))))
            (-parser [_]
-             (let [parse (fn [k s] (let [p (-parser s)] (fn [x] (miu/-map-valid #(tag k %) (p x)))))
+             (let [parse (fn [k s] (let [p (malli.core/parser s)] (fn [x] (miu/-map-valid #(tag k %) (p x)))))
                    find (finder (reduce-kv (fn [acc k s] (assoc acc k (parse k s))) {} @dispatch-map))]
                (fn [x] (if-some [parser (find (dispatch x))] (parser x) ::invalid))))
            (-unparser [_]
-             (let [unparsers (reduce-kv (fn [acc k s] (assoc acc k (-unparser s))) {} @dispatch-map)]
+             (let [unparsers (reduce-kv (fn [acc k s] (assoc acc k (malli.core/unparser s))) {} @dispatch-map)]
                (fn [x] (if (tag? x) (if-some [f (unparsers (:key x))] (f (:value x)) ::invalid) ::invalid))))
            (-transformer [this transformer method options]
             ;; FIXME: Probably should not use `dispatch`
@@ -1729,13 +1729,13 @@
            (-to-ast [this _] (-to-value-ast this))
            Schema
            (-validator [_]
-             (let [validator (-memoize (fn [] (-validator (rf))))]
+             (let [validator (-memoize (fn [] (malli.core/validator (rf))))]
                (fn [x] ((validator) x))))
            (-explainer [_ path]
-             (let [explainer (-memoize (fn [] (-explainer (rf) (into path [0 0]))))]
+             (let [explainer (-memoize (fn [] (malli.core/explainer (rf) (into path [0 0]))))]
                (fn [x in acc] ((explainer) x in acc))))
-           (-parser [_] (->parser -parser))
-           (-unparser [_] (->parser -unparser))
+           (-parser [_] (->parser malli.core/parser))
+           (-unparser [_] (->parser malli.core/unparser))
            (-transformer [this transformer method options]
              (let [this-transformer (-value-transformer transformer this method options)
                    deref-transformer (-memoize (fn [] (-transformer (rf) transformer method options)))]
@@ -1801,10 +1801,10 @@
                 raw (-to-value-ast this)
                 :else (-to-child-ast this)))
             Schema
-            (-validator [_] (-validator child))
-            (-explainer [_ path] (-explainer child (conj path 0)))
-            (-parser [_] (-parser child))
-            (-unparser [_] (-unparser child))
+            (-validator [_] (malli.core/validator child))
+            (-explainer [_ path] (malli.core/explainer child (conj path 0)))
+            (-parser [_] (malli.core/parser child))
+            (-unparser [_] (malli.core/unparser child))
             (-transformer [this transformer method options]
               (-parent-children-transformer this children transformer method options))
             (-walk [this walker path options]
@@ -1835,11 +1835,11 @@
             (-regex-validator [_]
               (if internal
                 (-regex-validator child)
-                (re/item-validator (-validator child))))
+                (re/item-validator (malli.core/validator child))))
             (-regex-explainer [_ path]
               (if internal
                 (-regex-explainer child path)
-                (re/item-explainer path child (-explainer child path))))
+                (re/item-explainer path child (malli.core/explainer child path))))
             (-regex-parser [_]
               (if internal
                 (-regex-parser child)
@@ -1851,7 +1851,7 @@
             (-regex-transformer [_ transformer method options]
               (if internal
                 (-regex-transformer child transformer method options)
-                (re/item-transformer method (-validator child)
+                (re/item-transformer method (malli.core/validator child)
                                      (or (-transformer child transformer method options) identity))))
             (-regex-min-max [_ nested?]
               (if (and nested? (not internal))
@@ -1900,13 +1900,13 @@
                                   (cond-> acc e (into (map #(assoc % :path (conj path i), :in in) (:errors e)))))]
                       (-> (conj acc error) (-push 0 explain-input) (-push 1 explain-output) (-push 2 explain-guard)))
                     acc)))
-              (let [validator (-validator this)]
+              (let [validator (malli.core/validator this)]
                 (fn explain [x in acc]
                   (if-not (validator x) (conj acc (miu/-error path in this x)) acc)))))
           (-parser [this]
-            (let [validator (-validator this)]
+            (let [validator (malli.core/validator this)]
               (fn [x] (if (validator x) x ::invalid))))
-          (-unparser [this] (-parser this))
+          (-unparser [this] (malli.core/parser this))
           (-transformer [_ _ _ _])
           (-walk [this walker path options] (-walk-indexed this walker path options))
           (-properties [_] properties)
@@ -1927,8 +1927,8 @@
                 max (assoc :max max))))
           (-instrument-f [schema {:keys [scope report gen] :as props} f _options]
             (let [{:keys [min max input output guard]} (-function-info schema)
-                  [validate-input validate-output] (-vmap -validator [input output])
-                  validate-guard (or (some-> guard -validator) any?)
+                  [validate-input validate-output] (-vmap malli.core/validator [input output])
+                  validate-guard (or (some-> guard malli.core/validator) any?)
                   [wrap-input wrap-output wrap-guard] (-vmap #(contains? scope %) [:input :output :guard])
                   f (or (if gen (gen schema) f) (-fail! ::missing-function {:props props}))]
               (fn [& args]
@@ -1982,13 +1982,13 @@
                   (if-let [res (checker x)]
                     (conj acc (assoc (miu/-error path in this x) :check res))
                     acc)))
-              (let [validator (-validator this)]
+              (let [validator (malli.core/validator this)]
                 (fn explain [x in acc]
                   (if-not (validator x) (conj acc (miu/-error path in this x)) acc)))))
           (-parser [this]
-            (let [validator (-validator this)]
+            (let [validator (malli.core/validator this)]
               (fn [x] (if (validator x) x ::invalid))))
-          (-unparser [this] (-parser this))
+          (-unparser [this] (malli.core/parser this))
           (-transformer [_ _ _ _])
           (-walk [this walker path options] (-walk-indexed this walker path options))
           (-properties [_] properties)
@@ -2039,10 +2039,10 @@
         ^{:type ::schema}
         (reify
           Schema
-          (-validator [_] (-validator @schema))
-          (-explainer [_ path] (-explainer @schema (conj path ::in)))
-          (-parser [_] (-parser @schema))
-          (-unparser [_] (-unparser @schema))
+          (-validator [_] (malli.core/validator @schema))
+          (-explainer [_ path] (malli.core/explainer @schema (conj path ::in)))
+          (-parser [_] (malli.core/parser @schema))
+          (-unparser [_] (malli.core/unparser @schema))
           (-transformer [this transformer method options]
             (-parent-children-transformer this [@schema] transformer method options))
           (-walk [this walker path options]
@@ -2336,9 +2336,6 @@
       (-inner [this s p options] (-walk s this p options))
       (-outer [_ s p c options] (f s p c options)))
     [] options)))
-
-#?(:cljs (goog-define reload-mode "default")
-   :clj  (def mode (or (System/getProperty "malli.core/") "default")))
 
 (defn validator
   "Returns an pure validation function of type `x -> boolean` for a given Schema.
