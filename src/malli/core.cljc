@@ -2755,7 +2755,7 @@
   (swap! global-schemas update :watchers dissoc k))
 
 (defn- -notify-global-cache-invalidation []
-  (run! (fn [f] (f)) (:watchers @global-schemas)))
+  (run! (fn [f] (f) nil) (:watchers @global-schemas)))
 
 (defn- -global-registry []
   (reify
