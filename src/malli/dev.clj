@@ -23,6 +23,40 @@
 (defn -uncapture-fail! []
   (alter-var-root #'m/-fail! (fn [f] (-> f meta ::original (or f)))))
 
+(defonce reloading-validators (atom []))
+
+(defn -reloading-validator! []
+  (alter-var-root
+    #'m/validator
+    (fn [validator]
+      (if (::original (meta validator))
+        validator
+        (-> (fn reloading-validator
+              ([?schema] (reloading-validator ?schema nil))
+              ([?schema options] (if (m/schema? ?schema)
+                                   ;; only reloadable if ?schema not already a Schema, so don't even bother.
+                                   (validator ?schema options)
+                                   (let [v (validator ?schema options)
+                                         vol (volatile! v)]
+                                     (swap! reloading-validators
+                                            conj (java.lang.ref.WeakReference.
+                                                   #(vreset! vol (validator ?schema options))))
+                                     #(@vol %)))))
+            (with-meta {::original validator}))))))
+
+(defn -unreloading-validator! []
+  (alter-var-root #'m/validator (fn [f] (-> f meta ::original (or f)))))
+
+(m/-register-global-cache-invalidation-watcher!
+  ::-reloading-validator
+  (fn [] (swap! reloading-validators
+                (fn [vs]
+                  (into [] (keep (fn [^java.lang.ref.WeakReference r]
+                                   (when-some [f (.get r)]
+                                     (f)
+                                     r)))
+                        vs)))))
+
 ;;
 ;; Public API
 ;;
@@ -34,6 +68,7 @@
   (->> (mi/unstrument!) (count) (format "unstrumented %d function vars") (-log!))
   (clj-kondo/save! {})
   (-uncapture-fail!)
+  (-unreloading-validator!)
   (-log! "dev-mode stopped"))
 
 (defn start!
@@ -61,4 +96,5 @@
    (let [count (->> (mi/instrument! options) (count))]
      (when (pos? count) (-log! (format "instrumented %d function vars" count))))
    (clj-kondo/emit! options)
+   (-reloading-validator!)
    (-log! "dev-mode started")))

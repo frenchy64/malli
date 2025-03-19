@@ -2337,6 +2337,9 @@
       (-outer [_ s p c options] (f s p c options)))
     [] options)))
 
+#?(:cljs (goog-define reload-mode "default")
+   :clj  (def mode (or (System/getProperty "malli.core/") "default")))
+
 (defn validator
   "Returns an pure validation function of type `x -> boolean` for a given Schema.
    Caches the result for [[Cached]] Schemas with key `:validator`."
@@ -2757,6 +2760,9 @@
 (defn- -notify-global-cache-invalidation []
   (run! (fn [f] (f) nil) (:watchers @global-schemas)))
 
+(defn -invalidate-global-schemas! []
+  (-notify-global-cache-invalidation))
+
 (defn- -global-registry []
   (reify
     mr/Registry
@@ -2874,11 +2880,12 @@
 
 (defn- -reg*
   [k v]
-  (let [[{prev :cache}] (swap-vals! global-schemas (fn [m]
-                                                     (-> m
-                                                         (assoc k v)
-                                                         (assoc :cache {}))))]
-    (when (seq prev)
+  (let [[prev m] (swap-vals! global-schemas (fn [m]
+                                              (-> m
+                                                  (cond->
+                                                    (get m k) (assoc :cache {}))
+                                                  (assoc k v))))]
+    (when (get prev k)
       (-notify-global-cache-invalidation)))
   k)
 
