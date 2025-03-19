@@ -20,42 +20,118 @@
                                  (throw e))))
                 (with-meta {::original f}))))))
 
-(defn -uncapture-fail! []
-  (alter-var-root #'m/-fail! (fn [f] (-> f meta ::original (or f)))))
+(defn -unwrap-original! [v]
+  (alter-var-root v (fn [f] (-> f meta ::original (or f)))))
 
-(defonce reloading-validators (atom []))
+(defn -uncapture-fail! [] (-unwrap-original! #'m/-fail!))
+
+(defonce reloading-fs (atom []))
+
+(defn -reloading-op! [v f]
+  (alter-var-root
+    v
+    (fn [original]
+      (if (::original (meta original))
+        original
+        (with-meta (f original) {::original original})))))
+
+(defn -unreloading-op! [v f]
+  (alter-var-root
+    v
+    (fn [original]
+      (if (::original (meta original))
+        original
+        (with-meta (f original) {::original original})))))
 
 (defn -reloading-validator! []
-  (alter-var-root
+  (-reloading-op!
     #'m/validator
     (fn [validator]
-      (if (::original (meta validator))
-        validator
-        (-> (fn reloading-validator
-              ([?schema] (reloading-validator ?schema nil))
-              ([?schema options] (if (m/schema? ?schema)
-                                   ;; only reloadable if ?schema not already a Schema, so don't even bother.
-                                   (validator ?schema options)
-                                   (let [v (validator ?schema options)
-                                         vol (volatile! v)]
-                                     (swap! reloading-validators
-                                            conj (java.lang.ref.WeakReference.
-                                                   #(vreset! vol (validator ?schema options))))
-                                     #(@vol %)))))
-            (with-meta {::original validator}))))))
+      (fn reloading-validator
+        ([?schema] (reloading-validator ?schema nil))
+        ([?schema options] (if (m/schema? ?schema)
+                             ;; only reloadable if ?schema not already a Schema, so don't even bother.
+                             (validator ?schema options)
+                             (let [v (validator ?schema options)
+                                   vol (volatile! v)]
+                               (swap! reloading-fs
+                                      conj (java.lang.ref.WeakReference.
+                                             #(vreset! vol (validator ?schema options))))
+                               #(@vol %))))))))
+(defn -unreloading-validator! [] (-unwrap-original! #'m/validator))
 
-(defn -unreloading-validator! []
-  (alter-var-root #'m/validator (fn [f] (-> f meta ::original (or f)))))
+(defn -reloading-explainer! []
+  (-reloading-op!
+    #'m/explainer
+    (fn [explainer]
+      (fn reloading-explainer
+        ([?schema] (reloading-explainer ?schema nil))
+        ([?schema options] (if (m/schema? ?schema)
+                             ;; only reloadable if ?schema not already a Schema, so don't even bother.
+                             (explainer ?schema options)
+                             (let [v (explainer ?schema options)
+                                   vol (volatile! v)]
+                               (swap! reloading-fs
+                                      conj (java.lang.ref.WeakReference.
+                                             #(vreset! vol (explainer ?schema options))))
+                               #(@vol %))))))))
+(defn -unreloading-explainer! [] (-unwrap-original! #'m/explainer))
+
+(defn -reloading-parser! []
+  (-reloading-op!
+    #'m/parser
+    (fn [parser]
+      (fn reloading-parser
+        ([?schema value] (reloading-parser ?schema value nil))
+        ([?schema value options] (if (m/schema? ?schema)
+                                   ;; only reloadable if ?schema not already a Schema, so don't even bother.
+                                   (parser ?schema value options)
+                                   (let [v (parser ?schema value options)
+                                         vol (volatile! v)]
+                                     (swap! reloading-fs
+                                            conj (java.lang.ref.WeakReference.
+                                                   #(vreset! vol (parser ?schema value options))))
+                                     #(@vol %))))))))
+(defn -unreloading-parser! [] (-unwrap-original! #'m/parser))
+
+(defn -reloading-unparser! []
+  (-reloading-op!
+    #'m/unparser
+    (fn [unparser]
+      (fn reloading-unparser
+        ([?schema] (reloading-unparser ?schema nil))
+        ([?schema options] (if (m/schema? ?schema)
+                             ;; only reloadable if ?schema not already a Schema, so don't even bother.
+                             (unparser ?schema options)
+                             (let [v (unparser ?schema options)
+                                   vol (volatile! v)]
+                               (swap! reloading-fs
+                                      conj (java.lang.ref.WeakReference.
+                                             #(vreset! vol (unparser ?schema options))))
+                               #(@vol %))))))))
+(defn -unreloading-unparser! [] (-unwrap-original! #'m/unparser))
 
 (m/-register-global-cache-invalidation-watcher!
-  ::-reloading-validator
-  (fn [] (swap! reloading-validators
-                (fn [vs]
-                  (into [] (keep (fn [^java.lang.ref.WeakReference r]
-                                   (when-some [f (.get r)]
-                                     (f)
-                                     r)))
-                        vs)))))
+  ::dev-reloading
+  #(swap! reloading-fs
+          (fn [vs]
+            (into [] (keep (fn [^java.lang.ref.WeakReference r]
+                             (when-some [f (.get r)]
+                               (f)
+                               r)))
+                  vs))))
+
+(defn -reloading-ops! []
+  (-reloading-validator!)
+  (-reloading-explainer!)
+  (-reloading-parser!)
+  (-reloading-unparser!))
+
+(defn -unreloading-ops! []
+  (-unreloading-validator!)
+  (-unreloading-explainer!)
+  (-unreloading-parser!)
+  (-unreloading-unparser!))
 
 ;;
 ;; Public API
@@ -68,7 +144,7 @@
   (->> (mi/unstrument!) (count) (format "unstrumented %d function vars") (-log!))
   (clj-kondo/save! {})
   (-uncapture-fail!)
-  (-unreloading-validator!)
+  (-unreloading-ops!)
   (-log! "dev-mode stopped"))
 
 (defn start!
@@ -96,5 +172,5 @@
    (let [count (->> (mi/instrument! options) (count))]
      (when (pos? count) (-log! (format "instrumented %d function vars" count))))
    (clj-kondo/emit! options)
-   (-reloading-validator!)
+   (-reloading-ops!)
    (-log! "dev-mode started")))
