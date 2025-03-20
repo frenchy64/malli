@@ -1562,13 +1562,14 @@
       (let [children (vec children)
             f (eval (first children) options)
             form (delay (-simple-form parent properties children identity options))
+            validator (-safe-pred f)
             cache (-create-cache options)]
         ^{:type ::schema}
         (reify
           AST
           (-to-ast [this _] (-to-value-ast this))
           Schema
-          (-validator [_] (-safe-pred f))
+          (-validator [_] validator)
           (-explainer [this path]
             (fn explain [x in acc]
               (try
@@ -1577,9 +1578,7 @@
                   acc)
                 (catch #?(:clj Exception, :cljs js/Error) e
                   (conj acc (miu/-error path in this x (:type (ex-data e))))))))
-          (-parser [this]
-            (let [validator (-validator this)]
-              (fn [x] (if (validator x) x ::invalid))))
+          (-parser [this] (fn [x] (if (validator x) x ::invalid)))
           (-unparser [this] (-parser this))
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
