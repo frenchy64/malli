@@ -3584,6 +3584,10 @@
 
 (deftest shared-simple-schema-test
   (is (identical? (m/validator :int) (m/validator :int)))
+  (let [s (m/schema :int)]
+    (is (identical? (m/-validator s) (m/-validator s))))
+  (let [s (m/schema [:int {:min 10}])]
+    (is (identical? (m/-validator s) (m/-validator s))))
   (is (not= (m/validator [:int {:min 10}]) (m/validator [:int {:min 10}])))
   (is (identical? (m/explainer :int) (m/explainer :int)))
   (is (not= (m/explainer [:int {:min 10}]) (m/explainer [:int {:min 10}])))

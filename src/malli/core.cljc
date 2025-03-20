@@ -734,7 +734,10 @@
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [_ (-check-children! type properties children min max)
-                  pvalidator (when property-pred (property-pred properties))
+                  pvalidator (when property-pred
+                               (when-some [pvalidator (property-pred properties)]
+                                 (fn [x] (and (pred x) (pvalidator x)))))
+                  pred (or pvalidator pred)
                   shared-cacheable? (and (nil? pvalidator)
                                          (empty? properties))
                   form (delay (-simple-form parent properties children identity options))
@@ -744,10 +747,7 @@
                 AST
                 (-to-ast [this _] (to-ast this))
                 Schema
-                (-validator [_]
-                  (if pvalidator
-                    (fn [x] (and (pred x) (pvalidator x)))
-                    pred))
+                (-validator [_] pred)
                 (-explainer [this path]
                   (let [validator (-validator this)]
                     (fn explain [x in acc]
