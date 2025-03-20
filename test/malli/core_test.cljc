@@ -3583,34 +3583,39 @@
   (is (nil? (m/explain [:sequential {:min 9} :int] (eduction identity (range 10))))))
 
 (deftest shared-simple-schema-test
-  (testing "validators for shared simple schemas are globally cached"
-    (is (identical? (m/validator :int) (m/validator :int))))
-  (testing "validators for shared simple schemas are locally cached"
-    (let [s (m/schema :int)]
-      (is (identical? (m/-validator s) (m/-validator s)))))
-  (testing "validators for non-shared simple schemas are only locally cached"
-    (let [s (m/schema [:int {:min 10}])]
-      (is (identical? (m/-validator s) (m/-validator s)))
-      (is (identical? (m/validator s) (m/validator s)))
-      (is (not= (m/-validator s) (m/validator (m/form s))))))
-  (testing "top-level explainers for shared simple schemas are globally cached"
-    (doseq [s [:int integer?]]
-      (testing (pr-str s)
-        (is (identical? (m/explainer s) (m/explainer s))))))
-  (testing "top-level explainers for non-shared simple schemas are only locally cached"
-    (doseq [s (mapv m/schema [[:int {:min 10}]])]
-      (testing (pr-str (m/form s))
+  (doseq [?s [:int :nil integer? empty?]]
+    (testing (pr-str ?s)
+      (testing "validators for shared simple schema are"
+        (testing "cached globally"
+          (is (identical? (m/validator ?s) (m/validator ?s))))
+        (testing "cached locally"
+          (let [s (m/schema ?s)]
+            (is (identical? (m/-validator s) (m/-validator s))))))
+      (testing "top-level explainers for shared simple schemas are globally cached"
+        (is (identical? (m/explainer ?s) (m/explainer ?s))))
+      (testing "(un)parsers for shared simple schemas are globally cached"
+        (is (identical? (m/parser ?s) (m/parser ?s)))
+        (is (identical? (m/unparser ?s) (m/unparser ?s))))))
+  (doseq [s (mapv m/schema [[:int {:min 10}]
+                            [:int {:max 10}]
+                            [:int {:foo 10}]])]
+    (testing (pr-str (m/form s))
+      (testing "validators for non-shared simple schemas are"
+        (testing "cached locally"
+          (is (identical? (m/-validator s) (m/-validator s)))
+          (is (identical? (m/validator s) (m/validator s))))
+        (testing "not cached globally"
+          (or (= int? (m/-validator s))
+              (is (not= (m/-validator s) (m/validator (m/form s)))))))
+      (testing "top-level explainers for non-shared simple schemas are only locally cached"
         (is (identical? (m/explainer s) (m/explainer s)))
-        (is (not= (m/explainer s) (m/explainer (m/form s)))))))
-  (testing "(un)parsers for shared simple schemas are globally cached"
-    (is (identical? (m/parser :int) (m/parser :int)))
-    (is (identical? (m/unparser :int) (m/unparser :int))))
-  (testing "(un)parsers for non-shared simple schemas are only locally cached"
-    (let [s (m/schema [:int {:min 10}])]
-      (is (identical? (m/parser s) (m/parser s)))
-      (is (identical? (m/unparser s) (m/unparser s)))
-      (is (not= (m/parser s) (m/parser (m/form s))))
-      (is (not= (m/unparser s) (m/unparser (m/form s)))))))
+        (is (not= (m/explainer s) (m/explainer (m/form s)))))
+      (testing "(un)parsers for non-shared simple schemas are only locally cached"
+        (let [s (m/schema [:int {:min 10}])]
+          (is (identical? (m/parser s) (m/parser s)))
+          (is (identical? (m/unparser s) (m/unparser s)))
+          (is (not= (m/parser s) (m/parser (m/form s))))
+          (is (not= (m/unparser s) (m/unparser (m/form s)))))))))
 
 (deftest fn-validator-internally-cached
   (let [s (m/schema [:fn any?])]
