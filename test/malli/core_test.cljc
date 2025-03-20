@@ -3584,5 +3584,10 @@
 
 (deftest shared-simple-schema-test
   (is (identical? (m/validator :int) (m/validator :int)))
+  (is (not= (m/validator [:int {:min 10}]) (m/validator [:int {:min 10}])))
   (is (identical? (m/explainer :int) (m/explainer :int)))
-)
+  (is (not= (m/explainer [:int {:min 10}]) (m/explainer [:int {:min 10}])))
+  (is (identical? (m/parser :int) (m/parser :int)))
+  (is (not= (m/parser [:int {:min 10}]) (m/parser [:int {:min 10}])))
+  (is (identical? (m/unparser :int) (m/unparser :int)))
+  (is (not= (m/unparser [:int {:min 10}]) (m/unparser [:int {:min 10}]))))
