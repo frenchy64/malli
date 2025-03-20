@@ -730,6 +730,8 @@
         (-type-properties [_] type-properties)
         (-properties-schema [_ _])
         (-children-schema [_ _])
+        Cached
+        (-cache [_] shared-cache)
         (-into-schema [parent properties children options]
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
@@ -737,8 +739,9 @@
                   pvalidator (when property-pred
                                (when-some [pvalidator (property-pred properties)]
                                  (fn [x] (and (pred x) (pvalidator x)))))
-                  shared-cacheable? (and (nil? pvalidator)
-                                         (empty? properties))
+                  shared-cache (when (and (nil? pvalidator)
+                                          (empty? properties))
+                                 (-cache parent))
                   validator (or pvalidator pred)
                   form (delay (-simple-form parent properties children identity options))
                   cache (-create-cache options)]
@@ -768,7 +771,7 @@
                 (-put-cache [this k f] (or (@cache k)
                                            (case k
                                              (::explainer :explainer :parser :unparser)
-                                             (if shared-cacheable?
+                                             (if shared-cache
                                                (let [v ((swap! shared-cache update k #(or % (f this))) k)]
                                                  (swap! cache assoc k v)
                                                  v)
