@@ -755,12 +755,8 @@
                         (conj acc (miu/-error path in this x))
                         acc))))
                 (-parser [this]
-                  (or (when shared-cacheable? (:parser @shared-cache))
-                      (let [f (let [validator (-validator this)]
-                                (fn [x] (if (validator x) x ::invalid)))]
-                        (if shared-cacheable?
-                          (:parser (swap! shared-cache update :parser #(or % f)))
-                          f))))
+                  (let [validator (-validator this)]
+                    (fn [x] (if (validator x) x ::invalid))))
                 (-unparser [this] (-parser this))
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
@@ -775,11 +771,12 @@
                 CacheInterface
                 (-put-cache [_ k f] (or (@cache k)
                                         (case k
-                                          (::explainer :explainer) (if shared-cacheable?
-                                                                     (let [v ((swap! shared-cache update k #(or % (f))) k)]
-                                                                       (swap! cache assoc k v)
-                                                                       v)
-                                                                     ((swap! cache update k #(or % (f))) k))
+                                          (::explainer :explainer :parser :unparser)
+                                          (if shared-cacheable?
+                                            (let [v ((swap! shared-cache update k #(or % (f))) k)]
+                                              (swap! cache assoc k v)
+                                              v)
+                                            ((swap! cache update k #(or % (f))) k))
                                           ((swap! cache update k #(or % (f))) k))))
                 LensSchema
                 (-keep [_])
