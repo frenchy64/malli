@@ -741,7 +741,7 @@
                                  (fn [x] (and (pred x) (pvalidator x)))))
                   shared-cache (when (and (nil? pvalidator)
                                           (empty? properties))
-                                 shared-cache)
+                                 (-cache parent))
                   validator (or pvalidator pred)
                   form (delay (-simple-form parent properties children identity options))
                   cache (-create-cache options)]
