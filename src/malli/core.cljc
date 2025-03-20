@@ -739,9 +739,9 @@
                   pvalidator (when property-pred
                                (when-some [pvalidator (property-pred properties)]
                                  (fn [x] (and (pred x) (pvalidator x)))))
-                  shared-cache (when (and (nil? pvalidator)
-                                          (empty? properties))
-                                 (-cache parent))
+                  shareable? (when (and (nil? pvalidator)
+                                        (empty? properties))
+                               (-cached? parent))
                   validator (or pvalidator pred)
                   form (delay (-simple-form parent properties children identity options))
                   cache (-create-cache options)]
@@ -768,11 +768,9 @@
                 Cached
                 (-cache [_] cache)
                 CacheInterface
-                (-put-cache [this k f] (or (when shared-cache
+                (-put-cache [this k f] (or (when shareable?
                                              (case k
-                                               (::explainer :explainer :parser :unparser)
-                                               (or (@shared-cache k)
-                                                   ((swap! shared-cache update k #(or % (f this))) k))
+                                               (::explainer :explainer :parser :unparser) (-put-cache parent k (fn [_] (f this)))
                                                nil))
                                            (or (@cache k) ((swap! cache update k #(or % (f this))) k))))
                 LensSchema
