@@ -706,7 +706,8 @@
 
 (defn -simple-schema [props]
   (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile]
-         :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props]
+         :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props
+        shared-cache (atom {})]
     (if (fn? props)
       (do
         (-deprecated! "-simple-schema doesn't take fn-props, use :compile property instead")
@@ -723,24 +724,38 @@
         (-into-schema [parent properties children options]
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
-            (let [form (delay (-simple-form parent properties children identity options))
+            (let [_ (-check-children! type properties children min max)
+                  pvalidator (when property-pred (property-pred properties))
+                  shared-cacheable? (nil? pvalidator)
+                  form (delay (-simple-form parent properties children identity options))
                   cache (-create-cache options)]
-              (-check-children! type properties children min max)
               ^{:type ::schema}
               (reify
                 AST
                 (-to-ast [this _] (to-ast this))
                 Schema
                 (-validator [_]
-                  (if-let [pvalidator (when property-pred (property-pred properties))]
-                    (fn [x] (and (pred x) (pvalidator x))) pred))
+                  (if pvalidator
+                    (fn [x] (and (pred x) (pvalidator x)))
+                    pred))
                 (-explainer [this path]
-                  (let [validator (-validator this)]
-                    (fn explain [x in acc]
-                      (if-not (validator x) (conj acc (miu/-error path in this x)) acc))))
+                  (let [shared-cacheable? (and shared-cacheable? (zero? (count path)))]
+                    (or (when shared-cacheable? (:explainer @shared-cache))
+                        (let [f (let [validator (-validator this)]
+                                  (fn explain [x in acc]
+                                    (if-not (validator x)
+                                      (conj acc (miu/-error path in this x))
+                                      acc)))]
+                          (if shared-cacheable?
+                            (:explainer (swap! shared-cache update :explainer #(or % f)))
+                            f)))))
                 (-parser [this]
-                  (let [validator (-validator this)]
-                    (fn [x] (if (validator x) x ::invalid))))
+                  (or (when shared-cacheable? (:parser @shared-cache))
+                      (let [f (let [validator (-validator this)]
+                                (fn [x] (if (validator x) x ::invalid)))]
+                        (if shared-cacheable?
+                          (:parser (swap! shared-cache update :parser #(or % f)))
+                          f))))
                 (-unparser [this] (-parser this))
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
