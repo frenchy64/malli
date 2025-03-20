@@ -737,9 +737,9 @@
                   pvalidator (when property-pred
                                (when-some [pvalidator (property-pred properties)]
                                  (fn [x] (and (pred x) (pvalidator x)))))
-                  pred (or pvalidator pred)
                   shared-cacheable? (and (nil? pvalidator)
                                          (empty? properties))
+                  validator (or pvalidator pred)
                   form (delay (-simple-form parent properties children identity options))
                   cache (-create-cache options)]
               ^{:type ::schema}
@@ -747,16 +747,12 @@
                 AST
                 (-to-ast [this _] (to-ast this))
                 Schema
-                (-validator [_] pred)
-                (-explainer [this path]
-                  (let [validator (-validator this)]
-                    (fn explain [x in acc]
-                      (if-not (validator x)
-                        (conj acc (miu/-error path in this x))
-                        acc))))
-                (-parser [this]
-                  (let [validator (-validator this)]
-                    (fn [x] (if (validator x) x ::invalid))))
+                (-validator [_] validator)
+                (-explainer [this path] (fn explain [x in acc]
+                                          (if-not (validator x)
+                                            (conj acc (miu/-error path in this x))
+                                            acc)))
+                (-parser [this] (fn [x] (if (validator x) x ::invalid)))
                 (-unparser [this] (-parser this))
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
