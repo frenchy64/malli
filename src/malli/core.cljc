@@ -116,8 +116,9 @@
 
   CompactForm
   (-compact-form [this {state ::compact}]
+    ;;TODO could walk output form to look for ambiguities
+    (println (str "WARNING: " (type this) " form cannot be compacted"))
     (swap! state assoc :abandoned true)
-    (println (str "WARNING: " (-type this) " form cannot be compacted"))
     (-form this))
 
   DistributiveSchema
@@ -364,12 +365,15 @@
       type))
 
 (defn -create-form [type properties children options]
+  (prn "-create-form" type)
   (let [properties (when (seq properties)
                      (let [registry (:registry properties)]
-                       (cond-> properties registry (assoc :registry (-property-registry registry options -form)))))
+                       (cond-> properties
+                         registry (assoc :registry (-property-registry registry options (if (::compact options)
+                                                                                          #(-compact-form % options)
+                                                                                          -form))))))
         type (cond-> type
                (qualified-keyword? type) (-abbrev-type options))]
-    (prn "-create-form" type (keys options))
     (-raw-form type properties children)))
 
 (defn -simple-form [parent properties children f options]
@@ -984,6 +988,8 @@
           (-children [_] children)
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (-simple-form parent properties children #(-compact-form % options) options))
           Cached
           (-cache [_] cache)
           LensSchema
@@ -1031,6 +1037,8 @@
            (-children [_] [schema])
            (-parent [_] parent)
            (-form [_] @form)
+           CompactForm
+           (-compact-form [_ options] (-simple-form parent properties children #(-compact-form % options) options))
            Cached
            (-cache [_] cache)
            LensSchema
@@ -1265,6 +1273,8 @@
            (-children [_] children)
            (-parent [_] parent)
            (-form [_] @form)
+           CompactForm
+           (-compact-form [_ options] (-simple-form parent properties children #(-compact-form % options) options))
            Cached
            (-cache [_] cache)
            LensSchema
@@ -1386,6 +1396,8 @@
                 (-children [_] children)
                 (-parent [_] parent)
                 (-form [_] @form)
+                CompactForm
+                (-compact-form [_ options] (-simple-form parent properties children #(-compact-form % options) options))
                 Cached
                 (-cache [_] cache)
                 LensSchema
@@ -1503,6 +1515,8 @@
           (-children [_] children)
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (-simple-form parent properties children identity options))
           Cached
           (-cache [_] cache)
           LensSchema
@@ -1555,6 +1569,8 @@
           (-children [_] children)
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (if class? re (-simple-form parent properties children identity options)))
           Cached
           (-cache [_] cache)
           LensSchema
@@ -1602,6 +1618,8 @@
           (-children [_] children)
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (-simple-form parent properties children identity options))
           Cached
           (-cache [_] cache)
           LensSchema
@@ -1647,6 +1665,8 @@
           (-children [_] children)
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (-simple-form parent properties children #(-compact-form % options) options))
           Cached
           (-cache [_] cache)
           LensSchema
@@ -1723,6 +1743,8 @@
            (-children [_] (-entry-children entry-parser))
            (-parent [_] parent)
            (-form [_] @form)
+           CompactForm
+           (-compact-form [_ options] (-create-entry-form parent properties entry-parser options))
            EntrySchema
            (-entries [_] (-entry-entries entry-parser))
            (-entry-parser [_] entry-parser)
@@ -1787,6 +1809,8 @@
            (-children [_] children)
            (-parent [_] parent)
            (-form [_] @form)
+           CompactForm
+           (-compact-form [_ options] (-simple-form parent properties children identity options))
            Cached
            (-cache [_] cache)
            LensSchema
@@ -1851,6 +1875,11 @@
             (-children [_] children)
             (-parent [_] parent)
             (-form [_] @form)
+            CompactForm
+            (-compact-form [_ options] (or (and (empty? properties)
+                                                (or (some-> id (-abbrev-type options))
+                                                    (and raw (-compact-form child options))))
+                                           (-simple-form parent properties children #(-compact-form % options) options)))
             Cached
             (-cache [_] cache)
             LensSchema
@@ -2030,6 +2059,8 @@
           (-children [_] children)
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (-simple-form parent properties children #(-compact-form % options) options))
           FunctionSchema
           (-function-schema? [_] true)
           (-function-schema-arities [_] children)

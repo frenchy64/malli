@@ -3603,4 +3603,8 @@
     (is (= :_/foo (m/compact-form (m/-proxy-schema {:type :_/foo :fn (fn [_ _ _] [[] [] (m/schema :any)])})))))
   (binding [*ns* (the-ns this-nsym)]
     (is (= :any (m/compact-form :any))))
+  (binding [*ns* (the-ns this-nsym)]
+    (is (= :any (m/compact-form [:schema {:registry {::a [:ref ::b]
+                                                     ::b :any}}
+                                 [:tuple ::a ::b]]))))
   )
