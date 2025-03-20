@@ -297,7 +297,7 @@
 
 (defn -property-registry [m options f]
   (let [options (assoc options ::allow-invalid-refs true)]
-    (reduce-kv (fn [acc k v] (assoc acc k (f (schema v options)))) {} m)))
+    (reduce-kv (fn [acc k v] (assoc acc (-abbrev-type k options) (f (schema v options)))) {} m)))
 
 (defn -delayed-registry [m f]
   (reduce-kv (fn [acc k v] (assoc acc k (reify IntoSchema (-into-schema [_ _ _ options] (f v options))))) {} m))
@@ -352,10 +352,8 @@
           :else type)))
 
 (defn -abbrev-type [type options]
-        (prn "-abbrev-type" type)
-  (or (when-some [{:keys [state aliases]} (::compact options)]
-        (prn "in -abbrev-type" aliases)
-        (when (keyword? type)
+  (or (when (qualified-keyword? type)
+        (when-some [{:keys [state aliases]} (::compact options)]
           (when-some [nsym (some-> (namespace type) symbol)]
             (when-some [k (some-> (get aliases nsym)
                                   name
@@ -365,15 +363,13 @@
       type))
 
 (defn -create-form [type properties children options]
-  (prn "-create-form" type)
   (let [properties (when (seq properties)
                      (let [registry (:registry properties)]
                        (cond-> properties
                          registry (assoc :registry (-property-registry registry options (if (::compact options)
                                                                                           #(-compact-form % options)
                                                                                           -form))))))
-        type (cond-> type
-               (qualified-keyword? type) (-abbrev-type options))]
+        type (-abbrev-type type options)]
     (-raw-form type properties children)))
 
 (defn -simple-form [parent properties children f options]
@@ -1810,7 +1806,7 @@
            (-parent [_] parent)
            (-form [_] @form)
            CompactForm
-           (-compact-form [_ options] (-simple-form parent properties children identity options))
+           (-compact-form [_ options] (-simple-form parent properties children #(-abbrev-type % options) options))
            Cached
            (-cache [_] cache)
            LensSchema
@@ -1877,7 +1873,7 @@
             (-form [_] @form)
             CompactForm
             (-compact-form [_ options] (or (and (empty? properties)
-                                                (or (some-> id (-abbrev-type options))
+                                                (or (-abbrev-type id options)
                                                     (and raw (-compact-form child options))))
                                            (-simple-form parent properties children #(-compact-form % options) options)))
             Cached
@@ -2389,7 +2385,21 @@
          {:keys [used abandoned]} @state]
      (prn "used" used aliases (keys used))
      (if-some [aliases (when-not abandoned (not-empty (select-keys aliases (keys used))))]
-       [:schema {:aliases (reduce-kv (fn [m k v] (assoc m (keyword k) (keyword v))) {} (set/map-invert aliases))} f]
+       (let [norm (if (vector? f)
+                    (if (= (count f) 1)
+                      (conj f {})
+                      (if (map? (nth f 1))
+                        f
+                        (if (nil? (nth f 1))
+                          (assoc f 1 {})
+                          (-> (subvec f 0 1)
+                              (conj {})
+                              (into (subvec f 1 (count f)))))))
+                    [f {}])]
+         (update-in norm [1 :aliases] (fn [old]
+                                        (when old
+                                          (-fail! ::aliases-property-already-exists))
+                                        (reduce-kv (fn [m k v] (assoc m (keyword k) (keyword v))) {} aliases))))
        f))))
 
 (defn properties

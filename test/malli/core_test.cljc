@@ -3604,7 +3604,11 @@
   (binding [*ns* (the-ns this-nsym)]
     (is (= :any (m/compact-form :any))))
   (binding [*ns* (the-ns this-nsym)]
-    (is (= :any (m/compact-form [:schema {:registry {::a [:ref ::b]
-                                                     ::b :any}}
-                                 [:tuple ::a ::b]]))))
+    (is (= [:schema
+            {:aliases {:malli.core-test :_}
+             :registry {:_/a [:ref :_/b], :_/b :any}}
+            [:tuple :_/a :_/b]]
+           (m/compact-form [:schema {:registry {::a [:ref ::b]
+                                                ::b :any}}
+                            [:tuple ::a ::b]]))))
   )
