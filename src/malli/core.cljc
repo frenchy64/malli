@@ -3,6 +3,7 @@
   #?(:cljs (:require-macros malli.core))
   (:require #?(:clj [clojure.walk :as walk])
             [clojure.core :as c]
+            [clojure.set :as set]
             [malli.impl.regex :as re]
             [malli.impl.util :as miu]
             [malli.registry :as mr]
@@ -96,6 +97,9 @@
   (-distributive-schema? [this])
   (-distribute-to-children [this f options]))
 
+(defprotocol CompactForm
+  (-compact-form [this options]))
+
 (defn -ref-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.RefSchema x))
 (defn -entry-parser? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntryParser x))
 (defn -entry-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntrySchema x))
@@ -109,6 +113,12 @@
   (-function-info [_])
   (-function-schema-arities [_])
   (-instrument-f [_ _ _ _])
+
+  CompactForm
+  (-compact-form [this {state ::compact}]
+    (swap! state assoc :abandoned true)
+    (println (str "WARNING: " (-type this) " form cannot be compacted"))
+    (-form this))
 
   DistributiveSchema
   (-distributive-schema? [_] false)
@@ -340,10 +350,26 @@
                                  children))
           :else type)))
 
+(defn -abbrev-type [type options]
+        (prn "-abbrev-type" type)
+  (or (when-some [{:keys [state aliases]} (::compact options)]
+        (prn "in -abbrev-type" aliases)
+        (when (keyword? type)
+          (when-some [nsym (some-> (namespace type) symbol)]
+            (when-some [k (some-> (get aliases nsym)
+                                  name
+                                  (keyword (name type)))]
+              (swap! state update-in [:used nsym k] (fnil inc 0))
+              k))))
+      type))
+
 (defn -create-form [type properties children options]
   (let [properties (when (seq properties)
                      (let [registry (:registry properties)]
-                       (cond-> properties registry (assoc :registry (-property-registry registry options -form)))))]
+                       (cond-> properties registry (assoc :registry (-property-registry registry options -form)))))
+        type (cond-> type
+               (qualified-keyword? type) (-abbrev-type options))]
+    (prn "-create-form" type (keys options))
     (-raw-form type properties children)))
 
 (defn -simple-form [parent properties children f options]
@@ -750,6 +776,8 @@
                 (-children [_] children)
                 (-parent [_] parent)
                 (-form [_] @form)
+                CompactForm
+                (-compact-form [_ options] (-simple-form parent properties children identity options))
                 Cached
                 (-cache [_] cache)
                 LensSchema
@@ -803,6 +831,8 @@
           (-children [_] children)
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (-simple-form parent properties children #(-compact-form % options) options))
           Cached
           (-cache [_] cache)
           LensSchema
@@ -847,6 +877,8 @@
           (-children [_] children)
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (-simple-form parent properties children #(-compact-form % options) options))
           Cached
           (-cache [_] cache)
           LensSchema
@@ -1426,6 +1458,8 @@
            (-children [_] children)
            (-parent [_] parent)
            (-form [_] @form)
+           CompactForm
+           (-compact-form [_ options] (-simple-form parent properties children #(-compact-form % options) options))
            Cached
            (-cache [_] cache)
            LensSchema
@@ -2034,6 +2068,7 @@
       (-check-children! type properties children min max)
       (let [[children forms schema] (fn properties (vec children) options)
             schema (delay (force schema))
+            options->form #(-create-form type properties forms %)
             form (delay (-create-form type properties forms options))
             cache (-create-cache options)]
         ^{:type ::schema}
@@ -2054,6 +2089,8 @@
           (-children [_] children)
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (-create-form type properties forms options))
           Cached
           (-cache [_] cache)
           LensSchema
@@ -2129,6 +2166,8 @@
           (-children [_] children)
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (-simple-form parent properties children #(-compact-form % options) options))
           Cached
           (-cache [_] cache)
           LensSchema
@@ -2178,6 +2217,8 @@
           (-children [_] (-entry-children entry-parser))
           (-parent [_] parent)
           (-form [_] @form)
+          CompactForm
+          (-compact-form [_ options] (-create-entry-form parent properties entry-parser options))
           Cached
           (-cache [_] cache)
           LensSchema
@@ -2291,6 +2332,34 @@
    (form ?schema nil))
   ([?schema options]
    (-form (schema ?schema options))))
+
+(defn compact-form
+  "Returns the Schema compact form"
+  ([?schema]
+   (compact-form ?schema nil))
+  ([?schema options]
+   (compact-form ?schema
+                 #?(:cljs {} ;??
+                    :default (if (= 'user (ns-name *ns*))
+                               {}
+                               (set/map-invert
+                                 (into (sorted-map)
+                                       (-> (ns-aliases *ns*)
+                                           (update-vals ns-name)
+                                           (update '_ (fn [old]
+                                                        (when old
+                                                          (-fail! ::underscore-alias-already-used))
+                                                        (ns-name *ns*))))))))
+                 options))
+  ([?schema aliases options]
+   (c/assert (not (::compact options)))
+   (let [state (atom {})
+         f (-compact-form (schema ?schema options) (assoc options ::compact {:aliases aliases :state state :raliases (set/map-invert aliases)}))
+         {:keys [used abandoned]} @state]
+     (prn "used" used aliases (keys used))
+     (if-some [aliases (when-not abandoned (not-empty (select-keys aliases (keys used))))]
+       [:schema {:aliases (reduce-kv (fn [m k v] (assoc m (keyword k) (keyword v))) {} (set/map-invert aliases))} f]
+       f))))
 
 (defn properties
   "Returns the Schema properties"

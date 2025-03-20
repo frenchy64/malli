@@ -3581,3 +3581,26 @@
   (is (not (m/validate [:sequential {:min 11} :int] (eduction identity (range 10)))))
   (is (not (m/validate [:seqable {:min 11} :int] (eduction identity (range 10)))))
   (is (nil? (m/explain [:sequential {:min 9} :int] (eduction identity (range 10))))))
+
+(def this-nsym (ns-name *ns*))
+
+(deftest compact-form-test
+  (binding [*ns* (the-ns this-nsym)]
+    (is (= [:schema {:aliases {:_ :malli.core-test}} :_/foo]
+           (m/compact-form (m/-proxy-schema {:type ::foo :fn (fn [_ _ _] [[] [] (m/schema :any)])})))))
+  (binding [*ns* (the-ns this-nsym)]
+    (is (= [:schema {:aliases {:_ :malli.core-test}} [:tuple :_/foo :_/bar]]
+           (m/compact-form [:tuple
+                            (m/-proxy-schema {:type ::foo :fn (fn [_ _ _] [[] [] (m/schema :any)])})
+                            (m/-proxy-schema {:type ::bar :fn (fn [_ _ _] [[] [] (m/schema :any)])})]))))
+  ;;FIXME don't alias if ambiguous
+  (binding [*ns* (the-ns this-nsym)]
+    (is (= [:tuple ::foo :_/foo]
+           (m/compact-form [:tuple
+                            (m/-proxy-schema {:type ::foo :fn (fn [_ _ _] [[] [] (m/schema :any)])})
+                            (m/-proxy-schema {:type :_/foo :fn (fn [_ _ _] [[] [] (m/schema :any)])})]))))
+  (binding [*ns* (the-ns this-nsym)]
+    (is (= :_/foo (m/compact-form (m/-proxy-schema {:type :_/foo :fn (fn [_ _ _] [[] [] (m/schema :any)])})))))
+  (binding [*ns* (the-ns this-nsym)]
+    (is (= :any (m/compact-form :any))))
+  )
