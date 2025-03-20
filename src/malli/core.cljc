@@ -59,6 +59,9 @@
 (defprotocol Cached
   (-cache [this]))
 
+(defprotocol CacheInterface
+  (-put-cache [this k f]))
+
 (defprotocol LensSchema
   (-keep [this] "returns truthy if schema contributes to value path")
   (-get [this key default] "returns schema at key")
@@ -99,11 +102,18 @@
 (defn -ref-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.RefSchema x))
 (defn -entry-parser? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntryParser x))
 (defn -entry-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntrySchema x))
-(defn -cached? [x] (#?(:clj instance?, :cljs implements?) malli.core.Cached x))
+(defn -cached? [x] (some? (-cache x)))
 (defn -ast? [x] (#?(:clj instance?, :cljs implements?) malli.core.AST x))
 (defn -transformer? [x] (#?(:clj instance?, :cljs implements?) malli.core.Transformer x))
 
 (extend-type #?(:clj Object, :cljs default)
+  Cached
+  (-cache [_] nil)
+  CacheInterface
+  (-put-cache [this k f] (let [c (-cache this)]
+                           (or (@c k)
+                               ((swap! (-cache this) update k #(or % (f))) k))))
+
   FunctionSchema
   (-function-schema? [_] false)
   (-function-info [_])
@@ -320,8 +330,7 @@
 
 (defn -cached [s k f]
   (if (-cached? s)
-    (let [c (-cache s)]
-      (or (@c k) ((swap! c assoc k (f s)) k)))
+    (-put-cache s k (partial f s))
     (f s)))
 
 ;;
@@ -726,7 +735,8 @@
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
             (let [_ (-check-children! type properties children min max)
                   pvalidator (when property-pred (property-pred properties))
-                  shared-cacheable? (nil? pvalidator)
+                  shared-cacheable? (and (nil? pvalidator)
+                                         (empty? properties))
                   form (delay (-simple-form parent properties children identity options))
                   cache (-create-cache options)]
               ^{:type ::schema}
@@ -739,16 +749,11 @@
                     (fn [x] (and (pred x) (pvalidator x)))
                     pred))
                 (-explainer [this path]
-                  (let [shared-cacheable? (and shared-cacheable? (zero? (count path)))]
-                    (or (when shared-cacheable? (:explainer @shared-cache))
-                        (let [f (let [validator (-validator this)]
-                                  (fn explain [x in acc]
-                                    (if-not (validator x)
-                                      (conj acc (miu/-error path in this x))
-                                      acc)))]
-                          (if shared-cacheable?
-                            (:explainer (swap! shared-cache update :explainer #(or % f)))
-                            f)))))
+                  (let [validator (-validator this)]
+                    (fn explain [x in acc]
+                      (if-not (validator x)
+                        (conj acc (miu/-error path in this x))
+                        acc))))
                 (-parser [this]
                   (or (when shared-cacheable? (:parser @shared-cache))
                       (let [f (let [validator (-validator this)]
@@ -767,6 +772,15 @@
                 (-form [_] @form)
                 Cached
                 (-cache [_] cache)
+                CacheInterface
+                (-put-cache [_ k f] (or (@cache k)
+                                        (case k
+                                          (::explainer :explainer) (if shared-cacheable?
+                                                                     (let [v ((swap! shared-cache update k #(or % (f))) k)]
+                                                                       (swap! cache assoc k v)
+                                                                       v)
+                                                                     ((swap! cache update k #(or % (f))) k))
+                                          ((swap! cache update k #(or % (f))) k))))
                 LensSchema
                 (-keep [_])
                 (-get [_ _ default] default)
@@ -2370,20 +2384,22 @@
 
 (defn explainer
   "Returns an pure explainer function of type `x -> explanation` for a given Schema.
-   Caches the result for [[Cached]] Schemas with key `:explainer`."
+   Caches the result for [[Cached]] Schemas with key `:explainer` for the result of
+   `(-explainer schema [])` and `:malli.core/explainer` for the output of the entire function."
   ([?schema]
    (explainer ?schema nil))
   ([?schema options]
-   (let [schema' (schema ?schema options)
-         explainer' (-cached schema' :explainer #(-explainer % []))]
-     (fn explainer
-       ([value]
-        (explainer value [] []))
-       ([value in acc]
-        (when-let [errors (seq (explainer' value in acc))]
-          {:schema schema'
-           :value value
-           :errors errors}))))))
+   (-cached (schema ?schema options) ::explainer
+            (fn [schema']
+              (let [explainer' (-cached schema' :explainer #(-explainer % []))]
+                (fn explainer
+                  ([value]
+                   (explainer value [] []))
+                  ([value in acc]
+                   (when-let [errors (seq (explainer' value in acc))]
+                     {:schema schema'
+                      :value value
+                      :errors errors}))))))))
 
 (defn explain
   "Explains a value against a given schema. Creates the `explainer` for every call.

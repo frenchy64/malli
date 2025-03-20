@@ -3581,3 +3581,8 @@
   (is (not (m/validate [:sequential {:min 11} :int] (eduction identity (range 10)))))
   (is (not (m/validate [:seqable {:min 11} :int] (eduction identity (range 10)))))
   (is (nil? (m/explain [:sequential {:min 9} :int] (eduction identity (range 10))))))
+
+(deftest shared-simple-schema-test
+  (is (identical? (m/validator :int) (m/validator :int)))
+  (is (identical? (m/explainer :int) (m/explainer :int)))
+)
