@@ -108,11 +108,11 @@
 
 (extend-type #?(:clj Object, :cljs default)
   Cached
-  (-cache [_] nil)
+  (-cache [_])
   CacheInterface
   (-put-cache [this k f] (let [c (-cache this)]
                            (or (@c k)
-                               ((swap! c update k #(or % (f))) k))))
+                               ((swap! c update k #(or % (f this))) k))))
 
   FunctionSchema
   (-function-schema? [_] false)
@@ -330,7 +330,7 @@
 
 (defn -cached [s k f]
   (if (-cached? s)
-    (-put-cache s k (partial f s))
+    (-put-cache s k f)
     (f s)))
 
 ;;
@@ -765,15 +765,15 @@
                 Cached
                 (-cache [_] cache)
                 CacheInterface
-                (-put-cache [_ k f] (or (@cache k)
-                                        (case k
-                                          (::explainer :explainer :parser :unparser)
-                                          (if shared-cacheable?
-                                            (let [v ((swap! shared-cache update k #(or % (f))) k)]
-                                              (swap! cache assoc k v)
-                                              v)
-                                            ((swap! cache update k #(or % (f))) k))
-                                          ((swap! cache update k #(or % (f))) k))))
+                (-put-cache [this k f] (or (@cache k)
+                                           (case k
+                                             (::explainer :explainer :parser :unparser)
+                                             (if shared-cacheable?
+                                               (let [v ((swap! shared-cache update k #(or % (f this))) k)]
+                                                 (swap! cache assoc k v)
+                                                 v)
+                                               ((swap! cache update k #(or % (f this))) k))
+                                             ((swap! cache update k #(or % (f this))) k))))
                 LensSchema
                 (-keep [_])
                 (-get [_ _ default] default)
