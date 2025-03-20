@@ -2383,7 +2383,6 @@
    (let [state (atom {})
          f (-compact-form (schema ?schema options) (assoc options ::compact {:aliases aliases :state state :raliases (set/map-invert aliases)}))
          {:keys [used abandoned]} @state]
-     (prn "used" used aliases (keys used))
      (if-some [aliases (when-not abandoned (not-empty (select-keys aliases (keys used))))]
        (let [norm (if (vector? f)
                     (if (= (count f) 1)
