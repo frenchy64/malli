@@ -112,7 +112,7 @@
   CacheInterface
   (-put-cache [this k f] (let [c (-cache this)]
                            (or (@c k)
-                               ((swap! (-cache this) update k #(or % (f))) k))))
+                               ((swap! c update k #(or % (f))) k))))
 
   FunctionSchema
   (-function-schema? [_] false)
