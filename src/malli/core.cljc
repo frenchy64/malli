@@ -768,15 +768,13 @@
                 Cached
                 (-cache [_] cache)
                 CacheInterface
-                (-put-cache [this k f] (or (@cache k)
-                                           (case k
-                                             (::explainer :explainer :parser :unparser)
-                                             (if shared-cache
-                                               (let [v ((swap! shared-cache update k #(or % (f this))) k)]
-                                                 (swap! cache assoc k v)
-                                                 v)
-                                               ((swap! cache update k #(or % (f this))) k))
-                                             ((swap! cache update k #(or % (f this))) k))))
+                (-put-cache [this k f] (or (when shared-cache
+                                             (case k
+                                               (::explainer :explainer :parser :unparser)
+                                               (or (@shared-cache k)
+                                                   ((swap! shared-cache update k #(or % (f this))) k))
+                                               nil))
+                                           (or (@cache k) ((swap! cache update k #(or % (f this))) k))))
                 LensSchema
                 (-keep [_])
                 (-get [_ _ default] default)
