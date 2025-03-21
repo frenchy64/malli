@@ -12,7 +12,7 @@
     (-schema [_ type] (-global-schema type))
     (-schemas [_] @global-schemas)))
 
-(defonce ^:private __add-global-registry__
+(def ^:private __add-global-registry__
   (let [strict #?(:cljs (identical? mr/mode "strict")
                   :default (= mr/mode "strict"))
         custom #?(:cljs (identical? mr/type "custom")

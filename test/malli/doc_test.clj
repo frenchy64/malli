@@ -11,7 +11,7 @@
        {:a static-meta-map}
        ::a-schema)
 
-(reg ::mutual1 [:maybe [:ref {:lazy true} ::mutual2]])
+(reg ::mutual1 [:maybe [:rec ::mutual2]])
 (reg ::mutual2 [:maybe [:ref ::mutual1]])
 
 ;TODO figure out mutual recursion
