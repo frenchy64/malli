@@ -3606,6 +3606,7 @@
   (binding [*ns* (the-ns this-nsym)]
     (is (= [:tuple
             {:aliases {:_ :malli.core-test, :mg :malli.generator}
+             :malli.core-test/property :malli.core-test/not-aliased,
              :registry {:_/a [:ref :_/b],
                         :_/b :mg/gen,
                         :mg/gen :_/a}}
@@ -3613,6 +3614,7 @@
            (m/compact-form [:tuple
                             {:registry {::a [:ref ::b]
                                         ::b ::mg/gen
-                                        ::mg/gen ::a}}
+                                        ::mg/gen ::a}
+                             ::property ::not-aliased}
                             ::a ::b]))))
   )
