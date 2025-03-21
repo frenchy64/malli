@@ -2897,14 +2897,14 @@
     (-fail! ::reg-schema-must-be-schema-form))
   (-reg* qkw sform))
 
-(defn -reg-ctor!
+(defn -reg-type!
   "Register an IntoSchema under a qualified keyword in the global registry.
   Returns the keyword."
   [qkw sform]
   (when-not (qualified-keyword? qkw)
-    (-fail! ::reg-ctor-key-must-be-qualified-keyword))
+    (-fail! ::reg-type-key-must-be-qualified-keyword))
   (when-not (into-schema? sform)
-    (-fail! ::reg-ctor-must-be-into-schema))
+    (-fail! ::reg-type-must-be-into-schema))
   (-reg* qkw sform))
 
 #?(:clj
@@ -2938,7 +2938,7 @@
                (-fail! ::reg-too-many-args))
            platform (if (:ns at-env) :cljs :clj)]
        ((requiring-resolve 'malli.doc/-register-schema-meta!) qkw m platform)
-       `(~(case mode :reg `-reg! :reg-ctor `-reg-ctor!) ~qkw ~s))))
+       `(~(case mode :reg `-reg! :reg-type `-reg-type!) ~qkw ~s))))
 
 #?(:clj
    (defmacro reg
@@ -2949,12 +2949,12 @@
      (-reg-macro qkw args :reg {} &form &env)))
 
 #?(:clj
-   (defmacro reg-ctor
+   (defmacro reg-type
      "Register a global schema constructor under a qualified keyword.
      
      Supports defn-like metadata which can be looked up with `doc`."
      [qkw & args]
-     (-reg-macro qkw args :reg-ctor {:into-schema true} &form &env)))
+     (-reg-macro qkw args :reg-type {:into-schema true} &form &env)))
 
 #?(:clj
    (defmacro doc [qkw]

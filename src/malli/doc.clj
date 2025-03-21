@@ -40,17 +40,18 @@
                                               :auto-resolve (assoc (ns-aliases ns) :current ns)}))))))))
 
 (defn print-doc [reference platform]
-  (when-some [{:keys [into-schema] :as m} (-schema-meta reference platform)]
+  (when-some [{:keys [into-schema doc] :as m} (-schema-meta reference platform)]
     (println "-------------------------")
     (cond
       into-schema (do (println "Schema constructor")
                       (println (pr-str m)))
       :else (do (println "Named Schema")
+                (when doc
+                  (println)
+                  (println (:doc m)))
                 (println)
-                (println (:doc m))
-                (println)
-                (if-some [form (when (= :clj platform)
-                                 (get @@#'m/global-schemas reference))]
+                (when-some [form (when (= :clj platform)
+                                   (get @@#'m/global-schemas reference))]
                   (println form)
                   (println (:schema-form m)))
                 (let [source (-source-fn m)]

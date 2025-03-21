@@ -2938,6 +2938,45 @@ Local registries can be persisted:
 
 See also [Recursive Schemas](#recursive-schemas).
 
+### Global registry
+
+The global registry can store schemas and custom schema types.
+It supports docstrings and compile-time metadata, including file
+location of the original definition.
+
+Use `m/reg` to register an alias for a schema. Use `m/doc` to lookup its documentation.
+
+```clojure
+(m/reg ::a-schema :int)
+(m/reg ::another-schema
+       "A documentation string"
+       {:a static-meta-map}
+       ::a-schema)
+
+(m/doc ::a-schema)
+; -------------------------
+; Named Schema
+; 
+; :int
+; 
+; Source code:
+; (m/reg ::a-schema :int)
+
+(m/doc ::another-schema)
+; -------------------------
+; Named Schema
+; 
+; A documentation string
+; 
+; :bool
+; 
+; Source code:
+; (m/reg ::another-schema
+;        "A documentation string"
+;        {:a static-meta-map}
+;        :bool)
+```
+
 ### Changing the default registry
 
 Passing in custom options to all public methods is a lot of boilerplate. For the lazy, there is an easier way - we can swap the (global) default registry:

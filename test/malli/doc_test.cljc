@@ -8,8 +8,16 @@
 (m/reg ::another-schema
        "A documentation string"
        {:a static-meta-map}
-       :boolean)
+       ::a-schema)
 
+(m/doc ::a-schema)
+; -------------------------
+; Named Schema
+; 
+; :int
+; 
+; Source code:
+; (m/reg ::a-schema :int)
 (m/doc ::another-schema)
 ; -------------------------
 ; Named Schema
@@ -24,12 +32,12 @@
 ;        {:a static-meta-map}
 ;        :bool)
 
-(m/reg-ctor ::any-alias (m/-any-schema))
+(m/reg-type ::any-alias (m/-any-schema))
 
 (m/doc ::any-alias)
 ;TODO
 ; Schema constructor
-; {:file "/Users/ambrose/Projects/malli-local-dev/register-macro/test/malli/doc_test.cljc", :ns malli.doc-test, :line 15, :column 1, :form (m/reg-ctor :malli.doc-test/any-alias (m/-any-schema)), :schema-form (m/-any-schema), :into-schema true}
+; {:file "/Users/ambrose/Projects/malli-local-dev/register-macro/test/malli/doc_test.cljc", :ns malli.doc-test, :line 15, :column 1, :form (m/reg-type :malli.doc-test/any-alias (m/-any-schema)), :schema-form (m/-any-schema), :into-schema true}
 
 (m/schema ::any-alias)
 (m/schema ::another-schema)
