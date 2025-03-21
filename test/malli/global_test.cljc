@@ -22,4 +22,5 @@
        [:maybe [:tuple [:= "pong"] [:ref ::ping]]])
 
 (deftest mutually-recursive-globals-test
-  (is (m/validator ::ping)))
+  (is (m/validator ::ping))
+  (is (mg/sample ::ping)))
