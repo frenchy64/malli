@@ -162,6 +162,7 @@
                                                        #(@vol %)))))))
 (defn -unreloading-coercer! [] (-unwrap-original! #'m/coercer))
 
+#_
 (m/-register-global-cache-invalidation-watcher!
   ::dev-reloading
   #(swap! reloading-fs
