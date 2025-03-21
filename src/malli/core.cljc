@@ -218,7 +218,7 @@
        (when (or (and min (< size ^long min)) (and max (> size ^long max)))
          (-fail! ::child-error {:type type, :properties properties, :children children, :min min, :max max}))))))
 
-(defn -pointer [id schema options] (-into-schema (-schema-schema {:id id}) nil [schema] options))
+(defn -pointer [id schema options] (-into-schema (-schema-schema {:id (-unabbrev-type id options)}) nil [schema] options))
 
 (defn -reference? [?schema] (or (string? ?schema) (qualified-ident? ?schema) (var? ?schema)))
 
@@ -302,8 +302,18 @@
 (defn -delayed-registry [m f]
   (reduce-kv (fn [acc k v] (assoc acc k (reify IntoSchema (-into-schema [_ _ _ options] (f v options))))) {} m))
 
+(defn- -unabbrev-type [k options]
+  (if (qualified-keyword? k)
+    (or (when-some [{:keys [aliases]} (::compact options)]
+          (some-> (get aliases (symbol (namespace k)))
+                  name
+                  (keyword (name k))))
+        k)
+    k))
+
 (defn- -lookup [?schema options]
-  (let [registry (-registry options)]
+  (let [?schema (-unabbrev-type ?schema options)
+        registry (-registry options)]
     (or (mr/-schema registry ?schema)
         (when-some [p (some-> registry (mr/-schema (c/type ?schema)))]
           (when (schema? ?schema)
@@ -312,10 +322,11 @@
           (-into-schema p nil [?schema] options)))))
 
 (defn- -lookup! [?schema ?form f rec options]
-  (or (and f (f ?schema) ?schema)
-      (if-let [?schema (-lookup ?schema options)]
-        (cond-> ?schema rec (recur ?form f rec options))
-        (-fail! ::invalid-schema {:schema ?schema, :form ?form}))))
+  (let [?schema (-unabbrev-type ?schema options)]
+    (or (and f (f ?schema) ?schema)
+        (if-let [?schema (-lookup ?schema options)]
+          (cond-> ?schema rec (recur ?form f rec options))
+          (-fail! ::invalid-schema {:schema ?schema, :form ?form})))))
 
 (defn -properties-and-options [properties options f]
   (if-let [r (:registry properties)]
@@ -353,9 +364,9 @@
 
 (defn -abbrev-type [type options]
   (or (when (qualified-keyword? type)
-        (when-some [{:keys [state aliases]} (::compact options)]
+        (when-some [{:keys [state raliases]} (::compact options)]
           (when-some [nsym (some-> (namespace type) symbol)]
-            (when-some [k (some-> (get aliases nsym)
+            (when-some [k (some-> (get raliases nsym)
                                   name
                                   (keyword (name type)))]
               (swap! state update-in [:used nsym k] (fnil inc 0))
@@ -1766,7 +1777,9 @@
        (-check-children! :ref properties children 1 1)
        (when-not (-reference? ref)
          (-fail! ::invalid-ref {:ref ref}))
-       (let [rf (or (and lazy (-memoize (fn [] (schema (mr/-schema (-registry options) ref) options))))
+       (let [ref (-unabbrev-type ref options)
+             children (assoc children 0 ref)
+             rf (or (and lazy (-memoize (fn [] (schema (mr/-schema (-registry options) ref) options))))
                     (when-let [s (mr/-schema (-registry options) ref)] (-memoize (fn [] (schema s options))))
                     (when-not allow-invalid-refs
                       (-fail! ::invalid-ref {:type :ref, :ref ref})))
@@ -2283,8 +2296,11 @@
   ([type properties children]
    (into-schema type properties children nil))
   ([type properties children options]
-   (let [properties' (when properties (when (pos? (count properties)) properties))
+   (let [aliases (-> options ::compact :aliases)
+         type (cond-> type aliases (-unabbrev-type options))
+         properties' (when properties (when (pos? (count properties)) properties))
          r (when properties' (properties' :registry))
+         r (if (and r aliases) (update-keys r #(-unabbrev-type % options)) r)
          options (if r (-update options :registry #(mr/composite-registry r (or % (-registry options)))) options)
          properties (if r (assoc properties' :registry (-property-registry r options identity)) properties')]
      (-into-schema (-lookup! type [type properties children] into-schema? false options) properties children options))))
@@ -2343,9 +2359,13 @@
      (schema? ?schema) ?schema
      (into-schema? ?schema) (-into-schema ?schema nil nil options)
      (vector? ?schema) (let [v #?(:clj ^IPersistentVector ?schema, :cljs ?schema)
-                             t (-lookup! #?(:clj (.nth v 0), :cljs (nth v 0)) v into-schema? true options)
                              n #?(:bb (count v) :clj (.count v), :cljs (count v))
-                             ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))]
+                             ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
+                             aliases (:aliases ?p)
+                             ?p (cond-> ?p aliases (dissoc :aliases))
+                             options (cond-> options
+                                       aliases (assoc ::compact {:aliases (reduce-kv (fn [m k v] (assoc m (symbol k) (symbol v))) {} aliases)}))
+                             t (-lookup! #?(:clj (.nth v 0), :cljs (nth v 0)) v into-schema? true options)]
                          (if (or (nil? ?p) (map? ?p))
                            (into-schema t ?p (when (< 2 n) (subvec ?schema 2 n)) options)
                            (into-schema t nil (when (< 1 n) (subvec ?schema 1 n)) options)))
@@ -2369,21 +2389,21 @@
                  #?(:cljs {} ;??
                     :default (if (= 'user (ns-name *ns*))
                                {}
-                               (set/map-invert
-                                 (into (sorted-map)
-                                       (-> (ns-aliases *ns*)
-                                           (update-vals ns-name)
-                                           (update '_ (fn [old]
-                                                        (when old
-                                                          (-fail! ::underscore-alias-already-used))
-                                                        (ns-name *ns*))))))))
+                               (-> (ns-aliases *ns*)
+                                   (update-vals ns-name)
+                                   (update '_ (fn [old]
+                                                (when old
+                                                  (-fail! ::underscore-alias-already-used))
+                                                (ns-name *ns*))))))
                  options))
   ([?schema aliases options]
    (c/assert (not (::compact options)))
    (let [state (atom {})
-         f (-compact-form (schema ?schema options) (assoc options ::compact {:aliases aliases :state state :raliases (set/map-invert aliases)}))
+         raliases (set/map-invert aliases)
+         f (-compact-form (schema ?schema options) (assoc options ::compact {:aliases aliases :state state :raliases raliases}))
          {:keys [used abandoned]} @state]
-     (if-some [aliases (when-not abandoned (not-empty (select-keys aliases (keys used))))]
+     (if-some [raliases (when-not abandoned (not-empty (select-keys raliases (keys used))))]
+       ;;FIXME cannot add properties to top-level pointer?
        (let [norm (if (vector? f)
                     (if (= (count f) 1)
                       (conj f {})
@@ -2398,7 +2418,7 @@
          (update-in norm [1 :aliases] (fn [old]
                                         (when old
                                           (-fail! ::aliases-property-already-exists))
-                                        (reduce-kv (fn [m k v] (assoc m (keyword v) (keyword k))) {} aliases))))
+                                        (reduce-kv (fn [m k v] (assoc m (keyword k) (keyword v))) {} (set/map-invert raliases)))))
        f))))
 
 (defn properties

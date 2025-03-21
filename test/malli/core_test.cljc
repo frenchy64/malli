@@ -3617,4 +3617,19 @@
                                         ::mg/gen ::a}
                              ::property ::not-aliased}
                             ::a ::b]))))
+  (binding [*ns* (the-ns this-nsym)]
+    (is (= [:tuple
+            {:registry {::a [:ref ::b]
+                        ::b ::mg/gen
+                        ::mg/gen ::a}
+             ::property ::not-aliased}
+            ::a ::b]
+           (m/form
+             (m/schema
+               (m/compact-form [:tuple
+                                {:registry {::a [:ref ::b]
+                                            ::b ::mg/gen
+                                            ::mg/gen ::a}
+                                 ::property ::not-aliased}
+                                ::a ::b]))))))
   )

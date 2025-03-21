@@ -188,3 +188,8 @@
   ([?schema value options]
    (let [explain (fn [] (->> (m/explain ?schema value options) (me/with-error-messages)))]
      ((prettifier ::m/explain "Validation Error" explain options)))))
+
+(defn print-schema
+  ([]))
+
+#?(:clj (defmethod print-method ::m/schema [v ^java.io.Writer w] (.write w (pr-str (-form ^Schema v)))))
