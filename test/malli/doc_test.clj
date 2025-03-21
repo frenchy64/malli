@@ -10,6 +10,12 @@
        {:a static-meta-map}
        ::a-schema)
 
+(m/reg ::mutual1 [:maybe [:ref ::mutual2]])
+(m/reg ::mutual2 [:maybe [:ref ::mutual1]])
+
+;TODO figure out mutual recursion
+;(m/schema ::mutual1)
+
 (m/doc ::a-schema)
 ; -------------------------
 ; Named Schema
