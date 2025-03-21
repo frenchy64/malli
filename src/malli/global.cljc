@@ -5,6 +5,7 @@
 (def ^:private global-schemas (atom {}))
 (defn- -global-schema [type] (@global-schemas type))
 
+;; TODO reloading-registry
 (defn -global-registry []
   (reify
     mr/Registry
