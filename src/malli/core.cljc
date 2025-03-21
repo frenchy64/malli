@@ -2748,38 +2748,13 @@
   (merge (predicate-schemas) (class-schemas) (comparator-schemas) (type-schemas) (sequence-schemas) (base-schemas)))
 
 (def ^:private global-schemas (atom {}))
-
-(defn- -global-schema [type]
-  (when (qualified-keyword? type)
-    (let [glo @global-schemas]
-      (or (-> glo :cache (get type))
-          (when (get glo type)
-            (-> (swap! global-schemas (fn [m]
-                                        (if (get (:cache m) type)
-                                          m
-                                          (if-some [[_ s] (find m type)]
-                                            (assoc-in m [:cache type] (cond-> s (not (into-schema? s)) (schema {::global true})))
-                                            m))))
-                :cache
-                (get type)))))))
-
-(defn -register-global-cache-invalidation-watcher! [k f]
-  (swap! global-schemas assoc-in [:watchers k] f))
-
-(defn -unregister-global-cache-invalidation-watcher! [k]
-  (swap! global-schemas update :watchers dissoc k))
-
-(defn- -notify-global-cache-invalidation []
-  (run! (fn [f] (f) nil) (:watchers @global-schemas)))
-
-(defn -invalidate-global-schemas! []
-  (-notify-global-cache-invalidation))
+(defn- -global-schema [type] (@global-schemas type))
 
 (defn -global-registry []
   (reify
     mr/Registry
     (-schema [_ type] (-global-schema type))
-    (-schemas [_] (dissoc @global-schemas :cache))))
+    (-schemas [_] @global-schemas)))
 
 (def default-registry
   (let [strict #?(:cljs (identical? mr/mode "strict")
@@ -2881,13 +2856,7 @@
 
 (defn- -reg*
   [k v]
-  (let [[prev m] (swap-vals! global-schemas (fn [m]
-                                              (-> m
-                                                  (cond->
-                                                    (get m k) (assoc :cache {}))
-                                                  (assoc k v))))]
-    (when (get prev k)
-      (-notify-global-cache-invalidation)))
+  (swap! global-schemas assoc k v)
   k)
 
 (defn -reg!
@@ -2896,20 +2865,17 @@
   [qkw sform]
   (when-not (qualified-keyword? qkw)
     (-fail! ::reg-key-must-be-qualified-keyword))
-  (when (or (schema? sform)
-            (into-schema? sform))
-    (-fail! ::reg-schema-must-be-schema-form))
-  (-reg* qkw sform))
+  (-reg* qkw (schema sform)))
 
 (defn -reg-type!
   "Register an IntoSchema under a qualified keyword in the global registry.
   Returns the keyword."
-  [qkw sform]
+  [qkw tform]
   (when-not (qualified-keyword? qkw)
     (-fail! ::reg-type-key-must-be-qualified-keyword))
-  (when-not (into-schema? sform)
+  (when-not (into-schema? tform)
     (-fail! ::reg-type-must-be-into-schema))
-  (-reg* qkw sform))
+  (-reg* qkw tform))
 
 #?(:clj
    (defn- -reg-macro [qkw args mode extra at-form at-env]
