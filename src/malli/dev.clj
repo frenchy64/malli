@@ -23,6 +23,38 @@
 (defn -uncapture-fail! []
   (alter-var-root #'m/-fail! (fn [f] (-> f meta ::original (or f)))))
 
+(defn -with-reloading-global-schemas []
+  (alter-var-root
+    #'m/-save-ctor
+    (fn [f]
+      (-> (fn -save-ctor [t] `#(do ~t))
+          (with-meta {::original f}))))
+  (alter-var-root
+    #'m/-global-schema
+    (fn [f]
+      (-> (fn -reg* [k v]
+            (swap-vals! @#'m/global-schemas
+                        (fn [m]
+                          (let [prev (m k)]
+                            (-> m
+                                (assoc k v))))))
+          (with-meta {::original f}))))
+  (alter-var-root
+    #'m/-reg*
+    (fn [f]
+      (-> (fn -reg* [k v]
+            (swap-vals! @#'m/global-schemas
+                        (fn [m]
+                          (let [prev (m k)]
+                            (-> m
+                                (assoc k v))))))
+          (with-meta {::original f})))))
+
+(defn -without-reloading-global-schemas []
+  (alter-var-root #'m/-reg* (fn [f] (-> f meta ::original (or f))))
+  (alter-var-root #'m/-global-schema (fn [f] (-> f meta ::original (or f))))
+  (alter-var-root #'m/-save-ctor (fn [f] (-> f meta ::original (or f)))))
+
 ;;
 ;; Public API
 ;;
@@ -33,6 +65,7 @@
   (remove-watch @#'m/-function-schemas* ::watch)
   (->> (mi/unstrument!) (count) (format "unstrumented %d function vars") (-log!))
   (clj-kondo/save! {})
+  (-without-reloading-global-schemas)
   (-uncapture-fail!)
   (-log! "dev-mode stopped"))
 
@@ -45,6 +78,7 @@
   ([options]
    (with-out-str (stop!))
    (-capture-fail! options)
+   (-without-reloading-global-schemas)
    (mi/collect! {:ns (all-ns)})
    (let [watch (bound-fn [_ _ old new]
                  (->> (for [[n d] (:clj new)

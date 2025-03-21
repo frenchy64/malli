@@ -2,21 +2,22 @@
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is]]
             [malli.core :as m]
-            [malli.doc :as mdoc]))
+            [malli.global :refer [reg reg-type]]
+            [malli.doc :refer [doc]]))
 
-(m/reg ::a-schema :int)
-(m/reg ::another-schema
+(reg ::a-schema :int)
+(reg ::another-schema
        "A documentation string"
        {:a static-meta-map}
        ::a-schema)
 
-(m/reg ::mutual1 [:maybe [:ref ::mutual2]])
-(m/reg ::mutual2 [:maybe [:ref ::mutual1]])
+(reg ::mutual1 [:maybe [:ref {:lazy true} ::mutual2]])
+(reg ::mutual2 [:maybe [:ref ::mutual1]])
 
 ;TODO figure out mutual recursion
 ;(m/schema ::mutual1)
 
-(m/doc ::a-schema)
+(doc ::a-schema)
 ; -------------------------
 ; Named Schema
 ; 
@@ -24,7 +25,7 @@
 ; 
 ; Source code:
 ; (m/reg ::a-schema :int)
-(m/doc ::another-schema)
+(doc ::another-schema)
 ; -------------------------
 ; Named Schema
 ; 
@@ -38,12 +39,12 @@
 ;        {:a static-meta-map}
 ;        :bool)
 
-(m/reg-type ::any-alias (m/-any-schema))
+(reg-type ::any-alias (m/-any-schema))
 
 (m/validator ::any-alias)
 ; => any?
 
-(m/doc ::any-alias)
+(doc ::any-alias)
 ;TODO
 ; Schema constructor
 ; {:file "/Users/ambrose/Projects/malli-local-dev/register-macro/test/malli/doc_test.cljc", :ns malli.doc-test, :line 15, :column 1, :form (m/reg-type :malli.doc-test/any-alias (m/-any-schema)), :schema-form (m/-any-schema), :into-schema true}

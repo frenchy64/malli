@@ -1,5 +1,6 @@
 (ns malli.doc
-  (:require [malli.core :as m]
+  (:require [malli.global :as glo]
+            [malli.core :as m]
             [clojure.java.io :as io]
             [edamame.core :as e :refer [parse-string]]))
 
@@ -51,7 +52,7 @@
                   (println (:doc m)))
                 (println)
                 (when-some [form (when (= :clj platform)
-                                   (get @@#'m/global-schemas reference))]
+                                   (get @@#'glo/global-schemas reference))]
                   (println form)
                   (println (:schema-form m)))
                 (let [source (-source-fn m)]
@@ -62,3 +63,6 @@
 
 (defn save! [file defining-ns-regex platform]
   (spit file (pr-str (-collect-meta defining-ns-regex platform))))
+
+(defmacro doc [qkw]
+  (print-doc qkw (if (:ns &env) :cljs :clj)))
