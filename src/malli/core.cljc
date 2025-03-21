@@ -2748,6 +2748,20 @@
 
 (def ^:private global-schemas (atom {}))
 
+(defn- -global-schema [type]
+  (when (qualified-keyword? type)
+    (let [glo @global-schemas]
+      (or (-> glo :cache (get type))
+          (when (get glo type)
+            (-> (swap! global-schemas (fn [m]
+                                        (if (get (:cache m) type)
+                                          m
+                                          (if-some [[_ s] (find m type)]
+                                            (assoc-in m [:cache type] (cond-> s (not (into-schema? s)) (schema {::global true})))
+                                            m))))
+                :cache
+                (get type)))))))
+
 (defn -register-global-cache-invalidation-watcher! [k f]
   (swap! global-schemas assoc-in [:watchers k] f))
 
@@ -2763,18 +2777,7 @@
 (defn -global-registry []
   (reify
     mr/Registry
-    (-schema [_ type] (when (qualified-keyword? type)
-                        (let [glo @global-schemas]
-                          (or (-> glo :cache (get type))
-                              (when (get glo type)
-                                (-> (swap! global-schemas (fn [m]
-                                                            (if (get (:cache m) type)
-                                                              m
-                                                              (if-some [[_ s] (find m type)]
-                                                                (assoc-in m [:cache type] (cond-> s (not (into-schema? s)) schema))
-                                                                m))))
-                                    :cache
-                                    (get type)))))))
+    (-schema [_ type] (-global-schema type))
     (-schemas [_] (dissoc @global-schemas :cache))))
 
 (def default-registry
