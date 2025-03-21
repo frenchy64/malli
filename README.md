@@ -2994,7 +2994,6 @@ Use `m/reg-type` to register new schema types.
 ; => any?
 ```
 
-
 ### Changing the default registry
 
 Passing in custom options to all public methods is a lot of boilerplate. For the lazy, there is an easier way - we can swap the (global) default registry:
