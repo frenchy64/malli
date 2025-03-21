@@ -2953,6 +2953,9 @@ Use `m/reg` to register an alias for a schema. Use `m/doc` to lookup its documen
        {:a static-meta-map}
        ::a-schema)
 
+(m/schema [:tuple ::a-schema ::another-schema])
+; => [:tuple ::a-schema ::another-schema]
+
 (m/doc ::a-schema)
 ; -------------------------
 ; Named Schema
@@ -2976,6 +2979,21 @@ Use `m/reg` to register an alias for a schema. Use `m/doc` to lookup its documen
 ;        {:a static-meta-map}
 ;        :bool)
 ```
+
+The global registry caches schemas once they are used. When schemas are overwritten,
+the global cache is cleared. Use `-register-global-cache-invalidation-watcher!` to
+register a function to watch for this event. Use `-invalidate-global-schemas!` to
+forcibly clear the global cache.
+
+Use `m/reg-type` to register new schema types.
+
+```clojure
+(m/reg-type ::any-alias (m/-any-schema))
+
+(m/validator ::any-alias)
+; => any?
+```
+
 
 ### Changing the default registry
 

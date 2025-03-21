@@ -34,6 +34,9 @@
 
 (m/reg-type ::any-alias (m/-any-schema))
 
+(m/validator ::any-alias)
+; => any?
+
 (m/doc ::any-alias)
 ;TODO
 ; Schema constructor
