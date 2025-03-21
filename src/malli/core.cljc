@@ -2760,7 +2760,7 @@
 (defn -invalidate-global-schemas! []
   (-notify-global-cache-invalidation))
 
-(defn- -global-registry []
+(defn -global-registry []
   (reify
     mr/Registry
     (-schema [_ type] (when (qualified-keyword? type)
