@@ -15,7 +15,7 @@
 
 (m/reg ::ping
        "The ping side"
-       [:maybe [:tuple [:= "ping"] (m/-lazy ::pong nil)]])
+       [:maybe [:tuple [:= "ping"] [:ref {:lazy true} ::pong]]])
 
 (m/reg ::pong
        "The pong side"
