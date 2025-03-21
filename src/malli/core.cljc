@@ -1714,8 +1714,7 @@
        (-check-children! :ref properties children 1 1)
        (when-not (-reference? ref)
          (-fail! ::invalid-ref {:ref ref}))
-       (let [lazy (or lazy (:lazy properties))
-             rf (or (and lazy (-memoize (fn [] (schema (mr/-schema (-registry options) ref) options))))
+       (let [rf (or (and lazy (-memoize (fn [] (schema (mr/-schema (-registry options) ref) options))))
                     (when-let [s (mr/-schema (-registry options) ref)] (-memoize (fn [] (schema s options))))
                     (when-not allow-invalid-refs
                       (-fail! ::invalid-ref {:type :ref, :ref ref})))
