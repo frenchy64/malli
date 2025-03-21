@@ -11,19 +11,20 @@
             [malli.registry :as mr]
             [malli.transform :as mt]
             [malli.util :as mu]
+            [malli.global :refer [reg]]
             #?(:clj [malli.test-macros :refer [when-env]])))
 
-(m/reg ::list
-       "A list of ints"
-       [:maybe [:tuple int? [:ref {:lazy true} ::list]]])
+(reg ::list
+     "A list of ints"
+     [:maybe [:tuple int? [:rec ::list]]])
 
-(m/reg ::ping
-       "The ping side"
-       [:maybe [:tuple [:= "ping"] [:ref {:lazy true} ::pong]]])
+(reg ::ping
+     "The ping side"
+     [:maybe [:tuple [:= "ping"] [:rec ::pong]]])
 
-(m/reg ::pong
-       "The pong side"
-       [:maybe [:tuple [:= "pong"] [:ref ::ping]]])
+(reg ::pong
+     "The pong side"
+     [:maybe [:tuple [:= "pong"] [:ref ::ping]]])
 
 (deftest mutually-recursive-globals-test
   (is (m/validator ::ping))
