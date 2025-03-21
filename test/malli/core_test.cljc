@@ -3605,7 +3605,7 @@
     (is (= :any (m/compact-form :any))))
   (binding [*ns* (the-ns this-nsym)]
     (is (= [:tuple
-            {:aliases {:malli.core-test :_, :malli.generator :mg}
+            {:aliases {:_ :malli.core-test, :mg :malli.generator}
              :registry {:_/a [:ref :_/b],
                         :_/b :mg/gen,
                         :mg/gen :_/a}}

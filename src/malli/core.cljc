@@ -2398,7 +2398,7 @@
          (update-in norm [1 :aliases] (fn [old]
                                         (when old
                                           (-fail! ::aliases-property-already-exists))
-                                        (reduce-kv (fn [m k v] (assoc m (keyword k) (keyword v))) {} aliases))))
+                                        (reduce-kv (fn [m k v] (assoc m (keyword v) (keyword k))) {} aliases))))
        f))))
 
 (defn properties
