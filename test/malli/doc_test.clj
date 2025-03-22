@@ -14,8 +14,7 @@
 (reg ::mutual1 [:maybe [:rec ::mutual2]])
 (reg ::mutual2 [:maybe [:ref ::mutual1]])
 
-;TODO figure out mutual recursion
-;(m/schema ::mutual1)
+(m/schema ::mutual1)
 
 (doc ::a-schema)
 ; -------------------------

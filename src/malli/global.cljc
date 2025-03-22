@@ -2,10 +2,23 @@
   (:require [malli.core :as m]
             [malli.registry :as mr]))
 
-(def ^:private global-schemas (atom {}))
-(defn- -global-schema [type] (@global-schemas type))
+#?(:cljs (goog-define reload "false")
+   :clj  (def reload (keyword (or (System/getProperty "malli.global/reload") :false))))
 
-;; TODO reloading-registry
+(def ^:private global-schemas (atom {}))
+(defn- -global-schema [type]
+  (let [r @global-schemas]
+    (or (r type)
+        (when #?(:cljs (identical? reload "true")
+                 :default (identical? reload :true))
+          (loop [r r]
+            (when-some [f (-> r meta ::cache (get type))]
+              (let [res (if (fn? f) (f) f)
+                    r' (vary-meta r assoc-in [::cache type] res)]
+                (if (compare-and-set! global-schemas r r')
+                  res
+                  (recur @global-schemas)))))))))
+
 (defn -global-registry []
   (reify
     mr/Registry
@@ -24,29 +37,33 @@
 
 (defn- -reg*
   [k v]
-  (swap! global-schemas assoc k v)
+  (let [v' (if (fn? v) (v) v)]
+    (if #?(:cljs (identical? reload "true")
+           :default (identical? reload :true))
+      (swap! global-schemas
+             (fn [r]
+               (-> r
+                   (cond-> (get r k) empty)
+                   (vary-meta assoc-in [::cache k] v)
+                   (assoc k v'))))
+      (swap! global-schemas k v')))
   k)
 
 (defn -reg!
   "Register a schema form under a qualified keyword in the global registry.
-  Returns the keyword."
-  [qkw sform]
+  Returns the keyword. If passed a fn, will be called to resolve the schema."
+  [qkw s]
   (when-not (qualified-keyword? qkw)
     (m/-fail! ::reg-key-must-be-qualified-keyword))
-  (-reg* qkw (m/schema sform)))
+  (-reg* qkw (if (fn? s) (comp m/schema s) (m/schema s))))
 
 (defn -reg-type!
   "Register an IntoSchema under a qualified keyword in the global registry.
-  Returns the keyword."
+  Returns the keyword. If passed a fn, will be called to resolve the type."
   [qkw t]
   (when-not (qualified-keyword? qkw)
     (m/-fail! ::reg-type-key-must-be-qualified-keyword))
-  (when-not (m/into-schema? t)
-    (m/-fail! ::reg-type-must-be-into-schema))
   (-reg* qkw t))
-
-#?(:clj
-   (defn- -save-ctor [t] t))
 
 #?(:clj
    (defn- -reg-macro [qkw args mode extra at-form at-env]
@@ -77,11 +94,15 @@
                (m/-fail! ::reg-missing-schema))
            _ (when (next args)
                (m/-fail! ::reg-too-many-args))
-           platform (if (:ns at-env) :cljs :clj)]
+           platform (if (:ns at-env) :cljs :clj)
+           op ~(case mode
+                 :reg `-reg!
+                 :reg-type `-reg-type!)]
        ((requiring-resolve 'malli.doc/-register-schema-meta!) qkw m platform)
-       (case mode
-         :reg `(-reg! ~qkw ~(-save-ctor s))
-         :reg-type `(-reg-type! ~qkw ~(-save-ctor s))))))
+       `(~op ~qkw
+             ~(if (identical? reload :true)
+                `(fn [] ~s)
+                s)))))
 
 #?(:clj
    (defmacro reg
