@@ -793,17 +793,16 @@
                                      :unparser (range (dec (count children)) -1 -1))]
                          (fn [x]
                            (reduce (fn [x i]
-                                     ;(prn "order" m i x)
                                      (let [parser (nth parsers i)
                                            x' (parser x)]
-                                       ;(prn "x'" x x')
                                        (if (miu/-invalid? x')
                                          (reduced ::invalid)
                                          (do (when-not (identical? x x')
                                                (when-not (zero? i)
                                                  (-deprecated! (str "Parser is only supported on the first :and child. "
-                                                                    "The " i "th child of " @form " parsed its output, "
-                                                                    "and should be first."))))
+                                                                    "The " i "th child of " @form " "
+                                                                    (case m :parser "parsed" :unparser "unparsed")
+                                                                    " its output, and should be the first child."))))
                                              x'))))
                                    x order))))]
         ^{:type ::schema}
