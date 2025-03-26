@@ -46,7 +46,7 @@
 (def ^:private -global-options {:registry (-global-registry)})
 
 (defn -reg! [k f]
-  (let [v' (f)
+  (let [v' (if (fn? f) (f) f)
         v' (cond-> v'
              (not (m/into-schema? v'))
              (m/schema -global-options))]
@@ -104,6 +104,7 @@
                (m/-fail! ::reg-too-many-args))
            platform (if (:ns at-env) :cljs :clj)
            _ ((requiring-resolve 'malli.doc/-register-schema-meta!) qkw m platform)]
+       ;;TODO allow omitting fn in production
        `(-reg! ~qkw #(do ~s)))))
 
 #?(:clj
