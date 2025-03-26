@@ -801,7 +801,9 @@
                                          (reduced ::invalid)
                                          (do (when-not (identical? x x')
                                                (when-not (zero? i)
-                                                 (-deprecated! "Parser is only supported on the first :and child")))
+                                                 (-deprecated! (str "Parser is only supported on the first :and child. "
+                                                                    "The " i "th child of " @form " parsed its output, "
+                                                                    "and should be first."))))
                                              x'))))
                                    x order))))]
         ^{:type ::schema}
