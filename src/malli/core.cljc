@@ -783,14 +783,22 @@
       (let [children (-vmap #(schema % options) children)
             form (delay (-simple-form parent properties children -form options))
             cache (-create-cache options)
-            ->parser (fn [f m] (let [parser (m (f (first children)))
-                                     validator (miu/-every-pred (-vmap -validator (next children)))]
-                                 #(let [x (parser %)]
-                                    (if (miu/-invalid? x)
-                                      x
-                                      (if (validator x)
-                                        x
-                                        ::invalid)))))]
+            ->parser (fn [m]
+                       (let [parser ((case m :parser -parser :unparser -unparser) (first children))
+                             validator (miu/-every-pred (-vmap -validator (next children)))]
+                         (case m
+                           :parser (fn [x]
+                                     (let [x' (parser x)]
+                                       (if (or (miu/-invalid? x')
+                                               (validator x))
+                                         x'
+                                         ::invalid)))
+                           :unparser (fn [x']
+                                       (let [x (parser x')]
+                                         (if (or (miu/-invalid? x)
+                                                 (validator x))
+                                           x
+                                           ::invalid))))))]
         ^{:type ::schema}
         (reify
           Schema
@@ -799,8 +807,8 @@
           (-explainer [_ path]
             (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
               (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
-          (-parser [_] (->parser -parser))
-          (-unparser [_] (->parser -unparser))
+          (-parser [_] (->parser :parser))
+          (-unparser [_] (->parser :unparser))
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
