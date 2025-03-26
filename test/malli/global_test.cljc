@@ -24,7 +24,7 @@
 
 (reg ::pong
      "The pong side"
-     [:maybe [:tuple [:= "pong"] [:ref ::ping]]])
+     [:maybe [:tuple [:= "pong"] [:rec ::ping]]])
 
 (deftest mutually-recursive-globals-test
   (is (m/validator ::ping))
