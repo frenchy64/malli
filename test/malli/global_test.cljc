@@ -11,8 +11,7 @@
             [malli.registry :as mr]
             [malli.transform :as mt]
             [malli.util :as mu]
-            [malli.global :refer [reg]]
-            #?(:clj [malli.test-macros :refer [when-env]])))
+            [malli.global #?(:clj :refer :cljs :refer-macros) [reg]]))
 
 (reg ::list
      "A list of ints"
