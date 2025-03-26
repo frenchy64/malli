@@ -2,6 +2,7 @@
   (:require [malli.core :as m]
             [malli.registry :as mr]))
 
+(declare -global-options)
 (def ^:private global-schemas (atom {}))
 (defn- -global-schema [type]
   (let [r @global-schemas]
@@ -15,11 +16,12 @@
                              (if (fn? f) (f) f))
                   m (if (map? m-or-res) m-or-res {type m-or-res})
                   res (get m type)
-                  r' (reduce (fn [r k v]
-                               (if (get r k)
-                                 (reduced (with-meta m (meta r)))
-                                 (assoc r k v)))
-                             r m)]
+                  r' (reduce-kv (fn [r k v]
+                                  (if (get r k)
+                                    (reduced (with-meta (update m #(cond-> % (not (m/into-schema? %)) (m/schema -global-options)))
+                                                        (meta r)))
+                                    (assoc r k (cond-> v (not (m/into-schema? v)) (m/schema -global-options)))))
+                                r m)]
               (if (compare-and-set! global-schemas r r')
                 res
                 (recur @global-schemas f res))))))))
@@ -30,7 +32,7 @@
     (-schema [_ type] (-global-schema type))
     (-schemas [_] @global-schemas)))
 
-#_
+;#_
 (def ^:private __add-global-registry__
   (let [strict #?(:cljs (identical? mr/mode "strict")
                   :default (= mr/mode "strict"))

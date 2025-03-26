@@ -23,34 +23,6 @@
 (defn -uncapture-fail! []
   (alter-var-root #'m/-fail! (fn [f] (-> f meta ::original (or f)))))
 
-#_
-(defn -with-reloading-global-schemas []
-  (alter-var-root
-    #'m/-global-schema
-    (fn [f]
-      (-> (fn -reg* [k v]
-            (swap-vals! @#'m/global-schemas
-                        (fn [m]
-                          (let [prev (m k)]
-                            (-> m
-                                (assoc k v))))))
-          (with-meta {::original f}))))
-  (alter-var-root
-    #'m/-reg*
-    (fn [f]
-      (-> (fn -reg* [k v]
-            (swap-vals! @#'m/global-schemas
-                        (fn [m]
-                          (let [prev (m k)]
-                            (-> m
-                                (assoc k v))))))
-          (with-meta {::original f})))))
-
-#_
-(defn -without-reloading-global-schemas []
-  (alter-var-root #'m/-reg* (fn [f] (-> f meta ::original (or f))))
-  (alter-var-root #'m/-global-schema (fn [f] (-> f meta ::original (or f)))))
-
 ;;
 ;; Public API
 ;;
