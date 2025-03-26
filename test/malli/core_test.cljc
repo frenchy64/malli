@@ -225,8 +225,8 @@
     (is (false? (m/validate empty? 1))))
 
   (testing "composite schemas"
-    (let [schema (m/schema [:and [:or pos-int? neg-int?] int?])
-          schema* (m/schema [:and [:orn [:pos pos-int?] [:neg neg-int?]] int?])]
+    (let [schema (m/schema [:and int? [:or pos-int? neg-int?]])
+          schema* (m/schema [:and int? [:orn [:pos pos-int?] [:neg neg-int?]]])]
 
       (doseq [schema [schema schema*]]
         (is (true? (m/validate schema 1)))
@@ -238,15 +238,15 @@
       (is (nil? (m/explain schema 1)))
       (is (results= {:schema schema,
                      :value 0,
-                     :errors [{:path [0 0], :in [], :schema pos-int?, :value 0}
-                              {:path [0 1], :in [], :schema neg-int?, :value 0}]}
+                     :errors [{:path [1 0], :in [], :schema pos-int?, :value 0}
+                              {:path [1 1], :in [], :schema neg-int?, :value 0}]}
                     (m/explain schema 0)))
 
       (is (nil? (m/explain schema* 1)))
       (is (results= {:schema schema*,
                      :value 0,
-                     :errors [{:path [0 :pos], :in [], :schema pos-int?, :value 0}
-                              {:path [0 :neg], :in [], :schema neg-int?, :value 0}]}
+                     :errors [{:path [1 :pos], :in [], :schema pos-int?, :value 0}
+                              {:path [1 :neg], :in [], :schema neg-int?, :value 0}]}
                     (m/explain schema* 0)))
 
       (is (= 1 (m/parse schema 1)))
@@ -293,22 +293,22 @@
 
       (testing "ast"
         (is (= {:type :and
-                :children [{:type :or
+                :children [{:type 'int?}
+                           {:type :or
                             :children [{:type 'pos-int?}
-                                       {:type 'neg-int?}]}
-                           {:type 'int?}]} (m/ast schema)))
+                                       {:type 'neg-int?}]}]} (m/ast schema)))
         (is (= {:type :and,
-                :children [{:type :orn
+                :children [{:type 'int?}
+                           {:type :orn
                             :keys {:pos {:order 0
                                          :value {:type 'pos-int?}}
                                    :neg {:order 1
-                                         :value {:type 'neg-int?}}}}
-                           {:type 'int?}]} (m/ast schema*)))
+                                         :value {:type 'neg-int?}}}}]} (m/ast schema*)))
         (is (true? (m/validate (m/from-ast (m/ast schema)) -1)))
         (is (true? (m/validate (m/from-ast (m/ast schema)) 1))))
 
-      (is (= [:and [:or 'pos-int? 'neg-int?] 'int?] (m/form schema)))
-      (is (= [:and [:orn [:pos 'pos-int?] [:neg 'neg-int?]] 'int?] (m/form schema*))))
+      (is (= [:and 'int? [:or 'pos-int? 'neg-int?]] (m/form schema)))
+      (is (= [:and 'int? [:orn [:pos 'pos-int?] [:neg 'neg-int?]]] (m/form schema*))))
 
     (testing "transforming :or"
       (let [math (mt/transformer {:name :math})

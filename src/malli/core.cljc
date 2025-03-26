@@ -771,8 +771,6 @@
 (defn -qualified-symbol-schema [] (-simple-schema {:type :qualified-symbol, :pred qualified-symbol?}))
 (defn -uuid-schema [] (-simple-schema {:type :uuid, :pred uuid?}))
 
-(def new-and-parser false)
-
 (defn -and-schema []
   ^{:type ::into-schema}
   (reify IntoSchema
@@ -786,42 +784,26 @@
             form (delay (-simple-form parent properties children -form options))
             cache (-create-cache options)
             ->parser (fn [m]
-                       (if new-and-parser
-                         (let [parser ((case m :parser -parser :unparser -unparser) (first children))
-                               validator (miu/-every-pred (-vmap -validator (next children)))]
-                           (case m
-                             :parser (fn [x]
-                                       (let [x' (parser x)]
-                                         (if (or (miu/-invalid? x')
-                                                 (validator x))
-                                           x'
-                                           ::invalid)))
-                             :unparser (fn [x']
-                                         (let [x (parser x')]
-                                           (if (or (miu/-invalid? x)
-                                                   (validator x))
-                                             x
-                                             ::invalid)))))
-                         (let [f (case m
-                                   :parser -parser
-                                   :unparser -unparser)
-                               parsers (-vmap f children)
-                               order (case m
-                                       :parser (range (count children))
-                                       :unparser (range (dec (count children)) -1 -1))]
-                           (fn [x]
-                             (reduce (fn [x i]
-                                       ;(prn "order" m i x)
-                                       (let [parser (nth parsers i)
-                                             x' (parser x)]
-                                         ;(prn "x'" x x')
-                                         (if (miu/-invalid? x')
-                                           (reduced ::invalid)
-                                           (do (when-not (identical? x x')
-                                                 (when-not (zero? i)
-                                                   (-deprecated! "Parser is only supported on the first :and child")))
-                                               x'))))
-                                     x order)))))]
+                       (let [f (case m
+                                 :parser -parser
+                                 :unparser -unparser)
+                             parsers (-vmap f children)
+                             order (case m
+                                     :parser (range (count children))
+                                     :unparser (range (dec (count children)) -1 -1))]
+                         (fn [x]
+                           (reduce (fn [x i]
+                                     ;(prn "order" m i x)
+                                     (let [parser (nth parsers i)
+                                           x' (parser x)]
+                                       ;(prn "x'" x x')
+                                       (if (miu/-invalid? x')
+                                         (reduced ::invalid)
+                                         (do (when-not (identical? x x')
+                                               (when-not (zero? i)
+                                                 (-deprecated! "Parser is only supported on the first :and child")))
+                                             x'))))
+                                   x order))))]
         ^{:type ::schema}
         (reify
           Schema
