@@ -783,6 +783,7 @@
       (let [children (-vmap #(schema % options) children)
             form (delay (-simple-form parent properties children -form options))
             cache (-create-cache options)
+            warned (volatile! false)
             ->parser (fn [m]
                        (let [f (case m
                                  :parser -parser
@@ -797,12 +798,14 @@
                                            x' (parser x)]
                                        (if (miu/-invalid? x')
                                          (reduced ::invalid)
-                                         (do (when-not (identical? x x')
-                                               (when-not (zero? i)
-                                                 (-deprecated! (str "Parser is only supported on the first :and child. "
-                                                                    "The " i "th child of " @form " "
-                                                                    (case m :parser "parsed" :unparser "unparsed")
-                                                                    " its output, and should be the first child."))))
+                                         (do (when (and (not (identical? x x'))
+                                                        (not (zero? i))
+                                                        (not @warned))
+                                               (vreset! warned true)
+                                               (-deprecated! (str "Parser is only supported on the first :and child. "
+                                                                  "The " i "th child of " @form " "
+                                                                  (case m :parser "parsed" :unparser "unparsed")
+                                                                  " its output, and should be the first child.")))
                                              x'))))
                                    x order))))]
         ^{:type ::schema}
