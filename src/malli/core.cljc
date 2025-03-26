@@ -783,8 +783,14 @@
       (let [children (-vmap #(schema % options) children)
             form (delay (-simple-form parent properties children -form options))
             cache (-create-cache options)
-            ->parser (fn [f m] (let [parsers (m (-vmap f children))]
-                                 #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)))]
+            ->parser (fn [f m] (let [parser (m (f (first children)))
+                                     validator (miu/-every-pred (-vmap -validator (next children)))]
+                                 #(let [x (parser %)]
+                                    (if (miu/-invalid? x)
+                                      x
+                                      (if (validator x)
+                                        x
+                                        ::invalid)))))]
         ^{:type ::schema}
         (reify
           Schema
@@ -793,8 +799,8 @@
           (-explainer [_ path]
             (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
               (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
-          (-parser [_] (->parser -parser seq))
-          (-unparser [_] (->parser -unparser rseq))
+          (-parser [_] (->parser -parser))
+          (-unparser [_] (->parser -unparser))
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
