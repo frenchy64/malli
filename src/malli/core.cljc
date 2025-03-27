@@ -788,9 +788,11 @@
             cache (-create-cache options)
             transforming-parser (delay
                                   (let [transforming-parsers (or (when-some [[_ i] (find properties :parse)]
-                                                                   (when-not (and (nat-int? i) (< i (count children)))
-                                                                     (-fail! ::and-schema-invalid-parse-property {:schema @form}))
-                                                                   [i])
+                                                                   (or (when (= :none i)
+                                                                         [])
+                                                                       (when-not (and (nat-int? i) (< i (count children)))
+                                                                         (-fail! ::and-schema-invalid-parse-property {:schema @form}))
+                                                                       [i]))
                                                                  (into []
                                                                        (keep-indexed
                                                                          (fn [i c]
