@@ -830,7 +830,7 @@
             ;; return x if all results are equal.
             (let [pi @transforming-parser
                   unparsers (->parsers -unparser)
-                  unparser (nth unparsers pi identity) 
+                  unparser (get unparsers pi identity) 
                   nchildren (count children)]
               (fn [x']
                 (let [x (unparser x')]
