@@ -3616,6 +3616,15 @@
          (m/parse [:andn [:o [:orn [:left :int] [:right :int]]] [:f [:fn number?]]] 1)))
   (let [s [:andn [:o [:orn [:left :int] [:right :int]]] [:f [:fn number?]]]]
     (is (= 1 (->> 1 (m/parse s) (m/unparse s)))))
+  (let [s [:andn [:o [:orn [:left :int] [:right :int]]] [:f [:fn number?]]]
+        p (m/parse s 1)
+        _ (is (= #malli.core.Tags{:values {:o #malli.core.Tag{:key :left, :value 1}, :f 1}}
+                 p))]
+    (testing "provided parses must agree"
+      (is (= ::m/invalid (m/unparse s (update-in p [:values :o :value] inc))))
+      (is (= 2 (m/unparse s (-> p
+                                (update-in [:values :o :value] inc)
+                                (update-in [:values :f] inc)))))))
   (is (= 1 (m/parse [:andn [:i :int] [:o [:or :int :boolean]]] 1)))
   (is (= 1 (m/parse [:andn [:o [:or :int :boolean]] [:i :int]] 1)))
   (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:andn [:i :int] [:o [:orn [:int :int] [:boolean :boolean]]]] 1)))

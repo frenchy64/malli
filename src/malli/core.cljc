@@ -892,23 +892,33 @@
                     ::invalid
                     (->Tags tags))))))
           (-unparser [this]
-            (let [[[k unparser] & ks+unparsers] (-vmap (fn [[k _ c]] [k (-unparser c)]) (-children this))
+            ;; all provided parsed values must unparse to the same thing.
+            ;; the result must also be valid for the remaining schemas.
+            ;; if you want to modify a particular conjunct's unparsed value, you must remove or synchronize any remaining ones.
+            (let [validators (into {} (map (fn [[k _ c]] [k (-validator c)])) (-children this))
+                  unparsers (into {} (map (fn [[k _ c]] [k (-unparser c)])) (-children this))
                   nchildren (count children)]
               (fn [tags]
-                (if-some [values (when (tags? tags) (:values tags))]
-                  (if-some [[_ x'] (when (= (count values) nchildren) (find values k))]
-                    (let [x (unparser x')]
-                      (if-not (miu/-invalid? x)
-                        (reduce (fn [x [k unparser]]
-                                  (if-some [[_ x'] (find values k)]
-                                    (let [another-x (unparser x')]
-                                      ;;FIXME this is too restrictive. we should be able to modify some
-                                      ;; of the results and have them reflect in the output.
-                                      (if (= x another-x)
-                                        x
-                                        (reduced ::invalid)))
-                                    (reduced ::invalid)))
-                                x ks+unparsers)
+                (if-some [values (when (tags? tags) (not-empty (:values tags)))]
+                  (if (every? validators (keys values))
+                    (let [[[k unparser] & unparsers] (select-keys unparsers (keys values))
+                          validators (apply dissoc validators (keys values))]
+                      (if-some [[_ x'] (find values k)]
+                        (let [x (unparser x')
+                              x (if-not (miu/-invalid? x)
+                                  (reduce (fn [x [k unparser]]
+                                            (if-some [[_ x'] (find values k)]
+                                              (let [another-x (unparser x')]
+                                                (if (= x another-x)
+                                                  x
+                                                  (reduced ::invalid)))
+                                              (reduced ::invalid)))
+                                          x unparsers)
+                                  ::invalid)]
+                          (if (and (not (miu/-invalid? x))
+                                   (every? #(% x) (vals validators)))
+                            x
+                            ::invalid))
                         ::invalid))
                     ::invalid)
                   ::invalid))))
