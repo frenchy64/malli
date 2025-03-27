@@ -880,11 +880,7 @@
             (let [explainers (-vmap (fn [[k _ c]] (-explainer c (conj path k))) (-children this))]
               (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
           (-parser [this]
-            (assert nil "TODO")
-            (let [k+parsers (-vmap (fn [[k _ c]]
-                                     [k (let [c (-parser c)]
-                                          (fn [x] (miu/-map-valid #(tag k %) (c x))))])
-                                   (-children this))]
+            (let [k+parsers (-vmap (fn [[k _ c]] [k (-parser c)]) (-children this))]
               (fn [x]
                 (let [tags (reduce (fn [acc [k parser]]
                                      (let [x' (parser x)]
@@ -906,6 +902,8 @@
                         (reduce (fn [x [k unparser]]
                                   (if-some [[_ x'] (find values k)]
                                     (let [another-x (unparser x')]
+                                      ;;FIXME this is too restrictive. we should be able to modify some
+                                      ;; of the results and have them reflect in the output.
                                       (if (= x another-x)
                                         x
                                         (reduced ::invalid)))

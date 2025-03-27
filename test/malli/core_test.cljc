@@ -18,12 +18,12 @@
 (defn with-schema-forms [result]
   (some-> result
           (update :schema m/form)
-          (update :errors (partial map (fn [error]
-                                         (-> error
-                                             (update :schema m/form)
-                                             (update :type (fnil identity nil))
-                                             (update :message (fnil identity nil))
-                                             (dissoc :check)))))))
+          (update :errors (partial mapv (fn [error]
+                                          (-> error
+                                              (update :schema m/form)
+                                              (update :type (fnil identity nil))
+                                              (update :message (fnil identity nil))
+                                              (dissoc :check)))))))
 
 (defn as-data [x] (walk/prewalk (fn [x] (cond-> x (m/schema? x) (m/form))) x))
 
@@ -3595,3 +3595,29 @@
         #?(:clj Exception, :cljs js/Error)
         #":malli\.core/and-schema-multiple-transforming-parsers"
         (m/parser [:and [:map] [:map]]))))
+
+(deftest andn-test
+  (is (= {:schema [:andn [:m :map] [:v [:vector :any]]],
+          :value {},
+          :errors
+          [{:path [:v],
+            :in [],
+            :schema [:vector :any],
+            :value {},
+            :type :malli.core/invalid-type,
+            :message nil}]}
+         (with-schema-forms
+           (m/explain [:andn [:m :map] [:v [:vector :any]]] {}))))
+  (is (= #malli.core.Tags{:values {:m {} :f {}}}
+         (m/parse [:andn [:m :map] [:f [:fn map?]]] {})))
+  (let [s [:andn [:m :map] [:f [:fn map?]]]]
+    (is (= {} (->> {} (m/parse s) (m/unparse s)))))
+  (is (= #malli.core.Tags{:values {:o #malli.core.Tag{:key :left, :value 1}, :f 1}}
+         (m/parse [:andn [:o [:orn [:left :int] [:right :int]]] [:f [:fn number?]]] 1)))
+  (let [s [:andn [:o [:orn [:left :int] [:right :int]]] [:f [:fn number?]]]]
+    (is (= 1 (->> 1 (m/parse s) (m/unparse s)))))
+  (is (= 1 (m/parse [:andn [:i :int] [:o [:or :int :boolean]]] 1)))
+  (is (= 1 (m/parse [:andn [:o [:or :int :boolean]] [:i :int]] 1)))
+  (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:andn [:i :int] [:o [:orn [:int :int] [:boolean :boolean]]]] 1)))
+  (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:andn [:o [:orn [:int :int] [:boolean :boolean]]] [:i :int]] 1)))
+  (is (= ::FIXME (m/parser [:andn [:l [:map]] [:r [:map]]]))))
