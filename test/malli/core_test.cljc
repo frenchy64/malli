@@ -3618,8 +3618,7 @@
     (is (= 1 (->> 1 (m/parse s) (m/unparse s)))))
   (let [s [:andn [:o [:orn [:left :int] [:right :int]]] [:f [:fn number?]]]
         p (m/parse s 1)
-        _ (is (= #malli.core.Tags{:values {:o #malli.core.Tag{:key :left, :value 1}, :f 1}}
-                 p))]
+        _ (is (= #malli.core.Tags{:values {:o #malli.core.Tag{:key :left, :value 1}, :f 1}} p))]
     (testing "left-most parse is used"
       (is (= 2 (m/unparse s (update-in p [:values :o :value] inc))))
       (is (= 1 (m/unparse s (update-in p [:values :f] inc))))
