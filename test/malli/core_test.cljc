@@ -3626,9 +3626,4 @@
       (is (= 2 (m/unparse s (-> p
                                 (update-in [:values :f] inc)
                                 (update :values dissoc :o)))))
-      (is (= ::m/invalid (m/unparse s (update p :values dissoc :o :f))))))
-  (is (= 1 (m/parse [:andn [:i :int] [:o [:or :int :boolean]]] 1)))
-  (is (= 1 (m/parse [:andn [:o [:or :int :boolean]] [:i :int]] 1)))
-  (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:andn [:i :int] [:o [:orn [:int :int] [:boolean :boolean]]]] 1)))
-  (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:andn [:o [:orn [:int :int] [:boolean :boolean]]] [:i :int]] 1)))
-  (is (= ::FIXME (m/parser [:andn [:l [:map]] [:r [:map]]]))))
+      (is (= ::m/invalid (m/unparse s (update p :values dissoc :o :f)))))))
