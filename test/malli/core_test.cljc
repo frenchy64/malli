@@ -3585,6 +3585,10 @@
 (deftest and-complex-parser-test
   (is (= {} (m/parse [:and [:map] [:fn any?]] {})))
   (is (= {} (m/parse [:and [:fn any?] [:map]] {})))
+  (is (= 1 (m/parse [:and :int [:or :int :boolean]] 1)))
+  (is (= 1 (m/parse [:and [:or :int :boolean] :int] 1)))
+  (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:and :int [:orn [:int :int] [:boolean :boolean]]] 1)))
+  (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:and [:orn [:int :int] [:boolean :boolean]] :int] 1)))
   (is (thrown-with-msg?
         #?(:clj Exception, :cljs js/Error)
         #":malli\.core/multiple-and-parsers-detected"
