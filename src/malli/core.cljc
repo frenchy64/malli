@@ -14,7 +14,8 @@
 
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
-         parser unparser ast from-ast -instrument ^:private -safely-countable?)
+         parser unparser ast from-ast -instrument ^:private -safely-countable?
+         deref-all)
 
 ;;
 ;; protocols and records
@@ -704,6 +705,10 @@
 ;; Schemas
 ;;
 
+(defn -simple-parser [s]
+  (let [validator (-validator s)]
+    (fn [x] (if (validator x) x ::invalid))))
+
 (defn -simple-schema [props]
   (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile]
          :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props]
@@ -717,7 +722,7 @@
         (-from-ast [parent ast options] (from-ast parent ast options))
         IntoSchema
         (-type [_] type)
-        (-type-properties [_] type-properties)
+        (-type-properties [_] (assoc type-properties ::simple-parser true))
         (-properties-schema [_ _])
         (-children-schema [_ _])
         (-into-schema [parent properties children options]
@@ -738,9 +743,7 @@
                   (let [validator (-validator this)]
                     (fn explain [x in acc]
                       (if-not (validator x) (conj acc (miu/-error path in this x)) acc))))
-                (-parser [this]
-                  (let [validator (-validator this)]
-                    (fn [x] (if (validator x) x ::invalid))))
+                (-parser [this] (-simple-parser this))
                 (-unparser [this] (-parser this))
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
@@ -784,30 +787,35 @@
             form (delay (-simple-form parent properties children -form options))
             cache (-create-cache options)
             warned (volatile! false)
-            ->parser (fn [m]
-                       (let [f (case m
+            ->parser (fn [this m]
+                       (let [dchildren (-vmap deref-all children)
+                             ;; if more than one parser might not be simple, throw and suggest :andn.
+                             [pi :as complex-parsers] (keep-indexed (fn [i c]
+                                                                      (when-not (-> c -parent -type-properties ::simple-parser)
+                                                                        i))
+                                                                    dchildren)
+                             _ (when (next complex-parsers)
+                                 (-fail! ::multiple-and-parsers-detected {:schema this
+                                                                          :complex-parsers (mapv #(nth children %) complex-parsers)}))
+                             f (case m
                                  :parser -parser
                                  :unparser -unparser)
-                             parsers (-vmap f children)
+                             parsers (-vmap f dchildren)
                              order (case m
-                                     :parser (range (count children))
-                                     :unparser (range (dec (count children)) -1 -1))]
-                         (fn [x]
-                           (reduce (fn [x i]
-                                     (let [parser (nth parsers i)
-                                           x' (parser x)]
-                                       (if (miu/-invalid? x')
-                                         (reduced ::invalid)
-                                         (do (when (and (not (identical? x x'))
-                                                        (not (zero? i))
-                                                        (not @warned))
-                                               (vreset! warned true)
-                                               (-deprecated! (str "Parser is only supported on the first :and child. "
-                                                                  "The " i "th child of " @form " "
-                                                                  (case m :parser "parsed" :unparser "unparsed")
-                                                                  " its output, and should be the first child.")))
-                                             x'))))
-                                   x order))))]
+                                     :parser (range (count dchildren))
+                                     :unparser (range (dec (count dchildren)) -1 -1))]
+                         (if pi
+                           (fn [x]
+                             (reduce (fn [acc i]
+                                       (let [parser (nth parsers i)
+                                             x' (parser x)]
+                                         (if (miu/-invalid? x')
+                                           (reduced ::invalid)
+                                           (if (= pi i)
+                                             x'
+                                             acc))))
+                                     x order))
+                           #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers))))]
         ^{:type ::schema}
         (reify
           Schema
@@ -816,8 +824,8 @@
           (-explainer [_ path]
             (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
               (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
-          (-parser [_] (->parser :parser))
-          (-unparser [_] (->parser :unparser))
+          (-parser [this] (->parser this :parser))
+          (-unparser [this] (->parser this :unparser))
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
           (-walk [this walker path options] (-walk-indexed this walker path options))
@@ -945,7 +953,7 @@
     (-from-ast [parent ast options] (-from-child-ast parent ast options))
     IntoSchema
     (-type [_] :not)
-    (-type-properties [_])
+    (-type-properties [_] {::simple-parser true})
     (-properties-schema [_ _])
     (-children-schema [_ _])
     (-into-schema [parent properties children options]
@@ -1463,7 +1471,7 @@
     (-from-ast [parent ast options] (-into-schema parent (:properties ast) (:values ast) options))
     IntoSchema
     (-type [_] :enum)
-    (-type-properties [_])
+    (-type-properties [_] {::simple-parser true})
     (-into-schema [parent properties children options]
       (-check-children! :enum properties children 1 nil)
       (let [children (vec children)
@@ -1506,7 +1514,7 @@
     (-from-ast [parent ast options] (-from-value-ast parent ast options))
     IntoSchema
     (-type [_] :re)
-    (-type-properties [_])
+    (-type-properties [_] {::simple-parser true})
     (-properties-schema [_ _])
     (-children-schema [_ _])
     (-into-schema [parent properties [child :as children] options]
@@ -1558,7 +1566,7 @@
     (-from-ast [parent ast options] (-from-value-ast parent ast options))
     IntoSchema
     (-type [_] :fn)
-    (-type-properties [_])
+    (-type-properties [_] {::simple-parser true})
     (-into-schema [parent properties children options]
       (-check-children! :fn properties children 1 1)
       (let [children (vec children)
@@ -1890,7 +1898,7 @@
                                         guard (conj (from-ast guard))) options))
     IntoSchema
     (-type [_] :=>)
-    (-type-properties [_])
+    (-type-properties [_] {::simple-parser true})
     (-into-schema [parent properties children {::keys [function-checker] :as options}]
       (-check-children! :=> properties children 2 3)
       (let [[input output guard :as children] (-vmap #(schema % options) children)
@@ -1978,7 +1986,7 @@
   ^{:type ::into-schema}
   (reify IntoSchema
     (-type [_] :function)
-    (-type-properties [_])
+    (-type-properties [_] {::simple-parser true})
     (-properties-schema [_ _])
     (-children-schema [_ _])
     (-into-schema [parent properties children {::keys [function-checker] :as options}]

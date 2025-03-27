@@ -3581,3 +3581,12 @@
   (is (not (m/validate [:sequential {:min 11} :int] (eduction identity (range 10)))))
   (is (not (m/validate [:seqable {:min 11} :int] (eduction identity (range 10)))))
   (is (nil? (m/explain [:sequential {:min 9} :int] (eduction identity (range 10))))))
+
+(deftest and-complex-parser-test
+  (is (= {} (m/parse [:and [:map] [:fn any?]] {})))
+  (is (= {} (m/parse [:and [:fn any?] [:map]] {})))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.core/multiple-and-parsers-detected"
+        (m/parser [:and [:map] [:map]])))
+  )
