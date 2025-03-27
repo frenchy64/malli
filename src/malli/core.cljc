@@ -790,6 +790,7 @@
             ->parser (fn [this m]
                        (let [dchildren (-vmap deref-all children)
                              ;; if more than one parser might not be simple, use leftmost
+                             ;; TODO :andn schema to return a Tags
                              [pi :as complex-parsers] (keep-indexed (fn [i c]
                                                                       (when-not (-> c -parent -type-properties ::simple-parser)
                                                                         i))
