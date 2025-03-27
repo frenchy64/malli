@@ -913,7 +913,7 @@
                     ::invalid)
                   ::invalid))))
           (-transformer [this transformer method options]
-            (assert nil "TODO")
+            ;(assert nil "TODO")
             (-or-transformer this transformer (-vmap #(nth % 2) (-children this)) method options))
           (-walk [this walker path options] (-walk-entries this walker path options))
           (-properties [_] properties)
