@@ -789,33 +789,45 @@
             warned (volatile! false)
             ->parser (fn [this m]
                        (let [dchildren (-vmap deref-all children)
-                             ;; if more than one parser might not be simple, throw and suggest :andn.
+                             ;; if more than one parser might not be simple, use leftmost
                              [pi :as complex-parsers] (keep-indexed (fn [i c]
                                                                       (when-not (-> c -parent -type-properties ::simple-parser)
                                                                         i))
                                                                     dchildren)
                              _ (when (next complex-parsers)
-                                 (-fail! ::multiple-and-parsers-detected {:schema this
-                                                                          :complex-parsers (mapv #(nth children %) complex-parsers)}))
+                                 (-fail! ::multiple-complex-and-parsers))
                              f (case m
                                  :parser -parser
                                  :unparser -unparser)
-                             parsers (-vmap f dchildren)
-                             order (case m
-                                     :parser (range (count dchildren))
-                                     :unparser (range (dec (count dchildren)) -1 -1))]
-                         (if pi
-                           (fn [x]
-                             (reduce (fn [acc i]
-                                       (let [parser (nth parsers i)
-                                             x' (parser x)]
-                                         (if (miu/-invalid? x')
-                                           (reduced ::invalid)
-                                           (if (= pi i)
-                                             x'
-                                             acc))))
-                                     x order))
-                           #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers))))]
+                             parsers (into [] (map-indexed (fn [i c] (if (= pi i) (f c) (-simple-parser c))))
+                                           dchildren)
+                             order (range (count dchildren))]
+                         (if (or (not pi) (= pi (dec (count dchildren))))
+                           #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)
+                           (case m
+                             ;; parse x left-to-right, return parsed value x'
+                             :parser (fn [x]
+                                       (reduce (fn [acc i]
+                                                 (let [parser (nth parsers i)
+                                                       x' (parser x)]
+                                                   (if (miu/-invalid? x')
+                                                     (reduced ::invalid)
+                                                     (if (= pi i)
+                                                       x'
+                                                       acc))))
+                                               x order))
+                             ;; parser: unparse x' then unparse with x left-to-right
+                             :unparser (fn [x']
+                                         (let [x (if pi ((nth parsers pi) x') x')]
+                                           (reduce (fn [acc i]
+                                                     (if (= pi i)
+                                                       acc
+                                                       (let [parser (nth parsers i)
+                                                             x' (parser x)]
+                                                         (if (miu/-invalid? x')
+                                                           (reduced ::invalid)
+                                                           x'))))
+                                                   x order)))))))]
         ^{:type ::schema}
         (reify
           Schema
