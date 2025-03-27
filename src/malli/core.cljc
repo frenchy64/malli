@@ -15,7 +15,7 @@
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
          parser unparser ast from-ast -instrument ^:private -safely-countable?
-         deref-all)
+         deref-all -proxy-schema)
 
 ;;
 ;; protocols and records
@@ -781,33 +781,42 @@
     (-type-properties [_])
     (-properties-schema [_ _])
     (-children-schema [_ _])
-    (-into-schema [parent properties children options]
+    (-into-schema [parent {:keys [tags] :as properties} children options]
       (-check-children! :and properties children 1 nil)
+      (when (and (some? tags)
+                 (or (not (vector? tags))
+                     (not= (count tags) (count children))))
+        (-fail! ::invalid-and-schema-tags {:children children :tags tags}))
       (let [children (-vmap #(schema % options) children)
             form (delay (-simple-form parent properties children -form options))
             cache (-create-cache options)
-            warned (volatile! false)
+            tag->i (when tags (zipmap tags (range)))
             ->parser (fn [this m]
-                       (let [dchildren (-vmap deref-all children)
-                             ;; if more than one parser might not be simple, use leftmost
-                             ;; TODO :andn schema to return a Tags
-                             [pi :as complex-parsers] (keep-indexed (fn [i c]
-                                                                      (when-not (-> c -parent -type-properties ::simple-parser)
-                                                                        i))
-                                                                    dchildren)
-                             _ (when (next complex-parsers)
-                                 (-fail! ::multiple-complex-and-parsers))
+                       (let [;; if more than one parser might not be simple, wrap all results in Tags.
+                             ;; for backwards compatibility, don't wrap in Tags if zero or one result
+                             ;; could be a transforming parser.
+                             ;; Use the final possibly-transforming schema for parsing in ambiguous cases.
+                             ;; TODO :and schema to return a Tags
+                             ;; [:and {:parse :map :tags [:map :constraint]}]
+                             transforming-parsers (into []
+                                                        (keep-indexed
+                                                          (fn [i c]
+                                                            (when-not (-> c deref-all -parent -type-properties ::simple-parser)
+                                                              i)))
+                                                        children)
+                             _ (when (next transforming-parsers)
+                                 (-deprecated! "Multiple transforming parsers detected in :and. Please migrate to :andn."))
+                             pi (peek transforming-parsers)
                              f (case m
                                  :parser -parser
                                  :unparser -unparser)
                              parsers (into [] (map-indexed (fn [i c] (if (= pi i) (f c) (-simple-parser c))))
-                                           dchildren)
-                             order (range (count dchildren))]
-                         (if (or (not pi) (= pi (dec (count dchildren))))
-                           #(reduce (fn [x parser] (miu/-map-invalid reduced (parser x))) % parsers)
-                           (case m
-                             ;; parse x left-to-right, return parsed value x'
-                             :parser (fn [x]
+                                           children)
+                             order (range (count children))]
+                         (case m
+                           ;; parse x left-to-right, return parsed value x'
+                           :parser (let [init-acc {}]
+                                     (fn [x]
                                        (reduce (fn [acc i]
                                                  (let [parser (nth parsers i)
                                                        x' (parser x)]
@@ -816,25 +825,26 @@
                                                      (if (= pi i)
                                                        x'
                                                        acc))))
-                                               x order))
-                             ;; parser: unparse x' then unparse with x left-to-right
-                             :unparser (fn [x']
-                                         (let [x (if pi ((nth parsers pi) x') x')]
-                                           (reduce (fn [acc i]
-                                                     (if (= pi i)
-                                                       acc
-                                                       (let [parser (nth parsers i)
-                                                             x' (parser x)]
-                                                         (if (miu/-invalid? x')
-                                                           (reduced ::invalid)
-                                                           x'))))
-                                                   x order)))))))]
+                                               x order)))
+                           ;; parser: unparse x' then unparse with x left-to-right
+                           :unparser (fn [x']
+                                       (let [x (if pi ((nth parsers pi) x') x')]
+                                         (reduce (fn [acc i]
+                                                   (if (= pi i)
+                                                     acc
+                                                     (let [parser (nth parsers i)
+                                                           x' (parser x)]
+                                                       (if (miu/-invalid? x')
+                                                         (reduced ::invalid)
+                                                         x'))))
+                                                 x order))))))]
         ^{:type ::schema}
         (reify
           Schema
           (-validator [_]
             (let [validators (-vmap -validator children)] (miu/-every-pred validators)))
           (-explainer [_ path]
+            ;;TODO :tags
             (let [explainers (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
               (fn explain [x in acc] (reduce (fn [acc' explainer] (explainer x in acc')) acc explainers))))
           (-parser [this] (->parser this :parser))
@@ -851,8 +861,21 @@
           (-cache [_] cache)
           LensSchema
           (-keep [_])
-          (-get [_ key default] (get children key default))
-          (-set [this key value] (-set-assoc-children this key value)))))))
+          (-get [_ key default] (get children (get tags key key) default))
+          (-set [this key value] (-set-assoc-children this (get tags key key) value)))))))
+
+(defn -andn-schema []
+  (-proxy-schema {:type :andn
+                  :fn (fn [p c o]
+                        (-check-children! :andn p c 1 nil)
+                        (let [entry-parser (-create-entry-parser c {:naked-keys true} o)
+                              c (-entry-children entry-parser)]
+                          [c (-entry-forms entry-parser)
+                           (delay (into-schema :and
+                                               (let [ks (sort-by :order (-entry-keyset entry-parser))]
+                                                 (assoc p :tags (-vmap key ks)))
+                                               (-vmap peek c)
+                                               o))]))}))
 
 (defn -or-schema []
   ^{:type ::into-schema}
@@ -2764,6 +2787,7 @@
 
 (defn base-schemas []
   {:and (-and-schema)
+   :andn (-andn-schema)
    :or (-or-schema)
    :orn (-orn-schema)
    :not (-not-schema)
