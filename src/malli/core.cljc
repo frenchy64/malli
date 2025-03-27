@@ -892,33 +892,21 @@
                     ::invalid
                     (->Tags tags))))))
           (-unparser [this]
-            ;; all provided parsed values must unparse to the same thing.
-            ;; the result must also be valid for the remaining schemas.
-            ;; if you want to modify a particular conjunct's unparsed value, you must remove or synchronize any remaining ones.
-            (let [validators (into {} (map (fn [[k _ c]] [k (-validator c)])) (-children this))
+            ;; only the left-most child provided in tags is unparsed. the remaining values are ignored.
+            ;; the unparsed value is checked against the remaining children.
+            ;; if you want to modify a particular conjunct's unparsed value, you should remove all others.
+            (let [ks (-vmap #(nth % 0) (-children this))
+                  validators (into {} (map (fn [[k _ c]] [k (-validator c)])) (-children this))
                   unparsers (into {} (map (fn [[k _ c]] [k (-unparser c)])) (-children this))
                   nchildren (count children)]
               (fn [tags]
                 (if-some [values (when (tags? tags) (not-empty (:values tags)))]
                   (if (every? validators (keys values))
-                    (let [[[k unparser] & unparsers] (select-keys unparsers (keys values))
-                          validators (apply dissoc validators (keys values))]
-                      (if-some [[_ x'] (find values k)]
-                        (let [x (unparser x')
-                              x (if-not (miu/-invalid? x)
-                                  (reduce (fn [x [k unparser]]
-                                            (if-some [[_ x'] (find values k)]
-                                              (let [another-x (unparser x')]
-                                                (if (= x another-x)
-                                                  x
-                                                  (reduced ::invalid)))
-                                              (reduced ::invalid)))
-                                          x unparsers)
-                                  ::invalid)]
-                          (if (and (not (miu/-invalid? x))
-                                   (every? #(% x) (vals validators)))
-                            x
-                            ::invalid))
+                    (let [[k x'] (some #(find values %) ks)
+                          x ((unparsers k) x')]
+                      (if (and (not (miu/-invalid? x))
+                               (every? #(or (= k %) ((validators k) x)) ks))
+                        x
                         ::invalid))
                     ::invalid)
                   ::invalid))))

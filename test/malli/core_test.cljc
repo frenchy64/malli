@@ -3620,11 +3620,13 @@
         p (m/parse s 1)
         _ (is (= #malli.core.Tags{:values {:o #malli.core.Tag{:key :left, :value 1}, :f 1}}
                  p))]
-    (testing "provided parses must agree"
-      (is (= ::m/invalid (m/unparse s (update-in p [:values :o :value] inc))))
+    (testing "left-most parse is used"
+      (is (= 2 (m/unparse s (update-in p [:values :o :value] inc))))
+      (is (= 1 (m/unparse s (update-in p [:values :f] inc))))
       (is (= 2 (m/unparse s (-> p
-                                (update-in [:values :o :value] inc)
-                                (update-in [:values :f] inc)))))))
+                                (update-in [:values :f] inc)
+                                (update :values dissoc :o)))))
+      (is (= ::m/invalid (m/unparse s (update p :values dissoc :o :f))))))
   (is (= 1 (m/parse [:andn [:i :int] [:o [:or :int :boolean]]] 1)))
   (is (= 1 (m/parse [:andn [:o [:or :int :boolean]] [:i :int]] 1)))
   (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:andn [:i :int] [:o [:orn [:int :int] [:boolean :boolean]]]] 1)))
