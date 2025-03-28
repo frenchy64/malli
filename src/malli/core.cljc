@@ -1170,15 +1170,14 @@
                               ok? #(and (pred? %) (not (tag? %)) (not (tags? %)))
                               parsers (cond->> (-vmap
                                                 (fn [[key {:keys [optional]} schema]]
-                                                  (let [parser (f schema)
-                                                        simple (-> schema -parser-info :simple-parser boolean)]
+                                                  (let [parser (f schema)]
                                                     (fn [m]
                                                       (if-let [e (find m key)]
                                                         (let [v (val e)
                                                               v* (parser v)]
                                                           (cond (miu/-invalid? v*) (reduced v*)
                                                                 (identical? v* v) m
-                                                                :else (cond-> m (not simple) (assoc key v*))))
+                                                                :else (assoc m key v*)))
                                                         (if optional m (reduced ::invalid))))))
                                                 @explicit-children)
                                         default-parser
@@ -1308,19 +1307,20 @@
              form (delay (-simple-form parent properties children -form options))
              cache (-create-cache options)
              validate-limits (-validate-limits min max)
+             simple-parser (delay (every? (comp :simple-parser -parser-info) children))
              ->parser (fn [f] (let [key-parser (f key-schema)
-                                    value-parser (f value-schema)]
+                                    value-parser (f value-schema)
+                                    simple @simple-parser]
                                 (fn [x]
                                   (if (map? x)
-                                    ;;TODO don't build if simple
                                     (reduce-kv (fn [acc k v]
                                                  (let [k* (key-parser k)
                                                        v* (value-parser v)]
-                                                   ;; OPTIMIZE: Restore `identical?` check + NOOP
                                                    (if (or (miu/-invalid? k*) (miu/-invalid? v*))
                                                      (reduced ::invalid)
-                                                     (assoc acc k* v*))))
-                                               (empty x) x)
+                                                     (cond-> acc
+                                                       (not simple) (assoc k* v*)))))
+                                               (cond-> x (not simple) empty) x)
                                     ::invalid))))]
          ^{:type ::schema}
          (reify
@@ -1379,7 +1379,7 @@
            (-get [_ key default] (get children key default))
            (-set [this key value] (-set-assoc-children this key value))
            ParserInfo
-           (-parser-info [_] {:simple-parser (every? (comp :simple-parser -parser-info) children)})))))))
+           (-parser-info [_] {:simple-parser @simple-parser})))))))
 
 ;; also doubles as a predicate for the :every schema to bound the number
 ;; of elements to check, so don't add potentially-infinite countable things like seq's.
@@ -1534,7 +1534,6 @@
                                                          (cond
                                                            (miu/-invalid? v*) (reduced v*)
                                                            (identical? v* v) x
-                                                           ;;TODO don't build if simple
                                                            :else (assoc x i v*))))
                                                      x parsers)))))]
          ^{:type ::schema}
@@ -1661,9 +1660,7 @@
                   (conj acc (miu/-error path in this x (:type (ex-data e))))))))
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
-          (-parser [this]
-            (let [valid? (-validator this)]
-              (fn [x] (if (valid? x) x ::invalid))))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           (-walk [this walker path options] (-walk-leaf this walker path options))
           (-properties [_] properties)
@@ -1706,9 +1703,7 @@
                   acc)
                 (catch #?(:clj Exception, :cljs js/Error) e
                   (conj acc (miu/-error path in this x (:type (ex-data e))))))))
-          (-parser [this]
-            (let [validator (-validator this)]
-              (fn [x] (if (validator x) x ::invalid))))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
@@ -2055,9 +2050,7 @@
               (let [validator (-validator this)]
                 (fn explain [x in acc]
                   (if-not (validator x) (conj acc (miu/-error path in this x)) acc)))))
-          (-parser [this]
-            (let [validator (-validator this)]
-              (fn [x] (if (validator x) x ::invalid))))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           (-transformer [_ _ _ _])
           (-walk [this walker path options] (-walk-indexed this walker path options))
@@ -2137,9 +2130,7 @@
               (let [validator (-validator this)]
                 (fn explain [x in acc]
                   (if-not (validator x) (conj acc (miu/-error path in this x)) acc)))))
-          (-parser [this]
-            (let [validator (-validator this)]
-              (fn [x] (if (validator x) x ::invalid))))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           (-transformer [_ _ _ _])
           (-walk [this walker path options] (-walk-indexed this walker path options))
