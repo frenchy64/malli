@@ -1450,7 +1450,7 @@
                                                      (cond
                                                        (miu/-invalid? x') x'
                                                        g (g x')
-                                                       (and fempty (not simple)) (into fempty x')
+                                                       (and fempty (or (not simple) (not (fpred x')))) (into fempty x')
                                                        :else x')))))))]
               ^{:type ::schema}
               (reify
