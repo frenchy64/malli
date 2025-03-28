@@ -2522,6 +2522,9 @@ parser cannot be picked automatically. There are several ways to resolve this.
 If you know a single conjunct should exclusively parse the input, use the `:parse` property
 to identify the conjunct by index.
 
+[:and [:and [:orn [:l :int] [:r :boolean]]]]
+[:and [:and [:orn [:l :int] [:r :boolean]]]]
+
 To opt-out of parsing any further levels of this schema, use the `:parse :none` property.
 
 To parse all conjuncts, you must migrate the schema to `:andn`. This involves tagging each conjunct

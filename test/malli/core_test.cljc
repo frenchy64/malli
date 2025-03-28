@@ -3594,6 +3594,36 @@
   (is (= 1 (m/parse [:and [:or :int :boolean] :int] 1)))
   (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:and :int [:orn [:int :int] [:boolean :boolean]]] 1)))
   (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:and [:orn [:int :int] [:boolean :boolean]] :int] 1)))
+  (is (= #malli.core.Tag{:key :int, :value 1} (m/parse [:and [:and [:orn [:int :int] [:boolean :boolean]] :int] :int] 1)))
+  (is (= #malli.core.Tag{:key :l, :value #malli.core.Tag{:key :int, :value 1}}
+         (m/parse [:and
+                   [:orn [:l [:and [:orn [:int :int] [:boolean :boolean]] :int]]]
+                   :int] 1)))
+  (is (= 1
+         (m/parse [:and
+                   {:parse :none}
+                   [:orn [:l [:and [:orn [:int :int] [:boolean :boolean]] :int]]]
+                   [:orn [:r [:and [:orn [:int :int] [:boolean :boolean]] :int]]]]
+                  1)))
+  (is (= #malli.core.Tag{:key :l, :value #malli.core.Tag{:key :int, :value 1}}
+         (m/parse [:and
+                   {:parse 0}
+                   [:orn [:l [:and [:orn [:int :int] [:boolean :boolean]] :int]]]
+                   [:orn [:r [:and [:orn [:int :int] [:boolean :boolean]] :int]]]]
+                  1)))
+  (is (= #malli.core.Tag{:key :r, :value #malli.core.Tag{:key :int, :value 1}}
+         (m/parse [:and
+                   {:parse 1}
+                   [:orn [:l [:and [:orn [:int :int] [:boolean :boolean]] :int]]]
+                   [:orn [:r [:and [:orn [:int :int] [:boolean :boolean]] :int]]]]
+                  1)))
+  (let [s [:and [:orn [:l [:and [:orn [:int :int] [:boolean :boolean]] :int]]] :int]]
+    (is (= 1 (->> 1 (m/parse s) (m/unparse s)))))
+  (let [s [:and
+           {:parse 1}
+           [:orn [:l [:and [:orn [:int :int] [:boolean :boolean]] :int]]]
+           [:orn [:r [:and [:orn [:int :int] [:boolean :boolean]] :int]]]]]
+    (is (= 1 (->> 1 (m/parse s) (m/unparse s)))))
   (is (thrown-with-msg?
         #?(:clj Exception, :cljs js/Error)
         #":malli\.core/and-schema-multiple-transforming-parsers"
