@@ -3631,7 +3631,9 @@
   (is (thrown-with-msg?
         #?(:clj Exception, :cljs js/Error)
         #":malli\.core/and-schema-multiple-transforming-parsers"
-        (m/parser [:and [:map [:left [:orn [:one :int]]]] [:map [:right [:orn [:one :int]]]]]))))
+        (m/parser [:and [:map [:left [:orn [:one :int]]]] [:map [:right [:orn [:one :int]]]]])))
+  (is (-> (m/schema [:vector :int]) m/-parser-info :simple-parser))
+  (is (-> (m/schema [:vector [:orn [:one :int]]]) m/-parser-info :simple-parser not)))
 
 (deftest andn-test
   (is (= {:schema [:andn [:m :map] [:v [:vector :any]]],
