@@ -926,7 +926,7 @@
                     ::invalid)
                   ::invalid))))
           (-transformer [this transformer method options]
-            ;(assert nil "TODO")
+            ;FIXME !!!
             (-or-transformer this transformer (-vmap #(nth % 2) (-children this)) method options))
           (-walk [this walker path options] (-walk-entries this walker path options))
           (-properties [_] properties)
@@ -1170,24 +1170,25 @@
                               ok? #(and (pred? %) (not (tag? %)) (not (tags? %)))
                               parsers (cond->> (-vmap
                                                 (fn [[key {:keys [optional]} schema]]
-                                                  (let [parser (f schema)]
+                                                  (let [parser (f schema)
+                                                        simple (-> schema -parser-info :simple-parser boolean)]
                                                     (fn [m]
                                                       (if-let [e (find m key)]
                                                         (let [v (val e)
                                                               v* (parser v)]
                                                           (cond (miu/-invalid? v*) (reduced v*)
                                                                 (identical? v* v) m
-                                                                ;;TODO don't build if simple
-                                                                :else (assoc m key v*)))
+                                                                :else (cond-> m (not simple) (assoc key v*))))
                                                         (if optional m (reduced ::invalid))))))
                                                 @explicit-children)
                                         default-parser
-                                        (cons (fn [m]
-                                                (let [m' (default-parser
-                                                          (reduce (fn [acc k] (dissoc acc k)) m (keys keyset)))]
-                                                  (if (miu/-invalid? m')
-                                                    (reduced m')
-                                                    (merge (select-keys m (keys keyset)) m')))))
+                                        (cons (let [simple (-> @default-schema -parser-info :simple-parser boolean)]
+                                                (fn [m]
+                                                  (let [m' (default-parser
+                                                             (reduce (fn [acc k] (dissoc acc k)) m (keys keyset)))]
+                                                    (if (miu/-invalid? m')
+                                                      (reduced m')
+                                                      (if simple m (merge (select-keys m (keys keyset)) m')))))))
                                         closed
                                         (cons (fn [m]
                                                 (reduce
@@ -1425,7 +1426,8 @@
                   validate-limits (if bounded
                                     (-validate-bounded-limits (c/min bounded (or max bounded)) min max)
                                     (-validate-limits min max))
-                  ->parser (fn [f g] (let [child-parser (f schema)]
+                  ->parser (fn [f g] (let [child-parser (f schema)
+                                           simple (-> schema -parser-info :simple-parser boolean)]
                                        (fn [x]
                                          (cond
                                            (not (fpred x)) ::invalid
@@ -1441,14 +1443,15 @@
                                                    (let [x' (reduce
                                                              (fn [acc v]
                                                                (let [v' (child-parser v)]
-                                                                 ;;TODO don't build if simple
-                                                                 (if (miu/-invalid? v') (reduced ::invalid) (conj acc v'))))
-                                                             [] x)]
+                                                                 (if (miu/-invalid? v')
+                                                                   (reduced ::invalid)
+                                                                   (cond-> acc
+                                                                     (not simple) (conj v')))))
+                                                             (if simple x []) x)]
                                                      (cond
                                                        (miu/-invalid? x') x'
                                                        g (g x')
-                                                       ;;TODO don't build if simple
-                                                       fempty (into fempty x')
+                                                       (and fempty (not simple)) (into fempty x')
                                                        :else x')))))))]
               ^{:type ::schema}
               (reify
