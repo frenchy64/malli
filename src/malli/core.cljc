@@ -14,8 +14,7 @@
 
 (declare schema schema? into-schema into-schema? type eval default-registry
          -simple-schema -val-schema -ref-schema -schema-schema -registry
-         parser unparser ast from-ast -instrument ^:private -safely-countable?
-         deref-all -proxy-schema)
+         parser unparser ast from-ast -instrument ^:private -safely-countable?)
 
 ;;
 ;; protocols and records
