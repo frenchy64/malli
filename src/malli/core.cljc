@@ -1606,7 +1606,7 @@
             (let [validator (-validator this)]
               (fn explain [x in acc]
                 (if-not (validator x) (conj acc (miu/-error path in this x)) acc))))
-          (-parser [_] (fn [x] (if (contains? schema x) x ::invalid)))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           ;; TODO: should we try to derive the type from values? e.g. [:enum 1 2] ~> int?
           (-transformer [this transformer method options]
