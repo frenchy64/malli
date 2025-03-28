@@ -97,6 +97,9 @@
   (-distributive-schema? [this])
   (-distribute-to-children [this f options]))
 
+(defprotocol ParserInfo
+  (-parser-info [this]))
+
 (defn -ref-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.RefSchema x))
 (defn -entry-parser? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntryParser x))
 (defn -entry-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntrySchema x))
@@ -115,6 +118,14 @@
   (-distributive-schema? [_] false)
   (-distribute-to-children [this _ _]
     (throw (ex-info "Not distributive" {:schema this})))
+
+  ParserInfo
+  (-parser-info [this]
+    (when (schema? this)
+      (if (-ref-schema? this)
+        (-parser-info (-deref this))
+        (when (-> this -parent -type-properties ::simple-parser)
+          {:simple-parser true}))))
 
   RegexSchema
   (-regex-op? [_] false)
@@ -796,7 +807,7 @@
                                                                  (into []
                                                                        (keep-indexed
                                                                          (fn [i c]
-                                                                           (when-not (-> c deref-all -parent -type-properties ::simple-parser)
+                                                                           (when-not (-> c -parser-info :simple-parser)
                                                                              i)))
                                                                        children))]
                                     (when (next transforming-parsers)
@@ -855,7 +866,9 @@
           LensSchema
           (-keep [_])
           (-get [_ key default] (get children key default))
-          (-set [this key value] (-set-assoc-children this key value)))))))
+          (-set [this key value] (-set-assoc-children this key value))
+          ParserInfo
+          (-parser-info [_] (if-some [i @transforming-parser] (-parser-info (nth children i)) {})))))))
 
 (defn -andn-schema []
   ^{:type ::into-schema}
@@ -973,7 +986,9 @@
           LensSchema
           (-keep [_])
           (-get [_ key default] (get children key default))
-          (-set [this key value] (-set-assoc-children this key value)))))))
+          (-set [this key value] (-set-assoc-children this key value))
+          ParserInfo
+          (-parser-info [_] {:simple-parser (every? (comp :simple-parser -parser-info) children)}))))))
 
 (defn -orn-schema []
   ^{:type ::into-schema}
@@ -1061,9 +1076,7 @@
             (let [validator (-validator this)]
               (fn explain [x in acc]
                 (if-not (validator x) (conj acc (miu/-error (conj path 0) in this x)) acc))))
-          (-parser [this]
-            (let [validator (-validator this)]
-              (fn [x] (if (validator x) x ::invalid))))
+          (-parser [this] (-simple-parser this))
           (-unparser [this] (-parser this))
           (-transformer [this transformer method options]
             (-parent-children-transformer this children transformer method options))
@@ -1164,6 +1177,7 @@
                                                               v* (parser v)]
                                                           (cond (miu/-invalid? v*) (reduced v*)
                                                                 (identical? v* v) m
+                                                                ;;TODO don't build if simple
                                                                 :else (assoc m key v*)))
                                                         (if optional m (reduced ::invalid))))))
                                                 @explicit-children)
@@ -1269,7 +1283,9 @@
            LensSchema
            (-keep [_] true)
            (-get [this key default] (-get-entries this key default))
-           (-set [this key value] (-set-entries this key value))))))))
+           (-set [this key value] (-set-entries this key value))
+           ParserInfo
+           (-parser-info [_] {:simple-parser (every? (comp :simple-parser -parser-info) (-entry-children entry-parser))})))))))
 
 (defn -map-of-schema
   ([]
@@ -1295,6 +1311,7 @@
                                     value-parser (f value-schema)]
                                 (fn [x]
                                   (if (map? x)
+                                    ;;TODO don't build if simple
                                     (reduce-kv (fn [acc k v]
                                                  (let [k* (key-parser k)
                                                        v* (value-parser v)]
@@ -1359,7 +1376,9 @@
            LensSchema
            (-keep [_])
            (-get [_ key default] (get children key default))
-           (-set [this key value] (-set-assoc-children this key value))))))))
+           (-set [this key value] (-set-assoc-children this key value))
+           ParserInfo
+           (-parser-info [_] {:simple-parser (every? (comp :simple-parser -parser-info) children)})))))))
 
 ;; also doubles as a predicate for the :every schema to bound the number
 ;; of elements to check, so don't add potentially-infinite countable things like seq's.
@@ -1422,11 +1441,13 @@
                                                    (let [x' (reduce
                                                              (fn [acc v]
                                                                (let [v' (child-parser v)]
+                                                                 ;;TODO don't build if simple
                                                                  (if (miu/-invalid? v') (reduced ::invalid) (conj acc v'))))
                                                              [] x)]
                                                      (cond
                                                        (miu/-invalid? x') x'
                                                        g (g x')
+                                                       ;;TODO don't build if simple
                                                        fempty (into fempty x')
                                                        :else x')))))))]
               ^{:type ::schema}
@@ -1480,7 +1501,9 @@
                 LensSchema
                 (-keep [_] true)
                 (-get [_ _ _] schema)
-                (-set [this _ value] (-set-children this [value]))))))))))
+                (-set [this _ value] (-set-children this [value]))
+                ParserInfo
+                (-parser-info [_] (-parser-info schema))))))))))
 
 (defn -tuple-schema
   ([]
@@ -1508,6 +1531,7 @@
                                                          (cond
                                                            (miu/-invalid? v*) (reduced v*)
                                                            (identical? v* v) x
+                                                           ;;TODO don't build if simple
                                                            :else (assoc x i v*))))
                                                      x parsers)))))]
          ^{:type ::schema}
@@ -1552,7 +1576,9 @@
            LensSchema
            (-keep [_] true)
            (-get [_ key default] (get children key default))
-           (-set [this key value] (-set-assoc-children this key value))))))))
+           (-set [this key value] (-set-assoc-children this key value))
+           ParserInfo
+           (-parser-info [_] (every? (comp :simple-parser -parser-info) children))))))))
 
 (defn -enum-schema []
   ^{:type ::into-schema}
@@ -1741,7 +1767,9 @@
           (-get [_ key default] (if (= 0 key) schema default))
           (-set [this key value] (if (= 0 key)
                                    (-set-children this [value])
-                                   (-fail! ::index-out-of-bounds {:schema this, :key key}))))))))
+                                   (-fail! ::index-out-of-bounds {:schema this, :key key})))
+          ParserInfo
+          (-parser-info [_] (-parser-info schema)))))))
 
 (defn -multi-schema
   ([]

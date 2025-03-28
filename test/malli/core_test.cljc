@@ -3625,10 +3625,13 @@
            [:orn [:l [:and [:orn [:int :int] [:boolean :boolean]] :int]]]
            [:orn [:r [:and [:orn [:int :int] [:boolean :boolean]] :int]]]]]
     (is (= 1 (->> 1 (m/parse s) (m/unparse s)))))
+  (is (m/parser [:and [:map] [:map]]))
+  (is (m/parser [:and [:map [:left [:orn [:one :int]]]] [:map]]))
+  (is (m/parser [:and [:map] [:map [:left [:orn [:one :int]]]]]))
   (is (thrown-with-msg?
         #?(:clj Exception, :cljs js/Error)
         #":malli\.core/and-schema-multiple-transforming-parsers"
-        (m/parser [:and [:map] [:map]]))))
+        (m/parser [:and [:map [:left [:orn [:one :int]]]] [:map [:right [:orn [:one :int]]]]]))))
 
 (deftest andn-test
   (is (= {:schema [:andn [:m :map] [:v [:vector :any]]],
