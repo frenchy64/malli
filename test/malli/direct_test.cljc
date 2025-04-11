@@ -181,6 +181,15 @@
   (is (= [:vector #'intentionally-out-of-sync]
          (m/form (md/direct [:vector #'intentionally-out-of-sync])))))
 
+#?(:cljs (def cljs-only :int))
+
+(def unintentionally-out-of-sync
+  (md/direct
+    #?(:cljs :int
+       :default :boolean)))
+
 #?(:cljs
    (deftest detect-out-of-sync-test
-     (is (thrown? :default (md/direct intentionally-out-of-sync)))))
+     (is (thrown? :default (md/direct unintentionally-out-of-sync)))
+     ;; throws at compile time
+     #_(is (thrown? :default (md/direct cljs-only)))))
