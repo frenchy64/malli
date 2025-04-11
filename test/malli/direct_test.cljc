@@ -183,4 +183,4 @@
 
 #?(:cljs
    (deftest detect-out-of-sync-test
-     (is (thrown? Exception (md/direct intentionally-out-of-sync)))))
+     (is (thrown? :default (md/direct intentionally-out-of-sync)))))
