@@ -2,27 +2,49 @@
   (:require [malli.core :as m]
             [malli.registry :as mr]))
 
-(defn -direct-all [s rvar opts]
+(declare direct)
+
+(defn -direct-default [s rvar options-local opts]
   (let [p (m/properties s)
         pno-reg (dissoc p :registry)
-        reg (:registry p)
+        reg (not-empty (:registry p))
+        ;;wrap in delayed
         pexpr (if reg
-                )]
-    `(m/-into-schema (mr/schema ~(symbol rvar) '~(m/type s))
-                     ~pexpr
-                     ~(mapv #(-direct-all % rvar opts) (m/children s))
-                     nil)))
+                )
+        goptions-local (gensym 'options-local)
+        gr (gensym 'r)]
+    ;;TODO pointer schemas
+    `(let [~gr ~(when reg
+                  (reduce-kv (fn [acc k v]
+                               (assoc acc (list 'quote k) `(reify m/IntoSchema
+                                                             (~'-into-schema [_# _# _# ~goptions-local]
+                                                               ~(direct v goptions-local opts)))))
+                             {} m))
+           ~goptions-local ~(if reg
+                              `(m/-add-options-registry ~options-local (m/-delayed-registry ~reg #(%1 %2)))
+                              options-local)
+           p# ~(if reg
+                 `(assoc ~(list 'quote pno-reg) :registry )
+                 ~(list 'quote pno-reg))]
+       (m/-into-schema (mr/schema ~(symbol rvar) '~(m/type s))
+                       ~pexpr
+                       ~(mapv #(-direct-all % rvar goptions-local opts) (m/children s))
+                       ~goptions-local))))
 
 (defonce default (Object.))
 
-(defmulti -direct (fn [s _ _] (m/type s))
+(defmulti -direct (fn [s _ _ _] (m/type s))
   :default default)
 
-(defmethod -direct default [s rvar opts] (-direct-all s rvar opts))
+(defmethod -direct default [s rvar options-local opts] (-direct-all s rvar opts))
 
 (defn direct
   ([s rvar] (direct s rvar nil))
-  ([s rvar opts] (-direct-all (m/schema s opts) rvar opts)))
+  ([s rvar opts]
+   (if (m/-ast? x)
+     (do ;(assert (m/-direct? x)) ;;TODO
+         (-direct-all (m/schema s opts) rvar nil opts)) ;;TODO
+     (-direct-default (m/schema s opts) rvar nil opts))))
 
 (comment
   (direct :int #'m/default-registry)
