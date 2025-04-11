@@ -1,5 +1,6 @@
 (ns malli.direct
-  (:require [malli.core :as m]
+  (:require [clojure.set :as set]
+            [malli.core :as m]
             [malli.registry :as mr]))
 
 (declare direct*)
@@ -10,7 +11,6 @@
   (let [p (m/properties s)
         pno-reg (not-empty (dissoc p :registry))
         reg (not-empty (:registry p))]
-    ;;TODO pointer schemas
     (if reg
       (let [gr (*gensym* 'r)
             gx (*gensym* 'x)
@@ -18,7 +18,7 @@
             gproperties' (*gensym* 'properties')
             gproperties (*gensym* 'properties)
             goptions (*gensym* 'options)]
-        ;;inline m/into-schema
+        ;;inlines m/into-schema
         `(let [~gr '~(update-vals (:registry p) m/form)
                ~options-local (m/-update ~options-local :registry (fn [~gx] (mr/composite-registry ~gr (or ~gx (m/-registry ~options-local)))))
                ~gp ~(let [r (reduce-kv (fn [acc k v]
@@ -47,23 +47,44 @@
 (defn -direct-value [s options-local opts]
   (-direct-default s options-local (fn [children options-local opts] (list 'quote (vec children))) opts))
 
+(defn -direct-child [s options-local opts]
+  (-direct-default s options-local
+                   (fn [[c :as children] options-local opts]
+                     {:pre [(= 1 (count children))]}
+                     [(direct* c options-local opts)])
+                   opts))
+
+(defn -direct-childless [s options-local opts]
+  (-direct-default s options-local
+                   (fn [children _ _]
+                     {:pre [(empty? children)]}
+                     [])
+                   opts))
+
 (defmethod -direct :ref [s options-local opts] (-direct-value s options-local opts))
 (defmethod -direct ::m/schema [s options-local opts]
   (if-some [ref (m/-ref s)]
     `(m/schema '~ref ~options-local) ;; m/-pointer case, inline further?
     (-direct-nested s options-local opts)))
-(defmethod -direct default [s options-local opts] (-direct-nested s options-local opts))
+
+(defn -infer-direct-ast [s options-local opts]
+  (let [ast (m/ast s)
+        ks (-> ast (dissoc :properties :registry) keys set)]
+    (case ks
+      #{:type :value} (-direct-value s options-local opts)
+      #{:type :child} (-direct-child s options-local opts)
+      #{:type} (-direct-childless s options-local opts)
+      nil)))
+
+(defmethod -direct default [s options-local opts]
+  (or (-infer-direct-ast s options-local opts)
+      (m/-fail! ::cannot-compile-schema {:schema s})))
 
 (defn direct*
   ([s] (let [go (*gensym* 'o)]
          `(let [~go {:registry (m/-registry)}]
             ~(direct* s go nil))))
-  ([s options-local opts]
-   (let [s (m/schema s opts)]
-     (if (m/-ast? s)
-       (do ;(assert (m/-direct? s)) ;;TODO
-           (-direct s options-local opts)) ;;TODO
-       (-direct s options-local opts)))))
+  ([s options-local opts] (-direct (m/schema s opts) options-local opts)))
 
 (defmacro direct [s] (direct* (do #_eval s)))
 
@@ -72,19 +93,5 @@
   (direct* [:vector :int])
   (direct* [:schema :int])
   (direct* [:map [:foo :int]])
-
-  (direct* [:schema {:registry {::foo :int}} :int] #'m/default-registry)
-  (-> (m/ast [:schema {:registry {::foo :int}} :int])
-      :registry
-      first
-      second
-      :type)
-
-  (m/ast [:schema {:registry {::foo [:ref ::bar]
-                              ::bar [:ref ::foo]}} :int])
-  (m/ast [:schema {:registry {::foo ::bar
-                              ::bar :int}} :int])
-
-
 
   )

@@ -46,10 +46,6 @@
   (-to-ast [this options] "schema to ast")
   (-from-ast [this ast options] "ast to schema"))
 
-(defprotocol Direct
-  (-compiling-fn [this options] "returns a function used to compile")
-  (-compiling-code [this options] "returns a function taking an argument which is the code to get a"))
-
 (defprotocol EntryParser
   (-entry-keyset [this])
   (-entry-children [this])
@@ -105,7 +101,6 @@
 (defn -entry-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntrySchema x))
 (defn -cached? [x] (#?(:clj instance?, :cljs implements?) malli.core.Cached x))
 (defn -ast? [x] (#?(:clj instance?, :cljs implements?) malli.core.AST x))
-(defn -direct? [x] (#?(:clj instance?, :cljs implements?) malli.core.Direct x))
 (defn -transformer? [x] (#?(:clj instance?, :cljs implements?) malli.core.Transformer x))
 
 (extend-type #?(:clj Object, :cljs default)
@@ -720,8 +715,6 @@
       (reify
         AST
         (-from-ast [parent ast options] (from-ast parent ast options))
-        Direct
-        (-compiling-fn [this options] (partial into-schema this))
         IntoSchema
         (-type [_] type)
         (-type-properties [_] type-properties)
@@ -737,8 +730,6 @@
               (reify
                 AST
                 (-to-ast [this _] (to-ast this))
-                Direct
-                (-compiling-code [this options] (fn [f] (list f )))
                 Schema
                 (-validator [_]
                   (if-let [pvalidator (when property-pred (property-pred properties))]
@@ -2578,11 +2569,9 @@
                    (let [r (when-let [r (:registry ?ast)] (-delayed-registry r from-ast))
                          options (cond-> options r (-update :registry #(mr/composite-registry r (or % (-registry options)))))
                          ast (cond-> ?ast r (-update :properties #(assoc % :registry (-property-registry r options identity))))]
-                     (if (into-schema? s)
-                       (if (-ast? s)
-                         (-from-ast s ast options)
-                         (-into-schema s (:properties ast) (-vmap #(from-ast % options) (:children ast)) options))
-                       s))
+                     (cond (and (into-schema? s) (-ast? s)) (-from-ast s ast options)
+                           (into-schema? s) (-into-schema s (:properties ast) (-vmap #(from-ast % options) (:children ast)) options)
+                           :else s))
                    (-fail! ::invalid-ast {:ast ?ast}))
      :else (-fail! ::invalid-ast {:ast ?ast}))))
 

@@ -3,6 +3,8 @@
             [malli.core :as m]
             [clojure.test :refer [is deftest]]))
 
+(set! *print-namespace-maps* false)
+
 (defn ->dgensym []
   (let [counter (atom -1)]
     (fn
@@ -42,20 +44,15 @@
                  o0)]
               o0))
          (ddirect* [:vector :int])))
-  (is (m/schema? (md/direct :int)))
-  (is (= :int (m/form (md/direct :int)))))
+  (is (m/schema? (md/direct [:vector :int])))
+  (is (= [:vector :int] (m/form (md/direct [:vector :int])))))
 
 (deftest direct-registry-test
   (is (= '(clojure.core/let
             [o0 {:registry (malli.core/-registry)}]
             (clojure.core/let
               [r1
-               {':malli.direct-test/foo
-                (malli.core/-into-schema
-                  (malli.registry/schema (:registry o0) ':int)
-                  'nil
-                  []
-                  o0)}
+               '#:malli.direct-test{:foo :int}
                o0
                (malli.core/-update
                  o0
@@ -66,7 +63,13 @@
                      r1
                      (clojure.core/or x2 (malli.core/-registry o0)))))
                p3
-               (clojure.core/assoc '{} :registry r1)]
+               {:registry
+                {':malli.direct-test/foo
+                 (malli.core/-into-schema
+                   (malli.registry/schema (:registry o0) ':int)
+                   'nil
+                   []
+                   o0)}}]
               (malli.core/-into-schema
                 (malli.registry/schema (:registry o0) ':int)
                 p3
@@ -82,12 +85,7 @@
             [o0 {:registry (malli.core/-registry)}]
             (clojure.core/let
               [r1
-               {':malli.direct-test/foo
-                (malli.core/-into-schema
-                  (malli.registry/schema (:registry o0) ':int)
-                  'nil
-                  []
-                  o0)}
+               '#:malli.direct-test{:foo :int}
                o0
                (malli.core/-update
                  o0
@@ -98,28 +96,35 @@
                      r1
                      (clojure.core/or x2 (malli.core/-registry o0)))))
                p3
-               (clojure.core/assoc '{} :registry r1)]
+               {:registry
+                {':malli.direct-test/foo
+                 (malli.core/-into-schema
+                   (malli.registry/schema (:registry o0) ':int)
+                   'nil
+                   []
+                   o0)}}]
               (malli.core/-into-schema
                 (malli.registry/schema (:registry o0) ':vector)
                 p3
                 [(clojure.core/let
-                   [r4
-                    {':malli.direct-test/bar
-                     (malli.core/schema ':malli.direct-test/foo o0)}
+                   [r7
+                    '#:malli.direct-test{:bar :malli.direct-test/foo}
                     o0
                     (malli.core/-update
                       o0
                       :registry
                       (clojure.core/fn
-                        [x5]
+                        [x8]
                         (malli.registry/composite-registry
-                          r4
-                          (clojure.core/or x5 (malli.core/-registry o0)))))
-                    p6
-                    (clojure.core/assoc '{} :registry r4)]
+                          r7
+                          (clojure.core/or x8 (malli.core/-registry o0)))))
+                    p9
+                    {:registry
+                     {':malli.direct-test/bar
+                      (malli.core/schema ':malli.direct-test/foo o0)}}]
                    (malli.core/-into-schema
                      (malli.registry/schema (:registry o0) ':vector)
-                     p6
+                     p9
                      [(malli.core/schema ':malli.direct-test/foo o0)]
                      o0))]
                 o0)))
