@@ -54,7 +54,7 @@
                     [o0 {:registry (malli.core/-registry)}]
                     (clojure.core/let
                       [r1
-                       '#:malli.direct-test{:foo :int}
+                       {:malli.direct-test/foo :int}
                        o0
                        (malli.core/-update
                          o0
@@ -87,7 +87,7 @@
                     [o0 {:registry (malli.core/-registry)}]
                     (clojure.core/let
                       [r1
-                       '#:malli.direct-test{:foo :int}
+                       {:malli.direct-test/foo :int}
                        o0
                        (malli.core/-update
                          o0
@@ -110,7 +110,7 @@
                         p3
                         [(clojure.core/let
                            [r7
-                            '#:malli.direct-test{:bar :malli.direct-test/foo}
+                            {:malli.direct-test/bar :malli.direct-test/foo}
                             o0
                             (malli.core/-update
                               o0
@@ -123,11 +123,11 @@
                             p9
                             {:registry
                              {':malli.direct-test/bar
-                              (malli.core/schema ':malli.direct-test/foo o0)}}]
+                              (malli.core/schema :malli.direct-test/foo o0)}}]
                            (malli.core/-into-schema
                              (malli.registry/schema (:registry o0) ':vector)
                              p9
-                             [(malli.core/schema ':malli.direct-test/foo o0)]
+                             [(malli.core/schema :malli.direct-test/foo o0)]
                              o0))]
                         o0)))
                  (ddirect* [:vector {:registry {::foo :int}} [:vector {:registry {::bar ::foo}} ::foo]]))))
@@ -140,7 +140,7 @@
                     [o0 {:registry (malli.core/-registry)}]
                     (clojure.core/let
                       [r1
-                       '{:malli.direct-test/foo [:vector [:ref :malli.direct-test/foo]]}
+                       {:malli.direct-test/foo [:vector [:ref :malli.direct-test/foo]]}
                        o0
                        (malli.core/-update
                          o0
@@ -165,7 +165,7 @@
                       (malli.core/-into-schema
                         (malli.registry/schema (:registry o0) ':schema)
                         p3
-                        [(malli.core/schema ':malli.direct-test/foo o0)]
+                        [(malli.core/schema :malli.direct-test/foo o0)]
                         o0)))
                  (ddirect* [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo]))))
   (is (= [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo]
