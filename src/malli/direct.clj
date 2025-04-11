@@ -3,9 +3,6 @@
             [malli.core :as m]
             [malli.registry :as mr]))
 
-#?(:cljs (goog-define mode "dev")
-   :clj  (def mode (or (System/getProperty "malli.registry/mode") "dev")))
-
 (declare direct*)
 
 (def ^:dynamic ^:private *gensym* gensym)
@@ -91,18 +88,23 @@
             ~(direct* s go nil))))
   ([s options-local opts] (-direct (m/schema s opts) options-local opts)))
 
-(defn direct-cljs* [s]
+(defmacro direct [s]
   (let [s (m/schema (eval s))
-        c (direct* s)]
-    `(let [s# ~c]
-       (when-not (identical? mode "dev")
+        c (direct* s)
+        _ (when-not (:ns &env)
+            (when-not *compile-files*
+              (try (eval c)
+                   (catch Exception e
+                     (throw (ex-info "Failed to compile schema"
+                                     {:form &form
+                                      :schema s}
+                                     e))))))]
+    (if (= (System/getProperty "malli.direct/mode") "dev")
+      `(let [s# ~c]
          (assert (= (m/form s#) '~(m/form s))
-                 (str "Cannot compile: " &form)))
-       s#)))
-
-(defn direct-clj* [s] (direct* (m/schema (eval s))))
-
-(defmacro direct [s] ((if (:ns &env) direct-cljs* direct-clj*) s))
+                 (str "Cannot compile: " &form))
+         s#)
+      c)))
 
 (comment
   (direct* :int)
