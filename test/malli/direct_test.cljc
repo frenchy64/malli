@@ -1,5 +1,7 @@
 (ns malli.direct-test
-  (:require [malli.direct :as md]
+  #?(:cljs (:require-macros [malli.direct :as md]
+                            malli.direct-test))
+  (:require #?(:clj [malli.direct :as md])
             [malli.core :as m]
             [clojure.test :refer [is deftest]]))
 
@@ -175,10 +177,9 @@
        :default :boolean)))
 
 (deftest direct-misc-test
+  (is (= #'intentionally-out-of-sync (m/form (md/direct #'intentionally-out-of-sync))))
   (is (= [:vector #'intentionally-out-of-sync]
          (m/form (md/direct [:vector #'intentionally-out-of-sync])))))
-
-(def impl-dependent #?(:cljs :int :default :boolean))
 
 #?(:cljs
    (deftest detect-out-of-sync-test

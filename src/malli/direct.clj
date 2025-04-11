@@ -1,11 +1,20 @@
 (ns malli.direct
   (:require [clojure.set :as set]
+            [clojure.walk :as walk]
             [malli.core :as m]
             [malli.registry :as mr]))
 
 (declare direct*)
 
 (def ^:dynamic ^:private *gensym* gensym)
+
+;;TODO symbols, lists
+(defn to-syntax [s]
+  (walk/postwalk (fn [v]
+                   (if (var? v)
+                     (list 'var (symbol v))
+                     v))
+                 s))
 
 (defn -direct-default [s options-local process-children opts]
   (let [p (m/properties s)
@@ -19,7 +28,7 @@
             gproperties (*gensym* 'properties)
             goptions (*gensym* 'options)]
         ;;inlines m/into-schema
-        `(let [~gr '~(update-vals (:registry p) m/form)
+        `(let [~gr ~(update-vals (:registry p) (comp to-syntax m/form))
                ~options-local (m/-update ~options-local :registry (fn [~gx] (mr/composite-registry ~gr (or ~gx (m/-registry ~options-local)))))
                ~gp ~(let [r (reduce-kv (fn [acc k v]
                                          (assoc acc (list 'quote k) (direct* v options-local opts)))
@@ -64,7 +73,7 @@
 (defmethod -direct :ref [s options-local opts] (-direct-value s options-local opts))
 (defmethod -direct ::m/schema [s options-local opts]
   (if-some [ref (m/-ref s)]
-    `(m/schema '~ref ~options-local) ;; m/-pointer case, inline further?
+    `(m/schema ~(to-syntax ref) ~options-local) ;; m/-pointer case, inline further?
     (-direct-nested s options-local opts)))
 
 (defn -infer-direct-ast [s options-local opts]
@@ -101,7 +110,9 @@
                                      e))))))]
     (if (= (System/getProperty "malli.direct/mode") "dev")
       `(let [s# ~c]
-         (assert (= (m/form s#) '~(m/form s))
+         (assert (= (m/form s#)
+                    ;; evaluation context for vars
+                    ~(to-syntax s))
                  (str "Cannot compile: " &form))
          s#)
       c)))
