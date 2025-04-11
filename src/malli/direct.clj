@@ -98,7 +98,13 @@
   ([s options-local opts] (-direct (m/schema s opts) options-local opts)))
 
 (defmacro direct [s]
-  (let [s (m/schema (eval s))
+  (let [s (m/schema (try (eval s)
+                         (catch Exception e
+                           (throw (ex-info (str "Failed to resolve schema"
+                                                (when (:ns &env)
+                                                  ", please ensure the schema is available in JVM Clojure"))
+                                           {:form s}
+                                           e)))))
         c (direct* s)
         _ (when-not (:ns &env)
             (when-not *compile-files*
