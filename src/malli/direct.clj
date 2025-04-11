@@ -3,6 +3,9 @@
             [malli.core :as m]
             [malli.registry :as mr]))
 
+#?(:cljs (goog-define mode "dev")
+   :clj  (def mode (or (System/getProperty "malli.registry/mode") "dev")))
+
 (declare direct*)
 
 (def ^:dynamic ^:private *gensym* gensym)
@@ -68,13 +71,15 @@
     (-direct-nested s options-local opts)))
 
 (defn -infer-direct-ast [s options-local opts]
-  (let [ast (m/ast s)
-        ks (-> ast (dissoc :properties :registry) keys set)]
-    (case ks
-      #{:type :value} (-direct-value s options-local opts)
-      #{:type :child} (-direct-child s options-local opts)
-      #{:type} (-direct-childless s options-local opts)
-      nil)))
+  (if (m/-ast? s)
+    (let [ast (m/ast s)
+          ks (-> ast (dissoc :properties :registry) keys set)]
+      (case ks
+        #{:type :value} (-direct-value s options-local opts)
+        #{:type :child} (-direct-child s options-local opts)
+        #{:type} (-direct-childless s options-local opts)
+        nil))
+    (-direct-nested s options-local opts)))
 
 (defmethod -direct default [s options-local opts]
   (or (-infer-direct-ast s options-local opts)
@@ -86,7 +91,18 @@
             ~(direct* s go nil))))
   ([s options-local opts] (-direct (m/schema s opts) options-local opts)))
 
-(defmacro direct [s] (direct* (do #_eval s)))
+(defn direct-cljs* [s]
+  (let [s (m/schema (eval s))
+        c (direct* s)]
+    `(let [s# ~c]
+       (when-not (identical? mode "dev")
+         (assert (= (m/form s#) '~(m/form s))
+                 (str "Cannot compile: " &form)))
+       s#)))
+
+(defn direct-clj* [s] (direct* (m/schema (eval s))))
+
+(defmacro direct [s] ((if (:ns &env) direct-cljs* direct-clj*) s))
 
 (comment
   (direct* :int)

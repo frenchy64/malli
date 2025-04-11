@@ -168,3 +168,9 @@
          (ddirect* [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo])))
   (is (= [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo]
          (m/form (md/direct [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo])))))
+
+(def foo :int)
+
+(deftest direct-misc-test
+  (= (md/direct #'foo))
+  )

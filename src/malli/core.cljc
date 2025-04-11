@@ -2801,6 +2801,7 @@
    (defmacro => [given-sym value]
      (let [cljs-resolve (when (:ns &env) (ns-resolve 'cljs.analyzer.api 'resolve))
            cljs-resolve-symbols (fn [env d]
+                                  ;; FIXME resolves resolvable quoted symbols
                                   (walk/postwalk (fn [x] (cond->> x (symbol? x) (or (:name (cljs-resolve env x)))))
                                                  d))
            name-str (name given-sym)
