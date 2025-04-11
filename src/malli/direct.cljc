@@ -8,23 +8,25 @@
 
 (defn -direct-default [s options-local process-children opts]
   (let [p (m/properties s)
-        pno-reg (dissoc p :registry)
+        pno-reg (not-empty (dissoc p :registry))
         reg (not-empty (:registry p))]
     ;;TODO pointer schemas
     (if reg
       (let [gr (*gensym* 'r)
             gx (*gensym* 'x)
-            gp (*gensym* 'p)]
-        `(let [~gr ~(some->> reg
-                             (reduce-kv (fn [acc k v]
-                                          (assoc acc (list 'quote k) (direct* v options-local opts)))
-                                        {}))
-               ~options-local ~(if reg
-                                 `(m/-update ~options-local :registry (fn [~gx] (mr/composite-registry ~gr (or ~gx (m/-registry ~options-local)))))
-                                 options-local)
-               ~gp ~(if reg
-                      `(assoc ~(list 'quote pno-reg) :registry ~gr)
-                      (list 'quote pno-reg))]
+            gp (*gensym* 'p)
+            gproperties' (*gensym* 'properties')
+            gproperties (*gensym* 'properties)
+            goptions (*gensym* 'options)]
+        ;;inline m/into-schema
+        `(let [~gr '~(update-vals (:registry p) m/form)
+               ~options-local (m/-update ~options-local :registry (fn [~gx] (mr/composite-registry ~gr (or ~gx (m/-registry ~options-local)))))
+               ~gp ~(let [r (reduce-kv (fn [acc k v]
+                                         (assoc acc (list 'quote k) (direct* v options-local opts)))
+                                       {} reg)]
+                      (if pno-reg
+                        `(assoc ~(list 'quote pno-reg) :registry ~r)
+                        {:registry r}))]
            (m/-into-schema (mr/schema (:registry ~options-local) '~(m/type s))
                            ~gp
                            ~(process-children (m/children s) options-local opts)
@@ -46,6 +48,10 @@
   (-direct-default s options-local (fn [children options-local opts] (list 'quote (vec children))) opts))
 
 (defmethod -direct :ref [s options-local opts] (-direct-value s options-local opts))
+(defmethod -direct ::m/schema [s options-local opts]
+  (if-some [ref (m/-ref s)]
+    `(m/schema '~ref ~options-local) ;; m/-pointer case, inline further?
+    (-direct-nested s options-local opts)))
 (defmethod -direct default [s options-local opts] (-direct-nested s options-local opts))
 
 (defn direct*
@@ -59,7 +65,7 @@
            (-direct s options-local opts)) ;;TODO
        (-direct s options-local opts)))))
 
-(defmacro direct [s] (direct* s))
+(defmacro direct [s] (direct* (do #_eval s)))
 
 (comment
   (direct* :int)

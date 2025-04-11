@@ -74,7 +74,7 @@
                 o0)))
          (ddirect* [:int {:registry {::foo :int}}])))
   (is (m/schema? (md/direct [:int {:registry {::foo :int}}])))
-  (is (= [:int {:registry {:malli.direct-test/foo :int}}]
+  (is (= [:int {:registry {::foo :int}}]
          (m/form (md/direct [:int {:registry {::foo :int}}])))))
 
 (deftest direct-nested-registry-test
@@ -105,15 +105,7 @@
                 [(clojure.core/let
                    [r4
                     {':malli.direct-test/bar
-                     (malli.core/-into-schema
-                       (malli.registry/schema (:registry o0) ':malli.core/schema)
-                       'nil
-                       [(malli.core/-into-schema
-                          (malli.registry/schema (:registry o0) ':int)
-                          'nil
-                          []
-                          o0)]
-                       o0)}
+                     (malli.core/schema ':malli.direct-test/foo o0)}
                     o0
                     (malli.core/-update
                       o0
@@ -128,21 +120,12 @@
                    (malli.core/-into-schema
                      (malli.registry/schema (:registry o0) ':vector)
                      p6
-                     [(malli.core/-into-schema
-                        (malli.registry/schema (:registry o0) ':malli.core/schema)
-                        'nil
-                        [(malli.core/-into-schema
-                           (malli.registry/schema (:registry o0) ':int)
-                           'nil
-                           []
-                           o0)]
-                        o0)]
+                     [(malli.core/schema ':malli.direct-test/foo o0)]
                      o0))]
                 o0)))
          (ddirect* [:vector {:registry {::foo :int}} [:vector {:registry {::bar ::foo}} ::foo]])))
   (is (m/schema? (md/direct [:vector {:registry {::foo :int}} [:vector {:registry {::bar ::foo}} ::foo]])))
-  ;;FIXME {::bar ::foo} should be preserved, not {::bar :int}. need to reconstruct pointers
-  (is (= [:vector {:registry {::foo :int}} [:vector {:registry {::bar :int}} :int]]
+  (is (= [:vector {:registry {::foo :int}} [:vector {:registry {::bar ::foo}} ::foo]]
          (m/form (md/direct [:vector {:registry {::foo :int}} [:vector {:registry {::bar ::foo}} ::foo]])))))
 
 (deftest direct-ref-test
@@ -150,16 +133,7 @@
             [o0 {:registry (malli.core/-registry)}]
             (clojure.core/let
               [r1
-               {':malli.direct-test/foo
-                (malli.core/-into-schema
-                  (malli.registry/schema (:registry o0) ':vector)
-                  'nil
-                  [(malli.core/-into-schema
-                     (malli.registry/schema (:registry o0) ':ref)
-                     'nil
-                     '[:malli.direct-test/foo]
-                     o0)]
-                  o0)}
+               '{:malli.direct-test/foo [:vector [:ref :malli.direct-test/foo]]}
                o0
                (malli.core/-update
                  o0
@@ -170,25 +144,22 @@
                      r1
                      (clojure.core/or x2 (malli.core/-registry o0)))))
                p3
-               (clojure.core/assoc '{} :registry r1)]
+               {:registry
+                {':malli.direct-test/foo
+                 (malli.core/-into-schema
+                   (malli.registry/schema (:registry o0) ':vector)
+                   'nil
+                   [(malli.core/-into-schema
+                      (malli.registry/schema (:registry o0) ':ref)
+                      'nil
+                      '[:malli.direct-test/foo]
+                      o0)]
+                   o0)}}]
               (malli.core/-into-schema
                 (malli.registry/schema (:registry o0) ':schema)
                 p3
-                [(malli.core/-into-schema
-                   (malli.registry/schema (:registry o0) ':malli.core/schema)
-                   'nil
-                   [(malli.core/-into-schema
-                      (malli.registry/schema (:registry o0) ':vector)
-                      'nil
-                      [(malli.core/-into-schema
-                         (malli.registry/schema (:registry o0) ':ref)
-                         'nil
-                         '[:malli.direct-test/foo]
-                         o0)]
-                      o0)]
-                   o0)]
+                [(malli.core/schema ':malli.direct-test/foo o0)]
                 o0)))
          (ddirect* [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo])))
-  ;:WIP
-  #_(is (= [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo]
-           (m/form (md/direct [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo])))))
+  (is (= [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo]
+         (m/form (md/direct [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo])))))
