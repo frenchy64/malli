@@ -141,6 +141,7 @@
                 o0)))
          (ddirect* [:vector {:registry {::foo :int}} [:vector {:registry {::bar ::foo}} ::foo]])))
   (is (m/schema? (md/direct [:vector {:registry {::foo :int}} [:vector {:registry {::bar ::foo}} ::foo]])))
+  ;;FIXME {::bar ::foo} should be preserved, not {::bar :int}. need to reconstruct pointers
   (is (= [:vector {:registry {::foo :int}} [:vector {:registry {::bar :int}} :int]]
          (m/form (md/direct [:vector {:registry {::foo :int}} [:vector {:registry {::bar ::foo}} ::foo]])))))
 
