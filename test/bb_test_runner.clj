@@ -4,6 +4,7 @@
    [malli.clj-kondo-test]
    [malli.core-test]
    [malli.destructure-test]
+   [malli.direct-test]
    [malli.dot-test]
    [malli.error-test]
    [malli.experimental-test]
@@ -23,6 +24,7 @@
          'malli.core-test
          'malli.clj-kondo-test
          'malli.destructure-test
+         'malli.direct-test
          'malli.dot-test
          'malli.error-test
          'malli.experimental-test

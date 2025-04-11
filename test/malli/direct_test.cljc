@@ -3,8 +3,6 @@
             [malli.core :as m]
             [clojure.test :refer [is deftest]]))
 
-(set! *print-namespace-maps* false)
-
 #?(:clj
    (defn ->dgensym []
      (let [counter (atom -1)]
@@ -171,13 +169,17 @@
   (is (= [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo]
          (m/form (md/direct [:schema {:registry {::foo [:vector [:ref ::foo]]}} ::foo])))))
 
-(def foo :int)
+(def intentionally-out-of-sync
+  (md/direct
+    #?(:cljs :int
+       :default :boolean)))
 
 (deftest direct-misc-test
-  (is (= (md/direct #'foo))))
+  (is (= [:vector #'intentionally-out-of-sync]
+         (m/form (md/direct [:vector #'intentionally-out-of-sync])))))
 
 (def impl-dependent #?(:cljs :int :default :boolean))
 
 #?(:cljs
    (deftest detect-out-of-sync-test
-     (is (thrown? Exception (md/direct impl-dependent)))))
+     (is (thrown? Exception (md/direct intentionally-out-of-sync)))))
