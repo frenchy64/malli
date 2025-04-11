@@ -27,8 +27,6 @@
            (md/direct :int))))
   (is (= :int (m/form (eval (md/direct :int))))))
 
-(set! *print-namespace-maps* false)
-
 (deftest direct-registry-test
   (with-deterministic-gensym
     (is (= '(clojure.core/let
