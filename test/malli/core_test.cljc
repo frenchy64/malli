@@ -3582,22 +3582,27 @@
   (is (not (m/validate [:seqable {:min 11} :int] (eduction identity (range 10)))))
   (is (nil? (m/explain [:sequential {:min 9} :int] (eduction identity (range 10))))))
 
-#_
 (comment
 (def ^:dynamic *tuple-validator* nil)
 (def registry {:tuple (m/-tuple-schema)
                ::creates-1-validator [:tuple]
-               ::creates-2-validators [:tuple ::creates-1-validator ::creates-1-validator]
-               ::creates-4-validators [:tuple ::creates-2-validators ::creates-2-validators]
-               ::creates-8-validators [:tuple ::creates-4-validators ::creates-4-validators]
-               ::creates-16-validators [:tuple ::creates-8-validators ::creates-8-validators]
-               ::creates-32-validators [:tuple ::creates-16-validators ::creates-16-validators]
-               ::creates-64-validators [:tuple ::creates-32-validators ::creates-32-validators]})
+               ::creates-2-validators [:tuple ::creates-1-validator ::creates-1-validator ::creates-1-validator ::creates-1-validator]
+               ::creates-16-validators [:tuple ::creates-2-validators ::creates-2-validators ::creates-2-validators ::creates-2-validators]
+               ::creates-64-validators [:tuple ::creates-16-validators ::creates-16-validators ::creates-16-validators ::creates-16-validators]
+               ::creates-256-validators [:tuple ::creates-64-validators ::creates-64-validators ::creates-64-validators ::creates-64-validators]
+               ::creates-1024-validators [:tuple ::creates-256-validators ::creates-256-validators ::creates-256-validators ::creates-256-validators]
+               ::creates-4096-validators [:tuple ::creates-1024-validators ::creates-1024-validators ::creates-1024-validators ::creates-1024-validators]
+               ::creates-16384-validators [:tuple ::creates-4096-validators ::creates-4096-validators ::creates-4096-validators ::creates-4096-validators]
+               ::creates-65536-validators [:tuple ::creates-16384-validators ::creates-16384-validators ::creates-16384-validators ::creates-16384-validators]
+               ::creates-262144-validators [:tuple ::creates-65536-validators ::creates-65536-validators ::creates-65536-validators ::creates-65536-validators]
+               ::creates-1048576-validators [:tuple ::creates-262144-validators ::creates-262144-validators ::creates-262144-validators ::creates-262144-validators]
+})
 
 (let [counter (atom 0)]
   (binding [*tuple-validator* #(swap! counter inc)]
-    (m/validator ::creates-64-validators {:registry registry})
+    (time (m/validator ::creates-1048576-validators {:registry registry}))
     (println "created" @counter "validators for [:tuple]")))
-;created 64 validators for [:tuple]
-;=> nil
+; eval (current-form): (let [counter (atom 0)] (binding [*tuple-validator* #(swap! ...
+; (out) "Elapsed time: 3159.466889 msecs"
+; (out) created 1048576 validators for [:tuple]
 )

@@ -1393,8 +1393,8 @@
          (reify
            Schema
            (-validator [_]
-             (when-some [f (resolve 'malli.core-test/*tuple-validator*)]
-               (when (empty? children)
+             (when-some [f (some-> (c/resolve 'malli.core-test/*tuple-validator*) c/deref)]
+               (when (c/empty? children)
                  (f)))
              (let [validators (into (array-map) (map-indexed vector (mapv -validator children)))]
                (fn [x] (and (vector? x)
