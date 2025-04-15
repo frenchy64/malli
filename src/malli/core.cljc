@@ -1389,11 +1389,14 @@
                                                            (identical? v* v) x
                                                            :else (assoc x i v*))))
                                                      x parsers)))))]
+
+         (when-some [f (some-> (c/resolve 'malli.core-test/*tuple-logger*) c/deref)]
+           (f))
          ^{:type ::schema}
          (reify
            Schema
            (-validator [_]
-             (when-some [f (some-> (c/resolve 'malli.core-test/*tuple-validator*) c/deref)]
+             (when-some [f (some-> (c/resolve 'malli.core-test/*tuple-logger*) c/deref)]
                (when (c/empty? children)
                  (f)))
              (let [validators (into (array-map) (map-indexed vector (mapv -validator children)))]
