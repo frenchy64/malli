@@ -1393,6 +1393,9 @@
          (reify
            Schema
            (-validator [_]
+             (when-some [f (resolve 'malli.core-test/*tuple-validator*)]
+               (when (empty? children)
+                 (f)))
              (let [validators (into (array-map) (map-indexed vector (mapv -validator children)))]
                (fn [x] (and (vector? x)
                             (= (count x) size)

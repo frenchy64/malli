@@ -3581,3 +3581,23 @@
   (is (not (m/validate [:sequential {:min 11} :int] (eduction identity (range 10)))))
   (is (not (m/validate [:seqable {:min 11} :int] (eduction identity (range 10)))))
   (is (nil? (m/explain [:sequential {:min 9} :int] (eduction identity (range 10))))))
+
+#_
+(comment
+(def ^:dynamic *tuple-validator* nil)
+(def registry {:tuple (m/-tuple-schema)
+               ::creates-1-validator [:tuple]
+               ::creates-2-validators [:tuple ::creates-1-validator ::creates-1-validator]
+               ::creates-4-validators [:tuple ::creates-2-validators ::creates-2-validators]
+               ::creates-8-validators [:tuple ::creates-4-validators ::creates-4-validators]
+               ::creates-16-validators [:tuple ::creates-8-validators ::creates-8-validators]
+               ::creates-32-validators [:tuple ::creates-16-validators ::creates-16-validators]
+               ::creates-64-validators [:tuple ::creates-32-validators ::creates-32-validators]})
+
+(let [counter (atom 0)]
+  (binding [*tuple-validator* #(swap! counter inc)]
+    (m/validator ::creates-64-validators {:registry registry})
+    (println "created" @counter "validators for [:tuple]")))
+;created 64 validators for [:tuple]
+;=> nil
+)
