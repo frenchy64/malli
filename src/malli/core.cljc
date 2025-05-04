@@ -59,6 +59,9 @@
 (defprotocol Cached
   (-cache [this]))
 
+(defprotocol CacheInterface
+  (-put-cache [this k f]))
+
 (defprotocol LensSchema
   (-keep [this] "returns truthy if schema contributes to value path")
   (-get [this key default] "returns schema at key")
@@ -99,11 +102,18 @@
 (defn -ref-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.RefSchema x))
 (defn -entry-parser? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntryParser x))
 (defn -entry-schema? [x] (#?(:clj instance?, :cljs implements?) malli.core.EntrySchema x))
-(defn -cached? [x] (#?(:clj instance?, :cljs implements?) malli.core.Cached x))
+(defn -cached? [x] (some? (-cache x)))
 (defn -ast? [x] (#?(:clj instance?, :cljs implements?) malli.core.AST x))
 (defn -transformer? [x] (#?(:clj instance?, :cljs implements?) malli.core.Transformer x))
 
 (extend-type #?(:clj Object, :cljs default)
+  Cached
+  (-cache [_])
+  CacheInterface
+  (-put-cache [this k f] (let [c (-cache this)]
+                           (or (@c k)
+                               ((swap! c update k #(or % (f this))) k))))
+
   FunctionSchema
   (-function-schema? [_] false)
   (-function-info [_])
@@ -320,8 +330,7 @@
 
 (defn -cached [s k f]
   (if (-cached? s)
-    (let [c (-cache s)]
-      (or (@c k) ((swap! c assoc k (f s)) k)))
+    (-put-cache s k f)
     (f s)))
 
 ;;
@@ -706,7 +715,8 @@
 
 (defn -simple-schema [props]
   (let [{:keys [type type-properties pred property-pred min max from-ast to-ast compile]
-         :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props]
+         :or {min 0, max 0, from-ast -from-value-ast, to-ast -to-type-ast}} props
+        shared-cache (atom {})]
     (if (fn? props)
       (do
         (-deprecated! "-simple-schema doesn't take fn-props, use :compile property instead")
@@ -720,27 +730,32 @@
         (-type-properties [_] type-properties)
         (-properties-schema [_ _])
         (-children-schema [_ _])
+        Cached
+        (-cache [_] shared-cache)
         (-into-schema [parent properties children options]
           (if compile
             (-into-schema (-simple-schema (merge (dissoc props :compile) (compile properties children options))) properties children options)
-            (let [form (delay (-simple-form parent properties children identity options))
+            (let [_ (-check-children! type properties children min max)
+                  pvalidator (when property-pred
+                               (when-some [pvalidator (property-pred properties)]
+                                 (fn [x] (and (pred x) (pvalidator x)))))
+                  shareable (and (nil? pvalidator)
+                                 (empty? properties)
+                                 (-cached? parent))
+                  validator (or pvalidator pred)
+                  form (delay (-simple-form parent properties children identity options))
                   cache (-create-cache options)]
-              (-check-children! type properties children min max)
               ^{:type ::schema}
               (reify
                 AST
                 (-to-ast [this _] (to-ast this))
                 Schema
-                (-validator [_]
-                  (if-let [pvalidator (when property-pred (property-pred properties))]
-                    (fn [x] (and (pred x) (pvalidator x))) pred))
-                (-explainer [this path]
-                  (let [validator (-validator this)]
-                    (fn explain [x in acc]
-                      (if-not (validator x) (conj acc (miu/-error path in this x)) acc))))
-                (-parser [this]
-                  (let [validator (-validator this)]
-                    (fn [x] (if (validator x) x ::invalid))))
+                (-validator [_] validator)
+                (-explainer [this path] (fn explain [x in acc]
+                                          (if-not (validator x)
+                                            (conj acc (miu/-error path in this x))
+                                            acc)))
+                (-parser [this] (fn [x] (if (validator x) x ::invalid)))
                 (-unparser [this] (-parser this))
                 (-transformer [this transformer method options]
                   (-intercepting (-value-transformer transformer this method options)))
@@ -752,6 +767,12 @@
                 (-form [_] @form)
                 Cached
                 (-cache [_] cache)
+                CacheInterface
+                (-put-cache [this k f] (or (when shareable
+                                             (case k
+                                               (::explainer :explainer :parser :unparser) (-put-cache parent k (fn [_] (f this)))
+                                               nil))
+                                           (or (@cache k) ((swap! cache update k #(or % (f this))) k))))
                 LensSchema
                 (-keep [_])
                 (-get [_ _ default] default)
@@ -1541,13 +1562,14 @@
       (let [children (vec children)
             f (eval (first children) options)
             form (delay (-simple-form parent properties children identity options))
+            validator (-safe-pred f)
             cache (-create-cache options)]
         ^{:type ::schema}
         (reify
           AST
           (-to-ast [this _] (-to-value-ast this))
           Schema
-          (-validator [_] (-safe-pred f))
+          (-validator [_] validator)
           (-explainer [this path]
             (fn explain [x in acc]
               (try
@@ -1556,9 +1578,7 @@
                   acc)
                 (catch #?(:clj Exception, :cljs js/Error) e
                   (conj acc (miu/-error path in this x (:type (ex-data e))))))))
-          (-parser [this]
-            (let [validator (-validator this)]
-              (fn [x] (if (validator x) x ::invalid))))
+          (-parser [this] (fn [x] (if (validator x) x ::invalid)))
           (-unparser [this] (-parser this))
           (-transformer [this transformer method options]
             (-intercepting (-value-transformer transformer this method options)))
@@ -2355,20 +2375,22 @@
 
 (defn explainer
   "Returns an pure explainer function of type `x -> explanation` for a given Schema.
-   Caches the result for [[Cached]] Schemas with key `:explainer`."
+   Caches the result for [[Cached]] Schemas with key `:explainer` for the result of
+   `(-explainer schema [])` and `:malli.core/explainer` for the output of the entire function."
   ([?schema]
    (explainer ?schema nil))
   ([?schema options]
-   (let [schema' (schema ?schema options)
-         explainer' (-cached schema' :explainer #(-explainer % []))]
-     (fn explainer
-       ([value]
-        (explainer value [] []))
-       ([value in acc]
-        (when-let [errors (seq (explainer' value in acc))]
-          {:schema schema'
-           :value value
-           :errors errors}))))))
+   (-cached (schema ?schema options) ::explainer
+            (fn [schema']
+              (let [explainer' (-cached schema' :explainer #(-explainer % []))]
+                (fn explainer
+                  ([value]
+                   (explainer value [] []))
+                  ([value in acc]
+                   (when-let [errors (seq (explainer' value in acc))]
+                     {:schema schema'
+                      :value value
+                      :errors errors}))))))))
 
 (defn explain
   "Explains a value against a given schema. Creates the `explainer` for every call.
