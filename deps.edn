@@ -5,7 +5,9 @@
         org.clojure/test.check {:mvn/version "1.1.1"}
         ;; pretty errors, optional deps
         fipp/fipp {:mvn/version "0.6.27"}
-        mvxcvi/arrangement {:mvn/version "2.1.0"}}
+        mvxcvi/arrangement {:mvn/version "2.1.0"}
+        ;; for constrained schema generators
+        org.clojure/math.combinatorics {:mvn/version "0.1.6"}}
  :aliases {:test {:extra-paths ["test"]
                   :extra-deps {com.gfredericks/test.chuck {:mvn/version "0.2.14"}
                                lambdaisland/kaocha {:mvn/version "1.91.1392"}
