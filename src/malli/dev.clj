@@ -2,6 +2,7 @@
   (:require [malli.clj-kondo :as clj-kondo]
             [malli.core :as m]
             [malli.dev.pretty :as pretty]
+            malli.dev.constraint ;; collect defn schemas
             [malli.instrument :as mi]))
 
 (defn -log!

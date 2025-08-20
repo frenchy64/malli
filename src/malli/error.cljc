@@ -1,12 +1,20 @@
 (ns malli.error
   (:require [clojure.string :as str]
+            [malli.constraint :as mc]
             [malli.core :as m]
             [malli.util :as mu]))
 
-(declare default-errors error-message)
+(declare error-message)
 
 (defn -pr-str [v] #?(:clj (pr-str v), :cljs (str v)))
 
+(defn- en-range-min-max [min max value]
+  (cond
+    (and min (= min max)) (str "should be " min)
+    (and min (< value min)) (str "should be at least " min)
+    max (str "should be at most " max)))
+
+;; if constraints are enabled, this will be handled by ::m/range-limits
 (defn -pred-min-max-error-fn [{:keys [pred message]}]
   (fn [{:keys [schema value negated]} _]
     (let [{:keys [min max]} (m/properties schema)]
@@ -16,6 +24,15 @@
         (and min ((if negated >= <) value min)) (str "should be at least " min)
         max (str "should be at most " max)
         negated message))))
+
+;;TODO negated
+(defn- en-count-limits [min max value]
+  (let [should (if (string? value) "should be " "should have ")
+        elements #(str " " (if (string? value) "character" "element") (when-not (= 1 %) "s"))]
+    (cond
+      (and min (= min max)) (str should min (elements min))
+      (and min (< (m/-safe-count value) min)) (str should "at least " min (elements min))
+      max (str should "at most " max (elements max)))))
 
 (let [prefix (str "-en-humanize-negation-" (random-uuid))]
   (defn- -en-humanize-negation [{:keys [schema negated] :as error} options]
@@ -44,12 +61,18 @@
 (def default-errors
   {::unknown {:error/message {:en "unknown error"}}
    ::m/missing-key {:error/message {:en "missing required key"}}
+   ;;TODO negated?
+   ::m/count-limits {:error/fn {:en (fn [{:keys [schema value]} _]
+                                       (let [{:keys [min max]} (m/properties schema)]
+                                         (en-count-limits min max value)))}}
+   ;;TODO negated?
+   ::m/range-limits {:error/fn {:en (fn [{:keys [schema value]} _]
+                                      (let [{:keys [min max]} (m/properties schema)]
+                                        (en-range-min-max min max value)))}}
+   ;;TODO negated?
    ::m/limits {:error/fn {:en (fn [{:keys [schema value]} _]
                                 (let [{:keys [min max]} (m/properties schema)]
-                                  (cond
-                                    (and min (= min max)) (str "should have " min " elements")
-                                    (and min (< (count value) min)) (str "should have at least " min " elements")
-                                    max (str "should have at most " max " elements"))))}}
+                                  (en-count-limits min max value)))}}
    ::m/tuple-size {:error/fn {:en (fn [{:keys [schema value]} _]
                                     (let [size (count (m/children schema))]
                                       (str "invalid tuple size " (count value) ", expected " size)))}}
@@ -128,6 +151,7 @@
                              (let [{:keys [min max]} (m/properties schema)]
                                (cond
                                  (not (string? value)) "should be a string"
+                                 ;;TODO are these overlapping with ::m/count-limits ?
                                  (and min (= min max)) (str "should be " min " character" (when (not= 1 min) "s"))
                                  (and min ((if negated >= <) (count value) min)) (str "should be at least " min " character"
                                                                                       (when (not= 1 min) "s"))

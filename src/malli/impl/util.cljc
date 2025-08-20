@@ -1,4 +1,5 @@
 (ns malli.impl.util
+  (:require [clojure.core :as c])
   #?(:clj (:import #?(:bb  (clojure.lang MapEntry)
                       :clj (clojure.lang MapEntry LazilyPersistentVector))
                    (java.util.concurrent TimeoutException TimeUnit FutureTask))))
@@ -66,8 +67,14 @@
 
 (def ^{:arglists '([[& preds]])} -every-pred
   #?(:clj  (-pred-composer and 16)
-     :cljs (fn [preds] (fn [m] (boolean (reduce #(or (%2 m) (reduced false)) true preds))))))
+     :cljs (fn [preds]
+             (if-some [preds (not-empty (reverse preds))]
+               (reduce (fn [acc f] (fn [x] (and (f x) (acc x)))) (first preds) (next preds))
+               any?))))
 
 (def ^{:arglists '([[& preds]])} -some-pred
   #?(:clj  (-pred-composer or 16)
-     :cljs (fn [preds] (fn [x] (boolean (some #(% x) preds))))))
+     :cljs (fn [preds]
+             (if-some [preds (not-empty (reverse preds))]
+               (reduce (fn [acc f] (fn [x] (or (f x) (acc x)))) (first preds) (next preds))
+               (fn [_] false)))))
