@@ -457,7 +457,7 @@ The `:or` schema asserts that at least one of its children is satisfied.
     [:has :top]
     [:has :bottom]
     [:has :left]
-    [:has :right]])
+    [:has :right]]])
 
 (m/validate Padding {:left 1 :right 10 :up 25 :down 50}) ;=> true
 (me/humanize
