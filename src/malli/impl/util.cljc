@@ -114,3 +114,9 @@
   (let [all (-every-pred preds)
         none (complement (-some-pred preds))]
     (-if-pred [choose all none])))
+
+#?(:clj
+   (defmacro predicate-schemas* [var-syms]
+     `(-> {}
+          ~@(for [vsym var-syms]
+              `(malli.core/-register-var '~vsym ~vsym)))))
