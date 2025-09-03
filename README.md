@@ -482,7 +482,6 @@ The `:xor` schema requires exactly one of its children to be satisfied.
     [:has :git/sha]]])
 
 (m/validate GitOrMvn {:mvn/version "1.0.0"}) ; => true
-
 (m/validate GitOrMvn {:mvn/version "1.0.0" :git/sha "123"}) ; => false
 
 (me/humanize
