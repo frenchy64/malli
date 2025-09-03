@@ -839,7 +839,6 @@
           #?@(:cljs [IPrintWithWriter (-pr-writer [this writer opts] (pr-writer-schema this writer opts))]))))
     #?@(:cljs [IPrintWithWriter (-pr-writer [this writer opts] (pr-writer-into-schema this writer opts))])))
 
-<<<<<<< HEAD
 (defn -or-schema
   ([] (-or-schema nil))
   ([{:keys [type] :or {type :or}}]
