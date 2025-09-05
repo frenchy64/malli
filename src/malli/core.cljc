@@ -2789,6 +2789,7 @@
    :re (-re-schema false)
    :fn (-fn-schema)
    :ref (-ref-schema)
+   :rec (-ref-schema {:lazy true})
    :=> (-=>-schema)
    :-> (-->-schema nil)
    :function (-function-schema nil)
