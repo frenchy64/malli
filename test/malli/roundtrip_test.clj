@@ -35,7 +35,7 @@
     (is (nil? (rt/explain-roundtrip [:or number? [:int]]))))
   (testing ":or with overlapping non-simple branches is NOT roundtrippable"
     ;; When branches have transforming parsers and overlap, it's not roundtrippable
-    (let [schema [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]
+    (let [schema [:or [:orn [:i :int]] [:orn [:j :int]]]
           result (rt/explain-roundtrip schema)]
       ;; Verify the exact error structure
       (is (= [{:schema schema
@@ -52,7 +52,7 @@
   (testing ":or with :fn record? and :orn does NOT allow roundtripping (order matters)"
     ;; :orn produces Tag records, which match record? predicate
     ;; When :fn record? comes first, it captures the Tag during unparse
-    (let [schema [:or [:fn record?] [:orn [:i [:int]]]]
+    (let [schema [:or [:fn record?] [:orn [:i :int]]]
           v1 123
           result (rt/explain-roundtrip schema)]
       ;; Verify the error (note: fn shows as object in form)
@@ -68,7 +68,7 @@
   (testing ":or with :orn and :fn record? (swapped order) - still flagged"
     ;; Even when order is swapped, we still flag it as non-roundtrippable
     ;; because overlap exists (conservative for soundness)
-    (let [schema [:or [:orn [:i [:int]]] [:fn record?]]
+    (let [schema [:or [:orn [:i :int]] [:fn record?]]
           v1 123
           result (rt/explain-roundtrip schema)]
       ;; Still flagged as non-roundtrippable
@@ -91,27 +91,27 @@
     (is (nil? (rt/explain-roundtrip [:or [:or [:int] number?] [:string]]))))
   (testing "nested :or with non-simple parsers is not roundtrippable"
     (let [result (rt/explain-roundtrip
-                   [:or [:or [:orn [:i [:int]]] [:orn [:j [:int]]]] [:string]])]
+                   [:or [:or [:orn [:i :int]] [:orn [:j :int]]] [:string]])]
       (is (vector? result))
       (is (seq result)))))
 
 (deftest roundtrippable-orn
   (testing ":orn is always roundtrippable"
     (is (nil? (rt/explain-roundtrip
-                [:orn [:i [:int]] [:s [:string]]])))
+                [:orn [:i :int] [:s [:string]]])))
     (is (nil? (rt/explain-roundtrip
                 [:orn [:a [:any]] [:b [:nil]]]))))
   (testing ":orn with overlapping types is still roundtrippable"
     ;; Even though int and number overlap, :orn makes it roundtrippable
     (is (nil? (rt/explain-roundtrip
-                [:orn [:i [:int]] [:n number?]])))))
+                [:orn [:i :int] [:n number?]])))))
 
 (deftest roundtrippable-map
   (testing ":map with roundtrippable children is roundtrippable"
     (is (nil? (rt/explain-roundtrip
                 [:map [:x [:int]] [:y [:string]]]))))
   (testing ":map with non-roundtrippable children is not roundtrippable"
-    (let [schema [:map [:x [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]]]
+    (let [schema [:map [:x [:or [:orn [:i :int]] [:orn [:j :int]]]]]
           result (rt/explain-roundtrip schema)]
       (is (= [{:schema [:or [:orn [:i :int]] [:orn [:j :int]]]
                :branch-a [:orn [:i :int]]
@@ -124,7 +124,7 @@
   (testing ":vector with roundtrippable child is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:vector [:int]]))))
   (testing ":vector with non-roundtrippable child is not roundtrippable"
-    (let [schema [:vector [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]]
+    (let [schema [:vector [:or [:orn [:i :int]] [:orn [:j :int]]]]
           result (rt/explain-roundtrip schema)]
       (is (= [{:schema [:or [:orn [:i :int]] [:orn [:j :int]]]
                :branch-a [:orn [:i :int]]
@@ -141,7 +141,7 @@
   (testing ":tuple with roundtrippable children is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:tuple [:int] [:string] [:boolean]]))))
   (testing ":tuple with non-roundtrippable child is not roundtrippable"
-    (let [schema [:tuple [:int] [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]]
+    (let [schema [:tuple [:int] [:or [:orn [:i :int]] [:orn [:j :int]]]]
           result (rt/explain-roundtrip schema)]
       (is (= [{:schema [:or [:orn [:i :int]] [:orn [:j :int]]]
                :branch-a [:orn [:i :int]]
@@ -156,7 +156,7 @@
   (testing ":and with roundtrippable children is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:and [:int] pos-int?]))))
   (testing ":and with non-roundtrippable child is not roundtrippable"
-    (let [schema [:and [:or [:orn [:i [:int]]] [:orn [:j [:int]]]] pos-int?]
+    (let [schema [:and [:or [:orn [:i :int]] [:orn [:j :int]]] pos-int?]
           result (rt/explain-roundtrip schema)]
       (is (= [{:schema [:or [:orn [:i :int]] [:orn [:j :int]]]
                :branch-a [:orn [:i :int]]
@@ -169,7 +169,7 @@
   (testing ":maybe with roundtrippable child is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:maybe [:int]]))))
   (testing ":maybe with non-roundtrippable child is not roundtrippable"
-    (let [schema [:maybe [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]]
+    (let [schema [:maybe [:or [:orn [:i :int]] [:orn [:j :int]]]]
           result (rt/explain-roundtrip schema)]
       (is (= [{:schema [:or [:orn [:i :int]] [:orn [:j :int]]]
                :branch-a [:orn [:i :int]]
@@ -191,7 +191,7 @@
     ;; This is a complex schema with maps, vectors, and :orn - all roundtrippable
     ))
   (testing "deeply nested non-roundtrippable schema"
-    (let [schema [:map [:data [:vector [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]]]]
+    (let [schema [:map [:data [:vector [:or [:orn [:i :int]] [:orn [:j :int]]]]]]
           result (rt/explain-roundtrip schema)]
       (is (= [{:schema [:or [:orn [:i :int]] [:orn [:j :int]]]
                :branch-a [:orn [:i :int]]
@@ -209,7 +209,7 @@
     ;; This should work because :fn record? doesn't overlap with :orn output (Tag)
     ;; Actually, the Tag IS a record, so they DO overlap!
     (let [result (rt/explain-roundtrip
-                   [:or [:fn record?] [:orn [:i [:int]]]])]
+                   [:or [:fn record?] [:orn [:i :int]]])]
       ;; For soundness, :fn with record? could accept Tag records
       ;; So we conservatively flag this as non-roundtrippable
       (is (vector? result))
@@ -243,10 +243,10 @@
   (testing ":or containing :orn doesn't flag overlap with :orn when no actual overlap"
     ;; :orn with non-record predicates don't overlap
     (is (nil? (rt/explain-roundtrip
-                [:or [:orn [:i [:int]] [:s [:string]]] [:boolean]]))))
+                [:or [:orn [:i :int] [:s [:string]]] [:boolean]]))))
   (testing "but non-:orn branches can overlap with other branches"
     (let [result (rt/explain-roundtrip
-                   [:or [:orn [:i [:int]] [:s [:string]]] [:int]])]
+                   [:or [:orn [:i :int] [:s [:string]]] [:int]])]
       ;; The :int branch overlaps with :orn's possible outputs
       ;; Actually, :orn outputs Tags, not plain ints, so no overlap
       ;; So this should be roundtrippable
@@ -256,7 +256,7 @@
   (testing ":repeat with roundtrippable child is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:repeat [:int]]))))
   (testing ":repeat with non-roundtrippable child is not roundtrippable"
-    (let [schema [:repeat [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]]
+    (let [schema [:repeat [:or [:orn [:i :int]] [:orn [:j :int]]]]
           result (rt/explain-roundtrip schema)]
       (is (= [{:schema [:or [:orn [:i :int]] [:orn [:j :int]]]
                :branch-a [:orn [:i :int]]
@@ -270,9 +270,9 @@
     ;; All simple parsers, so no issue even with overlap
     (is (nil? (rt/explain-roundtrip [:or [:int] [:string] number?]))))
   (testing ":or with three branches, non-simple overlapping"
-    (let [schema [:or [:orn [:i [:int]]] [:string] [:orn [:j [:int]]]]
+    (let [schema [:or [:orn [:i :int]] [:string] [:orn [:j :int]]]
           result (rt/explain-roundtrip schema)]
-      (is (= [{:schema schema
+      (is (= [{:schema [:or [:orn [:i :int]] :string [:orn [:j :int]]]
                :branch-a [:orn [:i :int]]
                :branch-b [:orn [:j :int]]
                :path [0 2]
@@ -292,7 +292,7 @@
     ;; Simple parsers throughout
     (is (nil? (rt/explain-roundtrip [:and [:or [:int] number?] pos-int?]))))
   (testing "nested :and with non-simple :or is not roundtrippable"
-    (let [schema [:and [:or [:orn [:i [:int]]] [:orn [:j [:int]]]] pos-int?]
+    (let [schema [:and [:or [:orn [:i :int]] [:orn [:j :int]]] pos-int?]
           result (rt/explain-roundtrip schema)]
       (is (= [{:schema [:or [:orn [:i :int]] [:orn [:j :int]]]
                :branch-a [:orn [:i :int]]
@@ -328,10 +328,10 @@
     
     ;; Mixed simple and non-simple - roundtrippable if no parsed overlap
     ;; :int parses to int, :orn parses to Tag - different parsed outputs!
-    (is (nil? (rt/explain-roundtrip [:or [:int] [:orn [:i [:int]]]])))
+    (is (nil? (rt/explain-roundtrip [:or [:int] [:orn [:i :int]]])))
     
     ;; Multiple non-simple branches overlapping - not roundtrippable
-    (let [schema [:or [:orn [:i [:int]]] [:orn [:j [:int]]] [:orn [:k [:int]]]]
+    (let [schema [:or [:orn [:i :int]] [:orn [:j :int]] [:orn [:k :int]]]
           result (rt/explain-roundtrip schema)]
       ;; Should detect overlap between branches 0-1, 0-2, and 1-2
       (is (= 3 (count result)))
@@ -353,7 +353,7 @@
              result)))
     
     ;; Non-simple branches that don't overlap - roundtrippable
-    (is (nil? (rt/explain-roundtrip [:or [:orn [:i [:int]]] [:orn [:s [:string]]]])))))
+    (is (nil? (rt/explain-roundtrip [:or [:orn [:i :int]] [:orn [:s :string]]])))))
 
 (deftest roundtrippable-nested-simple-parser-analysis
   (testing "Nested schemas respect simple parser rules"
@@ -364,7 +364,7 @@
                  [:level2 [:vector [:or [:int] [:double]]]]])))
     
     ;; Deeply nested with non-simple at leaf - not roundtrippable
-    (let [schema [:map [:data [:vector [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]]]]
+    (let [schema [:map [:data [:vector [:or [:orn [:i :int]] [:orn [:j :int]]]]]]
           result (rt/explain-roundtrip schema)]
       (is (= [{:schema [:or [:orn [:i :int]] [:orn [:j :int]]]
                :branch-a [:orn [:i :int]]
@@ -375,4 +375,4 @@
     
     ;; Non-simple in container but no overlap - roundtrippable
     (is (nil? (rt/explain-roundtrip
-                [:tuple [:orn [:i [:int]]] [:orn [:s [:string]]]])))))
+                [:tuple [:orn [:i :int]] [:orn [:s :string]]])))))
