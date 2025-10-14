@@ -157,17 +157,26 @@
 (defmethod parsed-overlap? [:fn 'number?] [_ _] true)
 (defmethod parsed-overlap? ['number? :fn] [_ _] true)
 
+(defn explain
+  [path msg & {:as opts}]
+  (assoc opts :path path :problem msg))
+
 (defmulti roundtrippable?
   (fn [schema] (m/type schema)))
 
 ;; Default dispatch: schemas with simple parsers are roundtrippable
 ;; This handles many base types and third-party schemas that implement -parser-info
 (defmethod roundtrippable? :default [schema]
-  (when-not (-> schema m/-parser-info :simple-parser)
-    ;; If not a simple parser and not handled by specific methods,
-    ;; conservatively assume it might not be roundtrippable
-    ;; Return nil for now (roundtrippable) to avoid false positives
-    nil))
+  (if (-> schema m/-parser-info :simple-parser)
+    ;; Simple parser = roundtrippable
+    nil
+    ;; Not a simple parser and no custom handling = conservatively assume not roundtrippable
+    ;; Return a failure explaining the schema needs custom handling
+    [(explain []
+              (str "Schema does not have a simple parser according to -parser-info "
+                   "and does not have custom handling in roundtrippable?. "
+                   "Consider extending roundtrippable? for this schema type to increase precision.")
+              :schema (m/form schema))]))
 
 (defn check-child-roundtrip
   [schema path-key]
@@ -185,10 +194,6 @@
                                  (roundtrippable? child)))
                           (map-indexed vector children)))]
     (not-empty problems)))
-
-(defn explain
-  [path msg & {:as opts}]
-  (assoc opts :path path :problem msg))
 
 (defmethod roundtrippable? :map [schema]
   (let [children (m/children schema)
@@ -265,7 +270,7 @@
   "Takes a schema, returns nil if roundtrippable, else a vector of
    maps explaining the failure."
   [schema]
-  (roundtrippable? schema))
+  (roundtrippable? (m/schema schema)))
 
 (defn print-roundtrip-explanation
   "Takes a schema, prints a readable explanation if not roundtrippable,

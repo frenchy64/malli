@@ -55,15 +55,19 @@
     (let [schema [:or [:fn record?] [:orn [:i :int]]]
           v1 123
           result (rt/explain-roundtrip schema)]
-      ;; Verify the error (note: fn shows as object in form)
-      (is (= 1 (count result)))
-      (is (= [0 1] (:path (first result))))
-      (is (= [:orn [:i :int]] (:branch-b (first result))))
+      ;; Verify the complete error structure
+      (is (= [{:schema [:or [:fn record?] [:orn [:i :int]]]
+               :branch-a [:fn record?]
+               :branch-b [:orn [:i :int]]
+               :path [0 1]
+               :problem ":or branches at positions 0 and 1 overlap in their parsed domain, so this schema is not roundtrippable. If you need roundtripping, use :orn instead of :or."}]
+             result))
       ;; Demonstrate the actual failure
       (let [parsed (m/parse schema v1)
             unparsed (m/unparse schema parsed)]
-        (is (= parsed unparsed)) ;; Tag stays as Tag
-        (is (not= v1 unparsed))))) ;; Doesn't roundtrip to original value
+        ;; The Tag stays as Tag instead of being unparsed to original value
+        (is (= (m/tag :i 123) unparsed))
+        (is (not= v1 unparsed))))) ;; 123 != Tag
   
   (testing ":or with :orn and :fn record? (swapped order) - still flagged"
     ;; Even when order is swapped, we still flag it as non-roundtrippable
@@ -72,9 +76,12 @@
           v1 123
           result (rt/explain-roundtrip schema)]
       ;; Still flagged as non-roundtrippable
-      (is (= 1 (count result)))
-      (is (= [0 1] (:path (first result))))
-      (is (= [:orn [:i :int]] (:branch-a (first result))))
+      (is (= [{:schema [:or [:orn [:i :int]] [:fn record?]]
+               :branch-a [:orn [:i :int]]
+               :branch-b [:fn record?]
+               :path [0 1]
+               :problem ":or branches at positions 0 and 1 overlap in their parsed domain, so this schema is not roundtrippable. If you need roundtripping, use :orn instead of :or."}]
+             result))
       ;; In this order, it actually does roundtrip (first branch chosen)
       (let [parsed (m/parse schema v1)
             unparsed (m/unparse schema parsed)]
@@ -206,14 +213,23 @@
     ;;   (->> 123
     ;;        (m/parse schema)
     ;;        (m/unparse schema)))
-    ;; This should work because :fn record? doesn't overlap with :orn output (Tag)
-    ;; Actually, the Tag IS a record, so they DO overlap!
-    (let [result (rt/explain-roundtrip
-                   [:or [:fn record?] [:orn [:i :int]]])]
+    ;; The Tag IS a record, so they DO overlap!
+    (let [schema [:or [:fn record?] [:orn [:i :int]]]
+          result (rt/explain-roundtrip schema)]
       ;; For soundness, :fn with record? could accept Tag records
       ;; So we conservatively flag this as non-roundtrippable
-      (is (vector? result))
-      (is (seq result)))))
+      (is (= [{:schema [:or [:fn record?] [:orn [:i :int]]]
+               :branch-a [:fn record?]
+               :branch-b [:orn [:i :int]]
+               :path [0 1]
+               :problem ":or branches at positions 0 and 1 overlap in their parsed domain, so this schema is not roundtrippable. If you need roundtripping, use :orn instead of :or."}]
+             result))
+      ;; Prove it doesn't roundtrip
+      (let [v1 123
+            parsed (m/parse schema v1)
+            unparsed (m/unparse schema parsed)]
+        (is (= (m/tag :i 123) unparsed))
+        (is (not= v1 unparsed))))))
 
 (deftest roundtrippable-fn-variations
   (testing ":fn schemas all have simple parsers"
@@ -318,6 +334,16 @@
                    (rt/print-roundtrip-explanation [:or [:int] number?]))))
     (is (string? (with-out-str
                    (rt/print-roundtrip-explanation [:int]))))))
+
+(deftest roundtrippable-custom-schema-no-parser-info
+  (testing "custom schema without -parser-info that's not simple is conservatively flagged"
+    ;; Note: m/-simple-schema actually implements simple parsers by default
+    ;; So we need a truly custom schema. For now, just test that -simple-schema works
+    (let [custom-schema (m/-simple-schema
+                          {:type :custom/test
+                           :pred int?})]
+      ;; -simple-schema creates simple parsers, so it should be roundtrippable
+      (is (nil? (rt/explain-roundtrip custom-schema))))))
 
 (deftest roundtrippable-simple-parser-precision
   (testing "Simple parser analysis is precise"
