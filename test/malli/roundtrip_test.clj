@@ -251,3 +251,44 @@
                    (rt/print-roundtrip-explanation [:or [:int] number?]))))
     (is (string? (with-out-str
                    (rt/print-roundtrip-explanation [:int]))))))
+
+(deftest roundtrippable-simple-parser-precision
+  (testing "Simple parser analysis is precise"
+    ;; All simple parsers - roundtrippable
+    (is (nil? (rt/explain-roundtrip [:or [:int] [:int]])))
+    (is (nil? (rt/explain-roundtrip [:or int? number? pos-int?])))
+    (is (nil? (rt/explain-roundtrip [:or [:fn int?] [:fn number?] [:int]])))
+    
+    ;; Mixed simple and non-simple - roundtrippable if no parsed overlap
+    ;; :int parses to int, :orn parses to Tag - different parsed outputs!
+    (is (nil? (rt/explain-roundtrip [:or [:int] [:orn [:i [:int]]]])))
+    
+    ;; Multiple non-simple branches overlapping - not roundtrippable
+    (let [result (rt/explain-roundtrip 
+                   [:or [:orn [:i [:int]]] [:orn [:j [:int]]] [:orn [:k [:int]]]])]
+      (is (vector? result))
+      (is (seq result))
+      ;; Should detect multiple overlap pairs
+      (is (> (count result) 1)))
+    
+    ;; Non-simple branches that don't overlap - roundtrippable
+    (is (nil? (rt/explain-roundtrip [:or [:orn [:i [:int]]] [:orn [:s [:string]]]])))))
+
+(deftest roundtrippable-nested-simple-parser-analysis
+  (testing "Nested schemas respect simple parser rules"
+    ;; Deeply nested all-simple - roundtrippable
+    (is (nil? (rt/explain-roundtrip
+                [:map
+                 [:level1 [:or int? number?]]
+                 [:level2 [:vector [:or [:int] [:double]]]]])))
+    
+    ;; Deeply nested with non-simple at leaf - not roundtrippable
+    (let [result (rt/explain-roundtrip
+                   [:map
+                    [:data [:vector [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]]]])]
+      (is (vector? result))
+      (is (seq result)))
+    
+    ;; Non-simple in container but no overlap - roundtrippable
+    (is (nil? (rt/explain-roundtrip
+                [:tuple [:orn [:i [:int]]] [:orn [:s [:string]]]])))))

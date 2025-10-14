@@ -108,13 +108,18 @@
 (defmethod parsed-overlap? [:or :orn] [a b] false)
 (defmethod parsed-overlap? [:orn :orn] [a b]
   ;; :orn produces Tags with specific keys
-  ;; Two different :orn schemas can overlap if they could produce the same Tag keys
-  ;; Since we can't easily inspect the keys, conservatively assume they might overlap
-  ;; Actually, :orn always produces new Tags, so they don't overlap
-  ;; But wait - if both :orn accept the same input and produce Tags with same structure,
-  ;; they could overlap in the parsed domain
-  ;; For soundness, assume they overlap
-  true)
+  ;; Two :orn schemas only overlap if they could produce the same Tag structure
+  ;; We can check if their input domains overlap
+  ;; If the input domains don't overlap, the parsed outputs won't either
+  ;; Children are [key props schema] tuples
+  (let [a-children (m/children a)
+        b-children (m/children b)]
+    (boolean
+     (some (fn [[_ka _props-a va]]
+             (some (fn [[_kb _props-b vb]]
+                     (parsed-overlap? va vb))
+                   b-children))
+           a-children))))
 (defmethod parsed-overlap? [:orn :fn] [a b]
   ;; :orn produces Tag records
   ;; If the :fn uses record?, they overlap
