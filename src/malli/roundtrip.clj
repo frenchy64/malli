@@ -55,8 +55,18 @@
 (defmethod parsed-overlap? [:string :string] [_ _] true)
 (defmethod parsed-overlap? [:keyword :string] [_ _] false)
 (defmethod parsed-overlap? [:keyword :keyword] [_ _] true)
-(defmethod parsed-overlap? [:fn :int] [_ _] false)
-(defmethod parsed-overlap? [:fn :fn] [a b] true)
+;; :fn schemas: for soundness, we must be conservative
+;; We can't determine what values an :fn might accept, so we assume potential overlap
+;; unless we can prove otherwise (e.g., :fn with clearly non-overlapping types)
+(defmethod parsed-overlap? [:fn :int] [_ _] true)
+(defmethod parsed-overlap? [:int :fn] [_ _] true)
+(defmethod parsed-overlap? [:fn :string] [_ _] true)
+(defmethod parsed-overlap? [:string :fn] [_ _] true)
+(defmethod parsed-overlap? [:fn :fn] [a b]
+  ;; :fn schemas can overlap if they use the same predicate
+  ;; For soundness, we assume they might overlap unless proven otherwise
+  ;; Since we assume :fn schemas are pure, we can compare their predicates
+  true)
 (defmethod parsed-overlap? [:orn :or] [a b] false)
 (defmethod parsed-overlap? [:or :orn] [a b] false)
 (defmethod parsed-overlap? [:map :map] [a b] true)
@@ -64,34 +74,49 @@
 (defmethod parsed-overlap? [:set :set] [a b] true)
 (defmethod parsed-overlap? [:any :any] [a b] true)
 (defmethod parsed-overlap? [:nil :nil] [a b] true)
-(defmethod parsed-overlap? [:number :int] [_ _] true)
-(defmethod parsed-overlap? [:int :number] [_ _] true)
-(defmethod parsed-overlap? [:number :number] [_ _] true)
+;; Predicate overlaps (using symbols as that's how malli represents them)
+(defmethod parsed-overlap? ['number? :int] [_ _] true)
+(defmethod parsed-overlap? [:int 'number?] [_ _] true)
+(defmethod parsed-overlap? ['number? 'number?] [_ _] true)
+(defmethod parsed-overlap? ['int? :int] [_ _] true)
+(defmethod parsed-overlap? [:int 'int?] [_ _] true)
+(defmethod parsed-overlap? ['int? 'int?] [_ _] true)
+(defmethod parsed-overlap? ['int? 'number?] [_ _] true)
+(defmethod parsed-overlap? ['number? 'int?] [_ _] true)
+;; :fn with predicates - for soundness, assume they might overlap
+(defmethod parsed-overlap? [:fn 'int?] [_ _] true)
+(defmethod parsed-overlap? ['int? :fn] [_ _] true)
+(defmethod parsed-overlap? [:fn 'number?] [_ _] true)
+(defmethod parsed-overlap? ['number? :fn] [_ _] true)
+
+(defmulti roundtrippable?
+  (fn [schema] (m/type schema)))
 
 (defn check-child-roundtrip
   [schema path-key]
   (let [child (second schema)
-        problems (map #(update % :path #(cons path-key %))
+        problems (map (fn [p] (update p :path (fn [path] (cons path-key path))))
                       (roundtrippable? child))]
     (not-empty problems)))
 
 (defn check-multi-children-roundtrip
   [children]
   (not-empty
-    (mapcat-indexed (fn [i child]
-                      (map #(update % :path #(cons i %))
-                           (roundtrippable? child)))
-                    children)))
-
-(defmulti roundtrippable?
-  (fn [schema] (m/type schema)))
+    (mapcat (fn [[i child]]
+              (map (fn [p] (update p :path (fn [path] (cons i path))))
+                   (roundtrippable? child)))
+            (map-indexed vector children))))
 
 (defn explain
   [path msg & {:as opts}]
   (assoc opts :path path :problem msg))
 
-(doseq [t [:int :string :keyword :boolean :double :uuid :nil :any :enum
-           :number]]
+(doseq [t [:int :string :keyword :boolean :double :uuid :nil :any :enum]]
+  (defmethod roundtrippable? t [_] nil))
+
+;; Predicates are also roundtrippable
+(doseq [t ['int? 'string? 'keyword? 'boolean? 'number? 'uuid? 'nil? 'any? 'double? 'float?
+           'pos-int? 'neg-int? 'nat-int? 'pos? 'neg? 'zero? 'some? 'fn? 'ifn?]]
   (defmethod roundtrippable? t [_] nil))
 
 (defmethod roundtrippable? :fn [_] nil)
@@ -99,7 +124,7 @@
 (defmethod roundtrippable? :map [schema]
   (let [children (m/children schema)
         problems (mapcat (fn [[k child]]
-                           (map #(update % :path #(cons k %))
+                           (map (fn [p] (update p :path (fn [path] (cons k path))))
                                 (roundtrippable? child)))
                          children)]
     (not-empty problems)))
@@ -136,6 +161,9 @@
 
 (defmethod roundtrippable? :or [schema]
   (let [branches (rest schema)
+        ;; First check if branches themselves are roundtrippable
+        branch-problems (check-multi-children-roundtrip branches)
+        ;; Then check for overlapping branches
         pairs (for [[i a] (map-indexed vector branches)
                     [j b] (map-indexed vector branches)
                     :when (< i j)]
@@ -152,8 +180,9 @@
                    " use :orn instead of :or.")
               :schema schema
               :branch-a a
-              :branch-b b)))]
-    (not-empty (remove nil? overlapping))))
+              :branch-b b)))
+        all-problems (vec (concat branch-problems (remove nil? overlapping)))]
+    (not-empty all-problems)))
 
 (defmethod roundtrippable? :orn [_] nil)
 

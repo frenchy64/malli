@@ -17,8 +17,9 @@
     (is (nil? (rt/explain-roundtrip [:keyword])))
     (is (nil? (rt/explain-roundtrip [:nil])))
     (is (nil? (rt/explain-roundtrip [:any])))
-    (is (nil? (rt/explain-roundtrip [:number])))
-    (is (nil? (rt/explain-roundtrip [:enum "a" "b" "c"]))))
+    (is (nil? (rt/explain-roundtrip number?)))
+    (is (nil? (rt/explain-roundtrip int?)))
+    (is (nil? (rt/explain-roundtrip [:enum "a" "b" "c"])))))
 
 (deftest roundtrippable-or-nonoverlapping
   (testing ":or with non-overlapping branches is roundtrippable"
@@ -27,11 +28,11 @@
 
 (deftest roundtrippable-or-overlapping
   (testing ":or with overlapping branches is not roundtrippable"
-    (let [result (rt/explain-roundtrip [:or [:int] [:number]])]
+    (let [result (rt/explain-roundtrip [:or [:int] number?])]
       (is (vector? result))
       (is (seq result))
       (is (some #(re-find #"overlap" (:problem %)) result)))
-    (let [result (rt/explain-roundtrip [:or [:number] [:int]])]
+    (let [result (rt/explain-roundtrip [:or number? [:int]])]
       (is (vector? result))
       (is (seq result))
       (is (some #(re-find #"overlap" (:problem %)) result)))))
@@ -53,7 +54,7 @@
 (deftest roundtrippable-nested-or
   (testing "nested :or with overlapping children"
     (let [result (rt/explain-roundtrip
-                   [:or [:or [:int] [:number]] [:string]])]
+                   [:or [:or [:int] number?] [:string]])]
       (is (vector? result))
       (is (seq result)))))
 
