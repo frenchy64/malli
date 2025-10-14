@@ -447,13 +447,9 @@
   ;; :or <: :some if all alternatives are <: :some
   (every? #(subtype?* % T opts) (m/-children S)))
 
-;; Numeric hierarchy: int <: double, int <: float, etc.
-(defmethod subtype-right?* [:int :double] [_ _ S T opts]
-  (properties-subtype? S T))
-(defmethod subtype-right?* [:int :float] [_ _ S T opts]
-  (properties-subtype? S T))
-(defmethod subtype-right?* [:float :double] [_ _ S T opts]
-  (properties-subtype? S T))
+;; Numeric hierarchy: only when explicitly intended
+;; Note: In Malli, :int values don't validate against :float
+;; so we don't have :int <: :float relationships
 
 ;; Collection hierarchy
 (defmethod subtype-right?* [:vector :sequential] [_ _ S T opts]
@@ -524,49 +520,58 @@
 
 ;; [:and ...] on the left (subtype) - check if it's a subtype of the right
 (defmethod subtype-left?* :and [_ S T opts]
-  (let [T-type (m/-type (m/-parent T))]
-    ;; [:and S1 S2 ...] <: T if ALL Si <: T
-    ;; This is conservative but sound
-    (if (= T-type :and)
+  (let [T-type (m/-type (m/-parent T))
+        S-children (m/-children S)]
+    (cond
       ;; Special case: :and <: :and handled by same-type
+      (= T-type :and)
       (subtype-same?* :and S T opts)
-      ;; General case: all children must be subtypes of T
-      (every? #(subtype?* % T opts) (m/-children S)))))
+      
+      ;; If any child of S is the same "base type" as T and all other children
+      ;; are refinements (like comparators), then S <: T
+      ;; e.g., [:and :int [:> 0]] <: :int
+      :else
+      (let [has-matching-base? (some #(= (m/-type (m/-parent %)) T-type) S-children)]
+        (if has-matching-base?
+          ;; If we have a matching base type, check if it (with properties) is <: T
+          (some #(when (= (m/-type (m/-parent %)) T-type)
+                   (subtype?* % T opts))
+                S-children)
+          ;; Otherwise, dispatch to right multimethod
+          (subtype-right?* :and T-type S T opts))))))
 
 ;; :or on the right - S <: [:or T1 T2 ...] if S <: T1 or S <: T2 or ...
 (defmethod subtype-right?* [:nil :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:some :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:string :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:int :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:double :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:float :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:boolean :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:keyword :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:symbol :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:vector :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:map :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:and :or] [_ _ S T opts]
-  (some #(subtype?* S % opts) (m/-children T)))
+  ;; [:and S1 S2 ...] <: [:or T1 T2 ...] if [:and S1 S2 ...] <: some Ti
+  ;; Check if any branch of the :or accepts the :and
+  (boolean (some #(subtype?* S % opts) (m/-children T))))
 (defmethod subtype-right?* [:or :or] [_ _ S T opts]
   ;; [:or S1 S2] <: [:or T1 T2] if for all Si, there exists Tj where Si <: Tj
   (every? (fn [S-child]
             (some #(subtype?* S-child % opts) (m/-children T)))
           (m/-children S)))
-
-;; Make sure we return false (not nil) for unhandled cases
-(defmethod subtype-right?* :default [S-type T-type S T opts]
-  false)
 
 ;; :enum relationships
 (defmethod subtype-right?* [:string :enum] [_ _ S T opts]
