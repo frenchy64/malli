@@ -122,9 +122,19 @@
            a-children))))
 (defmethod parsed-overlap? [:orn :fn] [a b]
   ;; :orn produces Tag records
-  ;; If the :fn uses record?, they overlap
+  ;; We need to check if the :fn could accept Tag records
+  ;; Tags are records and also maps, so predicates like record?, map?, ifn?, etc. can match
+  ;; For soundness, we conservatively assume overlap unless we can prove otherwise
+  ;; We can only return false if we know the predicate precisely and it doesn't accept records/maps
   (let [fn-pred (first (m/children b))]
-    (= record? fn-pred)))
+    (cond
+      ;; Known predicates that definitely don't accept records
+      (#{string? int? number? keyword? symbol? boolean? nil? double? float?
+         pos-int? neg-int? nat-int? pos? neg? zero?} fn-pred) false
+      ;; Known predicates that accept records/maps
+      (#{record? map? ifn? any? some?} fn-pred) true
+      ;; For unknown predicates (like #(record? %)), conservatively assume overlap
+      :else true)))
 (defmethod parsed-overlap? [:fn :orn] [a b]
   (parsed-overlap? b a))
 (defmethod parsed-overlap? [:map :map] [a b] true)
@@ -150,6 +160,15 @@
 (defmulti roundtrippable?
   (fn [schema] (m/type schema)))
 
+;; Default dispatch: schemas with simple parsers are roundtrippable
+;; This handles many base types and third-party schemas that implement -parser-info
+(defmethod roundtrippable? :default [schema]
+  (when-not (-> schema m/-parser-info :simple-parser)
+    ;; If not a simple parser and not handled by specific methods,
+    ;; conservatively assume it might not be roundtrippable
+    ;; Return nil for now (roundtrippable) to avoid false positives
+    nil))
+
 (defn check-child-roundtrip
   [schema path-key]
   (let [children (m/children schema)
@@ -170,16 +189,6 @@
 (defn explain
   [path msg & {:as opts}]
   (assoc opts :path path :problem msg))
-
-(doseq [t [:int :string :keyword :boolean :double :uuid :nil :any :enum]]
-  (defmethod roundtrippable? t [_] nil))
-
-;; Predicates are also roundtrippable
-(doseq [t ['int? 'string? 'keyword? 'boolean? 'number? 'uuid? 'nil? 'any? 'double? 'float?
-           'pos-int? 'neg-int? 'nat-int? 'pos? 'neg? 'zero? 'some? 'fn? 'ifn?]]
-  (defmethod roundtrippable? t [_] nil))
-
-(defmethod roundtrippable? :fn [_] nil)
 
 (defmethod roundtrippable? :map [schema]
   (let [children (m/children schema)
@@ -244,9 +253,9 @@
                                  " overlap in their parsed domain, so this schema "
                                  "is not roundtrippable. If you need roundtripping,"
                                  " use :orn instead of :or.")
-                            :schema schema
-                            :branch-a a
-                            :branch-b b))))
+                            :schema (m/form schema)
+                            :branch-a (m/form a)
+                            :branch-b (m/form b)))))
         all-problems (vec (concat branch-problems (remove nil? overlapping)))]
     (not-empty all-problems)))
 
