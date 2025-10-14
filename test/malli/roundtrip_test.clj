@@ -27,12 +27,14 @@
     (is (nil? (rt/explain-roundtrip [:or [:keyword] [:string]])))))
 
 (deftest roundtrippable-or-overlapping
-  (testing ":or with overlapping branches is not roundtrippable"
-    (let [result (rt/explain-roundtrip [:or [:int] number?])]
-      (is (vector? result))
-      (is (seq result))
-      (is (some #(re-find #"overlap" (:problem %)) result)))
-    (let [result (rt/explain-roundtrip [:or number? [:int]])]
+  (testing ":or with overlapping simple-parser branches IS roundtrippable"
+    ;; When both branches have simple (non-transforming) parsers,
+    ;; there's no ambiguity even if types overlap
+    (is (nil? (rt/explain-roundtrip [:or [:int] number?])))
+    (is (nil? (rt/explain-roundtrip [:or number? [:int]]))))
+  (testing ":or with overlapping non-simple branches is NOT roundtrippable"
+    ;; When branches have transforming parsers and overlap, it's not roundtrippable
+    (let [result (rt/explain-roundtrip [:or [:orn [:i [:int]]] [:orn [:j [:int]]]])]
       (is (vector? result))
       (is (seq result))
       (is (some #(re-find #"overlap" (:problem %)) result)))))
@@ -47,18 +49,17 @@
       (is (seq result)))))
 
 (deftest roundtrippable-or-fn-int
-  (testing ":or with :fn and :int does not roundtrip if overlapping"
-    (let [result (rt/explain-roundtrip
-                   [:or [:fn int?] [:int]])]
-      ;; both are int? so they overlap
-      (is (vector? result))
-      (is (seq result))
-      (is (some #(re-find #"overlap" (:problem %)) result)))))
+  (testing ":or with :fn and :int with simple parsers is roundtrippable"
+    ;; Both [:fn int?] and [:int] have simple parsers
+    (is (nil? (rt/explain-roundtrip [:or [:fn int?] [:int]])))))
 
 (deftest roundtrippable-nested-or
-  (testing "nested :or with overlapping children"
+  (testing "nested :or with simple parsers is roundtrippable"
+    ;; Even though inner :or has overlapping types, all are simple parsers
+    (is (nil? (rt/explain-roundtrip [:or [:or [:int] number?] [:string]]))))
+  (testing "nested :or with non-simple parsers is not roundtrippable"
     (let [result (rt/explain-roundtrip
-                   [:or [:or [:int] number?] [:string]])]
+                   [:or [:or [:orn [:i [:int]]] [:orn [:j [:int]]]] [:string]])]
       (is (vector? result))
       (is (seq result)))))
 
@@ -79,7 +80,7 @@
                 [:map [:x [:int]] [:y [:string]]]))))
   (testing ":map with non-roundtrippable children is not roundtrippable"
     (let [result (rt/explain-roundtrip
-                   [:map [:x [:or [:int] number?]]])]
+                   [:map [:x [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]]])]
       (is (vector? result))
       (is (seq result)))))
 
@@ -87,7 +88,7 @@
   (testing ":vector with roundtrippable child is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:vector [:int]]))))
   (testing ":vector with non-roundtrippable child is not roundtrippable"
-    (let [result (rt/explain-roundtrip [:vector [:or [:int] number?]])]
+    (let [result (rt/explain-roundtrip [:vector [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]])]
       (is (vector? result))
       (is (seq result))))
   (testing ":set with roundtrippable child is roundtrippable"
@@ -99,7 +100,7 @@
   (testing ":tuple with roundtrippable children is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:tuple [:int] [:string] [:boolean]]))))
   (testing ":tuple with non-roundtrippable child is not roundtrippable"
-    (let [result (rt/explain-roundtrip [:tuple [:int] [:or [:int] number?]])]
+    (let [result (rt/explain-roundtrip [:tuple [:int] [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]])]
       (is (vector? result))
       (is (seq result))))
   (testing ":cat with roundtrippable children is roundtrippable"
@@ -109,7 +110,7 @@
   (testing ":and with roundtrippable children is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:and [:int] pos-int?]))))
   (testing ":and with non-roundtrippable child is not roundtrippable"
-    (let [result (rt/explain-roundtrip [:and [:or [:int] number?] pos-int?])]
+    (let [result (rt/explain-roundtrip [:and [:or [:orn [:i [:int]]] [:orn [:j [:int]]]] pos-int?])]
       (is (vector? result))
       (is (seq result)))))
 
@@ -117,7 +118,7 @@
   (testing ":maybe with roundtrippable child is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:maybe [:int]]))))
   (testing ":maybe with non-roundtrippable child is not roundtrippable"
-    (let [result (rt/explain-roundtrip [:maybe [:or [:int] number?]])]
+    (let [result (rt/explain-roundtrip [:maybe [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]])]
       (is (vector? result))
       (is (seq result)))))
 
@@ -136,7 +137,7 @@
   (testing "deeply nested non-roundtrippable schema"
     (let [result (rt/explain-roundtrip
                    [:map
-                    [:data [:vector [:or [:int] number?]]]])]
+                    [:data [:vector [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]]]])]
       (is (vector? result))
       (is (seq result))
       ;; The problem should be in the nested :or
@@ -158,18 +159,14 @@
       (is (seq result)))))
 
 (deftest roundtrippable-fn-variations
-  (testing ":fn schemas with different predicates"
-    ;; :fn with int? overlaps with :int
-    (let [result (rt/explain-roundtrip [:or [:fn int?] [:int]])]
-      (is (vector? result))
-      (is (seq result)))
+  (testing ":fn schemas all have simple parsers"
+    ;; :fn has simple parsers, so no overlap issues even if predicates match
+    (is (nil? (rt/explain-roundtrip [:or [:fn int?] [:int]])))
     ;; :fn with string? doesn't overlap with :int
     (is (nil? (rt/explain-roundtrip [:or [:fn string?] [:int]]))))
-  (testing "multiple :fn schemas"
-    ;; Two :fn schemas might overlap
-    (let [result (rt/explain-roundtrip [:or [:fn int?] [:fn number?]])]
-      (is (vector? result))
-      (is (seq result)))))
+  (testing "multiple :fn schemas have simple parsers"
+    ;; Two :fn schemas both have simple parsers
+    (is (nil? (rt/explain-roundtrip [:or [:fn int?] [:fn number?]])))))
 
 (deftest roundtrippable-enum
   (testing ":enum is always roundtrippable"
@@ -180,14 +177,10 @@
   (testing "various predicate combinations"
     ;; string? doesn't overlap with int?
     (is (nil? (rt/explain-roundtrip [:or string? int?])))
-    ;; number? overlaps with int?
-    (let [result (rt/explain-roundtrip [:or number? int?])]
-      (is (vector? result))
-      (is (seq result)))
-    ;; Same predicate definitely overlaps
-    (let [result (rt/explain-roundtrip [:or int? int?])]
-      (is (vector? result))
-      (is (seq result)))))
+    ;; number? overlaps with int? but both have simple parsers
+    (is (nil? (rt/explain-roundtrip [:or number? int?])))
+    ;; Same predicate definitely overlaps but still simple
+    (is (nil? (rt/explain-roundtrip [:or int? int?])))))
 
 (deftest roundtrippable-or-orn-interaction
   (testing ":or containing :orn doesn't flag overlap with :orn when no actual overlap"
@@ -206,16 +199,19 @@
   (testing ":repeat with roundtrippable child is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:repeat [:int]]))))
   (testing ":repeat with non-roundtrippable child is not roundtrippable"
-    (let [result (rt/explain-roundtrip [:repeat [:or [:int] number?]])]
+    (let [result (rt/explain-roundtrip [:repeat [:or [:orn [:i [:int]]] [:orn [:j [:int]]]]])]
       (is (vector? result))
       (is (seq result)))))
 
 (deftest roundtrippable-multi-arity-or
-  (testing ":or with three branches, two overlapping"
-    (let [result (rt/explain-roundtrip [:or [:int] [:string] number?])]
+  (testing ":or with three simple branches is roundtrippable"
+    ;; All simple parsers, so no issue even with overlap
+    (is (nil? (rt/explain-roundtrip [:or [:int] [:string] number?]))))
+  (testing ":or with three branches, non-simple overlapping"
+    (let [result (rt/explain-roundtrip [:or [:orn [:i [:int]]] [:string] [:orn [:j [:int]]]])]
       (is (vector? result))
       (is (seq result))
-      ;; Should report overlap between [:int] and number?
+      ;; Should report overlap between the two :orn branches
       (is (some #(and (re-find #"overlap" (:problem %))
                       (or (= [0 2] (:path %))
                           (= [2 0] (:path %)))) result))))
@@ -229,24 +225,24 @@
     (is (nil? (rt/explain-roundtrip [:any]))))
   (testing ":nil is roundtrippable"
     (is (nil? (rt/explain-roundtrip [:nil]))))
-  (testing "nested :and with overlapping :or"
+  (testing "nested :and with simple :or is roundtrippable"
+    ;; Simple parsers throughout
+    (is (nil? (rt/explain-roundtrip [:and [:or [:int] number?] pos-int?]))))
+  (testing "nested :and with non-simple :or is not roundtrippable"
     (let [result (rt/explain-roundtrip
-                   [:and [:or [:int] number?] pos-int?])]
+                   [:and [:or [:orn [:i [:int]]] [:orn [:j [:int]]]] pos-int?])]
       (is (vector? result))
       (is (seq result)))))
 
 (deftest roundtrippable-fn-edge-cases
-  (testing ":fn with any? predicate overlaps with everything"
-    (let [result (rt/explain-roundtrip [:or [:fn any?] [:int]])]
-      ;; any? accepts everything, so it overlaps with :int
-      (is (vector? result))
-      (is (seq result))))
+  (testing ":fn schemas all have simple parsers"
+    ;; :fn has simple parsers, so no overlap issues
+    (is (nil? (rt/explain-roundtrip [:or [:fn any?] [:int]]))))
   (testing ":fn with disjoint predicates don't overlap"
     (is (nil? (rt/explain-roundtrip [:or [:fn string?] [:fn int?]]))))
-  (testing ":fn with related predicates overlap"
-    (let [result (rt/explain-roundtrip [:or [:fn int?] [:fn number?]])]
-      (is (vector? result))
-      (is (seq result)))))
+  (testing ":fn with related predicates have simple parsers"
+    ;; Even though they overlap, both are simple parsers
+    (is (nil? (rt/explain-roundtrip [:or [:fn int?] [:fn number?]])))))
 
 (deftest roundtrippable-print-explanation
   (testing "print-roundtrip-explanation doesn't crash"

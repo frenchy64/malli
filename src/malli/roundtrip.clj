@@ -106,6 +106,15 @@
       :else true)))
 (defmethod parsed-overlap? [:orn :or] [a b] false)
 (defmethod parsed-overlap? [:or :orn] [a b] false)
+(defmethod parsed-overlap? [:orn :orn] [a b]
+  ;; :orn produces Tags with specific keys
+  ;; Two different :orn schemas can overlap if they could produce the same Tag keys
+  ;; Since we can't easily inspect the keys, conservatively assume they might overlap
+  ;; Actually, :orn always produces new Tags, so they don't overlap
+  ;; But wait - if both :orn accept the same input and produce Tags with same structure,
+  ;; they could overlap in the parsed domain
+  ;; For soundness, assume they overlap
+  true)
 (defmethod parsed-overlap? [:orn :fn] [a b]
   ;; :orn produces Tag records
   ;; If the :fn uses record?, they overlap
@@ -210,22 +219,29 @@
   (let [branches (m/children schema)
         ;; First check if branches themselves are roundtrippable
         branch-problems (check-multi-children-roundtrip branches)
-        ;; Then check for overlapping branches
-        pairs (for [[i a] (map-indexed vector branches)
-                    [j b] (map-indexed vector branches)
-                    :when (< i j)]
-                [i a j b])
-        overlapping
-        (for [[i a j b] pairs
-              :when (parsed-overlap? a b)]
-          (explain [i j]
-            (str ":or branches at positions " i " and " j
-                 " overlap in their parsed domain, so this schema "
-                 "is not roundtrippable. If you need roundtripping,"
-                 " use :orn instead of :or.")
-            :schema schema
-            :branch-a a
-            :branch-b b))
+        ;; Check if all branches have simple (non-transforming) parsers
+        ;; If all branches are simple, then :or is roundtrippable regardless of overlap
+        ;; because both parse and unparse are identity operations
+        all-simple? (every? (fn [branch]
+                              (-> branch m/-parser-info :simple-parser))
+                            branches)
+        ;; Only check for overlapping branches if not all simple
+        overlapping (if all-simple?
+                      []
+                      (let [pairs (for [[i a] (map-indexed vector branches)
+                                        [j b] (map-indexed vector branches)
+                                        :when (< i j)]
+                                    [i a j b])]
+                        (for [[i a j b] pairs
+                              :when (parsed-overlap? a b)]
+                          (explain [i j]
+                            (str ":or branches at positions " i " and " j
+                                 " overlap in their parsed domain, so this schema "
+                                 "is not roundtrippable. If you need roundtripping,"
+                                 " use :orn instead of :or.")
+                            :schema schema
+                            :branch-a a
+                            :branch-b b))))
         all-problems (vec (concat branch-problems (remove nil? overlapping)))]
     (not-empty all-problems)))
 

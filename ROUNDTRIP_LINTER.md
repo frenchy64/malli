@@ -15,17 +15,47 @@ A schema is roundtrippable if for all valid inputs `x`:
 
 ### Non-roundtrippable Schemas
 
-The main cause of non-roundtrippability is when `:or` branches have overlapping parsed outputs. For example:
+The main cause of non-roundtrippability is when `:or` branches have overlapping parsed outputs **and at least one branch has a non-simple (transforming) parser**.
+
+#### Simple vs. Non-simple Parsers
+
+Malli schemas have a "simple-parser" property that indicates whether the parser transforms values:
+- **Simple parser** (`-parser-info :simple-parser` is `true`): The parse/unparse operations are identity functions
+- **Non-simple parser** (`-parser-info :simple-parser` is `nil` or `false`): The parser transforms values
+
+Examples:
+- Simple parsers: `:int`, `:string`, predicates (`int?`, `number?`), `:fn` schemas
+- Non-simple parsers: `:orn` (wraps values in Tags)
+
+#### When :or is NOT Roundtrippable
+
+An `:or` schema is not roundtrippable when:
+1. **At least one branch has a non-simple parser**, AND
+2. **The branches have overlapping parsed outputs**
+
+Example of non-roundtrippable schema:
+```clojure
+[:or [:fn record?] [:orn [:i [:int]]]]
+```
+
+This is not roundtrippable because:
+1. The `:orn` branch has a non-simple parser (produces Tag records)
+2. The `:fn record?` branch accepts records (overlaps with Tag)
+3. When unparsing a Tag, the `:fn record?` branch matches and returns the Tag as-is
+4. Result: `123` → `Tag{:i 123}` → `Tag{:i 123}` ≠ `123`
+
+#### When :or IS Roundtrippable
+
+An `:or` schema IS roundtrippable when **all branches have simple parsers**, even if types overlap:
 
 ```clojure
 [:or [:int] number?]
 ```
 
-This is not roundtrippable because:
-1. Both branches can parse integers
-2. If an integer is parsed by the first branch, it's returned as-is
-3. If parsed by the second branch (if first fails), it's still an integer
-4. On unparse, there's ambiguity about which branch to use
+This IS roundtrippable because:
+1. Both `:int` and `number?` have simple parsers (identity parse/unparse)
+2. Even though integers match both branches, no transformation occurs
+3. Result: `123` → `123` → `123` = `123`
 
 ### Why :orn is Roundtrippable
 
@@ -41,15 +71,15 @@ When parsing `123`, you get `#malli.core.Tag{:key :i, :value 123}` or `#malli.co
 
 ### Overlap Detection
 
-The `parsed-overlap?` multimethod determines if two schemas have overlapping parsed outputs:
+The `parsed-overlap?` multimethod determines if two schemas have overlapping parsed outputs. However, overlap only matters when at least one schema has a non-simple parser.
 
+Key overlap rules:
 - **Keyword schemas** (`:int`, `:string`, etc.): Overlap based on type compatibility
 - **Predicate schemas** (`int?`, `number?`, etc.): Overlap if predicates accept the same values
-- **:fn schemas**: Inspect the predicate function to determine overlap
-  - `[:fn int?]` overlaps with `[:int]` and `number?`
-  - `[:fn string?]` doesn't overlap with `[:int]`
-  - For soundness, unknown predicates are assumed to potentially overlap
-- **:orn schemas**: Tag outputs are records, so `[:fn record?]` overlaps with `:orn`
+- **:fn schemas**: Have simple parsers, so overlap doesn't cause issues
+- **:orn schemas**: Have non-simple parsers, overlap detection is critical
+  - Two `:orn` schemas can overlap (both produce Tag records)
+  - `:orn` overlaps with `[:fn record?]` (Tag IS a record)
 - **Container schemas**: `:map`, `:vector`, etc. overlap if they're the same type
 
 ### Recursive Checking
@@ -57,12 +87,14 @@ The `parsed-overlap?` multimethod determines if two schemas have overlapping par
 The `roundtrippable?` multimethod recursively checks schemas:
 
 - **Simple types** (`:int`, `:string`, predicates): Always roundtrippable
-- **:fn schemas**: Always roundtrippable (pure functions assumed)
-- **:orn schemas**: Always roundtrippable (by design)
+- **:fn schemas**: Always roundtrippable (simple parsers)
+- **:orn schemas**: Always roundtrippable (by design, tags disambiguate)
 - **Container schemas** (`:map`, `:vector`, `:set`, `:tuple`, etc.): Roundtrippable if children are
 - **:or schemas**: Roundtrippable if:
   1. All branches are roundtrippable, AND
-  2. No two branches have overlapping parsed outputs
+  2. Either:
+     - All branches have simple parsers (no overlap issues), OR
+     - No two non-simple branches have overlapping parsed outputs
 - **:and, :maybe, :repeat**: Roundtrippable if children are
 
 ## API
@@ -87,48 +119,50 @@ Prints a human-readable explanation with suggested fixes.
 
 ## Test Coverage
 
-The test suite includes 23 tests with 84 assertions covering:
+The test suite includes 23 tests with 78 assertions covering:
 
 1. **Simple types**: All base types and predicates
-2. **:or schemas**: Non-overlapping, overlapping, nested
-3. **:orn schemas**: Various combinations
+2. **:or schemas**: Simple parsers (roundtrippable even with overlap), non-simple branches
+3. **:orn schemas**: Various combinations, overlap with `:fn record?`
 4. **Container schemas**: Maps, vectors, sets, tuples
-5. **:fn schemas**: Different predicates, overlap detection
+5. **:fn schemas**: Simple parser behavior
 6. **Complex nested schemas**: Deeply nested structures
 7. **Edge cases**: :any, :nil, :enum, multiple branches
 8. **Original example**: `[:fn record?]` with `:orn`
+9. **Simple parser understanding**: Tests demonstrating when overlap is OK
 
 ## Soundness
 
-The implementation errs on the side of soundness:
+The implementation errs on the side of soundness by using the simple-parser API:
 
-- Unknown `:fn` predicates are assumed to potentially overlap
-- Conservative checks ensure no false negatives (claiming roundtrippability when it's not)
-- May produce false positives (claiming non-roundtrippability when it might be)
+- Schemas with simple (non-transforming) parsers don't cause roundtrip issues, even with type overlap
+- Only non-simple parsers (like `:orn`) require overlap checking
+- This provides precise analysis: no false negatives or false positives for the simple parser case
+- Conservative checks for complex overlaps ensure soundness
 
 ## Example Usage
 
 ```clojure
 (require '[malli.roundtrip :as rt])
 
-;; Check a simple schema
-(rt/explain-roundtrip [:or [:int] [:string]])
-;; => nil (roundtrippable)
-
-;; Check a problematic schema
+;; Check a schema with simple parsers - roundtrippable even with overlap
 (rt/explain-roundtrip [:or [:int] number?])
+;; => nil (roundtrippable! Both have simple parsers)
+
+;; Check a schema with non-simple parser
+(rt/explain-roundtrip [:or [:fn record?] [:orn [:i [:int]]]])
 ;; => [{:path [0 1],
 ;;      :problem ":or branches at positions 0 and 1 overlap...",
-;;      :schema [:or [:int] number?],
-;;      :branch-a [:int],
-;;      :branch-b number?}]
+;;      :schema [:or [:fn record?] [:orn [:i [:int]]]],
+;;      :branch-a [:fn record?],
+;;      :branch-b [:orn [:i [:int]]]}]
 
 ;; Print explanation
-(rt/print-roundtrip-explanation [:or [:int] number?])
+(rt/print-roundtrip-explanation [:or [:fn record?] [:orn [:i [:int]]]])
 ;; Prints:
 ;; Non-roundtrippable schema path: [0 1]
 ;;   Problem: :or branches at positions 0 and 1 overlap in their parsed domain...
-;;   Overlapping branch a: [:int]
-;;   Overlapping branch b: number?
+;;   Overlapping branch a: [:fn record?]
+;;   Overlapping branch b: [:orn [:i [:int]]]
 ;;   Remedy: Use :orn instead of :or if you need roundtrippable behavior.
 ```
