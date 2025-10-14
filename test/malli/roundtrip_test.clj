@@ -7,7 +7,10 @@
 
 (ns malli.roundtrip-test
   (:require [clojure.test :refer [deftest is testing]]
+            [clojure.test.check :refer [quick-check]]
+            [clojure.test.check.properties :refer [for-all]]
             [malli.core :as m]
+            [malli.generator :as mg]
             [malli.roundtrip :as rt]))
 
 (deftest roundtrippable-simple-types
@@ -402,3 +405,62 @@
     ;; Non-simple in container but no overlap - roundtrippable
     (is (nil? (rt/explain-roundtrip
                 [:tuple [:orn [:i :int]] [:orn [:s :string]]])))))
+
+;;; Generative tests using test.check
+
+(defn fuzz-roundtrippable
+  "Generatively test that a schema roundtrips correctly.
+   Returns the quick-check result."
+  [schema num-tests]
+  (let [schema (m/schema schema)]
+    (quick-check num-tests
+                 (for-all [v (mg/generator schema)]
+                   (= v (m/unparse schema (m/parse schema v))))
+                 {:seed 0})))
+
+(deftest generative-roundtrip-simple-types
+  (testing "Simple types roundtrip correctly (generative)"
+    (is (:pass? (fuzz-roundtrippable [:int] 100)))
+    (is (:pass? (fuzz-roundtrippable [:string] 100)))
+    (is (:pass? (fuzz-roundtrippable [:keyword] 100)))
+    (is (:pass? (fuzz-roundtrippable [:boolean] 100)))))
+
+(deftest generative-roundtrip-predicates
+  (testing "Predicate schemas roundtrip correctly (generative)"
+    (is (:pass? (fuzz-roundtrippable int? 100)))
+    (is (:pass? (fuzz-roundtrippable number? 100)))
+    (is (:pass? (fuzz-roundtrippable string? 100)))))
+
+(deftest generative-roundtrip-or-simple
+  (testing ":or with simple parsers roundtrips correctly (generative)"
+    ;; All simple parsers - should roundtrip
+    (is (:pass? (fuzz-roundtrippable [:or [:int] [:string]] 100)))
+    (is (:pass? (fuzz-roundtrippable [:or int? number?] 100)))
+    (is (:pass? (fuzz-roundtrippable [:or [:int] [:string] [:boolean]] 100)))))
+
+(deftest generative-roundtrip-orn
+  (testing ":orn always roundtrips correctly (generative)"
+    (is (:pass? (fuzz-roundtrippable [:orn [:i [:int]] [:s [:string]]] 100)))
+    (is (:pass? (fuzz-roundtrippable [:orn [:i [:int]] [:j [:int]]] 100)))))
+
+(deftest generative-roundtrip-containers
+  (testing "Container schemas with roundtrippable children roundtrip (generative)"
+    (is (:pass? (fuzz-roundtrippable [:map [:x [:int]] [:y [:string]]] 100)))
+    (is (:pass? (fuzz-roundtrippable [:vector [:int]] 100)))
+    (is (:pass? (fuzz-roundtrippable [:set [:string]] 100)))
+    (is (:pass? (fuzz-roundtrippable [:tuple [:int] [:string]] 100)))))
+
+(deftest generative-roundtrip-nested
+  (testing "Nested roundtrippable schemas roundtrip (generative)"
+    (is (:pass? (fuzz-roundtrippable 
+                  [:map 
+                   [:user [:map 
+                           [:name [:string]]
+                           [:age [:int]]]]
+                   [:items [:vector [:orn 
+                                     [:i [:int]]
+                                     [:s [:string]]]]]]
+                  100)))
+    (is (:pass? (fuzz-roundtrippable
+                  [:or [:map [:x [:int]]] [:vector [:string]]]
+                  100)))))
