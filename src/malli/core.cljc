@@ -232,7 +232,9 @@
        (when (or (and min (< size ^long min)) (and max (> size ^long max)))
          (-fail! ::child-error {:type type, :properties properties, :children children, :min min, :max max}))))))
 
-(defn -pointer [id schema options] (-into-schema (-schema-schema {:id id}) nil [schema] options))
+(defn -pointer
+  ([id schema options] (-pointer id schema nil options))
+  ([id schema properties options] (-into-schema (-schema-schema {:id id}) properties [schema] options)))
 
 (defn -reference? [?schema] (or (string? ?schema) (qualified-ident? ?schema) (var? ?schema)))
 
@@ -326,11 +328,20 @@
               (-fail! ::infinitely-expanding-schema {:schema ?schema})))
           (-into-schema p nil [?schema] options)))))
 
+;FIXME difference between (m/schema [:schema {::foo ...} [:foo {:prop ...}]]) and (m/schema [:foo {:prop ...}] {:registry {::foo ...}})
+;; see registry tests, they should both work
 (defn- -lookup! [?schema ?form f rec options]
   (or (and f (f ?schema) ?schema)
       (if-let [?schema (-lookup ?schema options)]
         (cond-> ?schema rec (recur ?form f rec options))
         (-fail! ::invalid-schema {:schema ?schema, :form ?form}))))
+
+(defn- -lookup-into-schema [?schema options]
+  (if (into-schema? ?schema)
+    ?schema
+    (let [?schema (mr/-schema (-registry options) ?schema)]
+      (when (into-schema? ?schema)
+        ?schema))))
 
 (defn -properties-and-options [properties options f]
   (if-let [r (:registry properties)]
@@ -1962,7 +1973,7 @@
            Cached
            (-cache [_] cache)
            LensSchema
-           (-get [_ key default] (if (= key 0) (-pointer ref (rf) options) default))
+           (-get [_ key default] (if (= key 0) (-pointer ref (rf) nil options) default))
            (-keep [_])
            (-set [this key value] (if (= key 0) (-set-children this [value])
                                                 (-fail! ::index-out-of-bounds {:schema this, :key key})))
@@ -1997,8 +2008,14 @@
         (-check-children! type properties children 1 1)
         (let [children (-vmap #(schema % options) children)
               child (nth children 0)
-              form (delay (or (and (empty? properties) (or id (and raw (-form child))))
-                              (-simple-form parent properties children -form options)))
+              child-children (not-empty (-children child))
+              form (delay (let [no-props? (empty? properties)]
+                            (or (when id
+                                  (if (and no-props? (not child-children))
+                                    id
+                                    (into [id properties] child-children)))
+                                (and no-props? raw (-form child))
+                                (-simple-form parent properties children -form options))))
               cache (-create-cache options)]
           ^{:type ::schema}
           (reify
@@ -2495,14 +2512,25 @@
      (schema? ?schema) ?schema
      (into-schema? ?schema) (-into-schema ?schema nil nil options)
      (vector? ?schema) (let [v #?(:clj ^IPersistentVector ?schema, :cljs ?schema)
-                             t (-lookup! #?(:clj (.nth v 0), :cljs (nth v 0)) v into-schema? true options)
+                             v0 #?(:clj (.nth v 0), :cljs (nth v 0))
                              n #?(:bb (count v) :clj (.count v), :cljs (count v))
-                             ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))]
-                         (if (or (nil? ?p) (map? ?p))
-                           (into-schema t ?p (when (< 2 n) (subvec ?schema 2 n)) options)
-                           (into-schema t nil (when (< 1 n) (subvec ?schema 1 n)) options)))
+                             ?p (when (> n 1) #?(:clj (.nth v 1), :cljs (nth v 1)))
+                             props? (or (nil? ?p) (map? ?p))
+                             properties (when props? ?p)
+                             children (if props?
+                                        (when (< 2 n) (subvec ?schema 2 n))
+                                        (when (< 1 n) (subvec ?schema 1 n)))]
+                         (if-some [t (-lookup-into-schema v0 options)]
+                           (into-schema t properties children options)
+                           (if-let [?schema' (and (-reference? v0) (-lookup v0 options))]
+                             (let [inner (schema ?schema' options)]
+                               (when (seq (-children inner))
+                                 (when (seq children)
+                                   (-fail! ::cannot-provide-children-to-schema {:schema ?schema})))
+                               (-pointer v0 (-set-children inner children) properties options))
+                             (-fail! ::invalid-schema {:schema ?schema}))))
      :else (if-let [?schema' (and (-reference? ?schema) (-lookup ?schema options))]
-             (-pointer ?schema (schema ?schema' options) options)
+             (-pointer ?schema (schema ?schema' options) nil options)
              (-> ?schema (-lookup! ?schema nil false options) (recur options))))))
 
 (defn form
