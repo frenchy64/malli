@@ -1140,3 +1140,7 @@
 
 (deftest empty?-generator-test
   (is (every? empty? (mg/sample empty?))))
+
+(deftest instance-generator-test
+  #(:clj (is (= (mapv java.io.File/.getName (mg/sample [:instance java.io.File] {:seed 0}))
+                ["" "6" "" "0" "" "Sb" "Bfv33" "hLM4T" "2j3Yk3" "jHYY5y3"]))))
