@@ -406,7 +406,7 @@
                                      `java.util.UUID :uuid}
                 :let [schema (m/schema ?schema)]]
           (defmethod instance-generator type-name [_ options]
-            (prn "instance-generator" type-name schema)
+            ;(prn "instance-generator" type-name schema)
             (generator schema options))))
 
 #?(:bb nil
@@ -421,16 +421,31 @@
               (Class/forName (name type-name))))))
 
 #?(:bb nil
-   :clj (defn- ctor->gen [{ctor-name :name :keys [parameter-types parameter-type->gen]} options]
+   :clj (defn- ctor->args-gen [{ctor-name :name :keys [parameter-types parameter-type->gen] :as ctor-desc} options]
           {:pre [(every? parameter-type->gen parameter-types)]}
+          (apply gen/tuple (mapv parameter-type->gen parameter-types))))
+
+#?(:bb nil
+   :clj (defn- ctor->fn [{ctor-name :name :keys [parameter-types parameter-type->gen] :as ctor-desc} options]
           (let [ctor (-> ctor-name
                          type-name->Class
                          (.getConstructor (into-array Class (mapv type-name->Class parameter-types))))]
             (assert ctor (str "failed to find constructor " (pr-str ctor-name) " " (pr-str parameter-types)))
-            (->> (apply gen/tuple (mapv parameter-type->gen parameter-types))
-                 (gen/fmap (fn [args]
-                             (prn "in newInstance")
-                             (.newInstance ctor (object-array args))))))))
+            (fn [args]
+              ;(prn "in newInstance")
+              (try (.newInstance ctor (object-array args))
+                   (catch Throwable _))))))
+
+#?(:bb nil
+   :clj (defn- all-ctors->gen [options ctor-descs]
+          ;; TODO generate args for all constructor simultaneously and try all constructors until one works
+          (let [ctor-fns (mapv #(ctor->fn % options) ctor-descs)]
+            (gen/such-that
+              some?
+              (gen/fmap (fn [argss]
+                          (some identity (mapv #(%1 %2) ctor-fns argss)))
+                        (apply gen/tuple (mapv #(ctor->args-gen % options) ctor-descs)))
+              {:max-tries 100 :ex-fn #(m/-exception ::such-that-failure (assoc % :ctor-descs (mapv (fn [ctor-desc] (dissoc ctor-desc :parameter-type->gen)) ctor-descs)))}))))
 
 #?(:bb nil
    :clj (defn- class-generator-via-reflection [^Class cls options]
@@ -438,8 +453,15 @@
           (let [options (update options ::currently-generating-class
                                 (fnil (fn [currently-generating-class]
                                         (when (currently-generating-class cls)
+                                          (prn ::recursive-class-generator)
+                                          ((requiring-resolve `clojure.pprint/pprint)
+                                           {:class cls
+                                            :currently-generating-classes currently-generating-class
+                                            :member-generator-stack (::member-generator-stack options)
+                                            :options options})
                                           (m/-fail! ::recursive-class-generator {:class cls
                                                                                  :currently-generating-classes currently-generating-class
+                                                                                 :member-generator-stack (::member-generator-stack options)
                                                                                  :options options}))
                                         (conj currently-generating-class cls))
                                       #{}))
@@ -447,31 +469,41 @@
                 csym (Class->type-name cls)
                 public-constructor? #(and (= (:name %) csym)
                                           (-> % :flags :public))
+                ;; for now, don't generate constructors that take classes we're currently creating generators for
+                ;; crude check, but good enough for initial prototype with java.io.File.
+                ;; will trigger a ::recursive-class-generator exception if a self-referencing constructor slips through
+                self-referencing-constructor? #(some #{csym} (:parameter-types %))
                 gen-via-ctors (some->> (:members info)
                                        (into [] (comp (filter public-constructor?)
+                                                      (remove self-referencing-constructor?)
                                                       (keep (fn [{:keys [parameter-types] :as ctor}]
-                                                              (prn "ctor" ctor)
-                                                              (when-some [parameter-type->gen (into {} (comp (distinct)
-                                                                                                             (map (fn [t]
-                                                                                                                    (prn "gen" t (type-name->Class t))
-                                                                                                                    (when-some [g (instance-generator [:instance (type-name->Class t)]
-                                                                                                                                                      options)]
-                                                                                                                      (prn "found" g)
-                                                                                                                      [t g])))
-                                                                                                             (halt-when nil?))
-                                                                                                    parameter-types)]
+                                                              ;(prn "ctor" ctor)
+                                                              (when-some [parameter-type->gen
+                                                                          (into {}
+                                                                                (comp
+                                                                                  (distinct)
+                                                                                  (map (fn [t]
+                                                                                         ;(prn "gen" t (type-name->Class t))
+                                                                                         (when-some [g (instance-generator
+                                                                                                         [:instance (type-name->Class t)]
+                                                                                                         (update options
+                                                                                                                 ::member-generator-stack (fnil conj [])
+                                                                                                                 ctor))]
+                                                                                           ;(prn "found" g)
+                                                                                           [t g])))
+                                                                                  (halt-when nil?))
+                                                                                parameter-types)]
                                                                 (when (every? parameter-type->gen parameter-types)
                                                                   (assoc ctor :parameter-type->gen parameter-type->gen)))))))
                                        not-empty
                                        (sort-by (comp count :parameter-types))
-                                       (mapv #(ctor->gen % options))
-                                       (gen-one-of options))]
-            (prn "gen-via-ctors" gen-via-ctors csym)
+                                       (all-ctors->gen options))]
+            ;(prn "gen-via-ctors" gen-via-ctors csym)
             (when-some [gens (not-empty
                                (into [] (remove nil?)
                                      [;;TODO methods
                                       gen-via-ctors]))]
-              (prn gens)
+              ;(prn gens)
               (gen-one-of options gens)))))
 
 (defmethod instance-generator :default [schema options]
