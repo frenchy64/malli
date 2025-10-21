@@ -384,17 +384,20 @@
 (defmulti instance-generator
   "Register a new generator for class C for schema [:instance C]."
   (fn [schema options]
+    {:pre [(= :instance (m/type schema))]
+     :post [(class? %)]} ;; TODO consider whether to allow other representations
     (-child schema options)))
 
 (doseq [[the-class ?schema] {String :string
                              Object :some
-                             Number :number
+                             Number number?
                              Double :double
                              Float :float
-                             java.util.UUID :uuid}]
+                             java.util.UUID :uuid}
+        :let [schema (do (prn ?schema) (m/schema ?schema))]]
   (defmethod instance-generator the-class [_ options]
-    (prn "instance-generator" the-class ?schema)
-    (generator ?schema options)))
+    (prn "instance-generator" the-class schema)
+    (generator schema options)))
 
 #?(:bb nil
    :clj (defn- type-name->Class ^Class [type-name]
@@ -413,15 +416,18 @@
 
 #?(:bb nil
    :clj (defn- ctor->gen [{ctor-name :name :keys [parameter-types parameter-type->gen]} options]
+          {:pre [(every? parameter-type->gen parameter-types)]}
           (let [ctor (-> ctor-name
                          type-name->Class
                          (.getConstructor (into-array Class (mapv type-name->Class parameter-types))))]
-            (gen/fmap (apply gen/tuple (mapv parameter-type->gen parameter-types))
-                      (fn [args]
-                        (.newInstance ctor (object-array args)))))))
+            (->> (apply gen/tuple (mapv parameter-type->gen parameter-types))
+                 (gen/fmap (fn [args]
+                             (prn "in newInstance")
+                             (.newInstance ctor (object-array args))))))))
 
 #?(:bb nil
    :clj (defn- class-generator-via-reflection [^Class cls options]
+          {:pre [(class? cls)]}
           (let [info (reflect/type-reflect cls)
                 csym (Class->type-name cls)
                 public-constructor? #(and (= (:name %) csym)
@@ -429,9 +435,13 @@
                 gen-via-ctors (some->> (:members info)
                                        (into [] (comp (filter public-constructor?)
                                                       (keep (fn [{:keys [parameter-types] :as ctor}]
+                                                              (prn "ctor" ctor)
                                                               (let [parameter-type->gen (into {} (comp (distinct)
                                                                                                        (map (fn [t]
-                                                                                                              (when-some [g (instance-generator (type-name->Class t) options)]
+                                                                                                              (prn "gen" t (type-name->Class t))
+                                                                                                              (when-some [g (instance-generator [:instance (type-name->Class t)]
+                                                                                                                                                options)]
+                                                                                                                (prn "found" g)
                                                                                                                 [t g])))
                                                                                                        (halt-when nil?))
                                                                                               parameter-types)]
@@ -439,8 +449,9 @@
                                                                   (assoc ctor :parameter-type->gen parameter-type->gen)))))))
                                        not-empty
                                        (sort-by (comp count :parameter-types))
-                                       (mapv ctor->gen)
+                                       (mapv #(ctor->gen % options))
                                        (gen-one-of options))]
+            (prn "gen-via-ctors" gen-via-ctors csym)
             (when-some [gens (not-empty
                                (into [] (remove nil?)
                                      [;;TODO methods
@@ -454,11 +465,15 @@
 (comment
   (class-generator-via-reflection java.io.File nil)
   (class-generator-via-reflection String nil)
+  (sample (instance-generator [:instance java.io.File] nil))
   (reflect/type-reflect Class)
+  (mapv class (sample [:instance java.io.File]))
   )
 
 (defn- -instance-gen [schema options]
-  (instance-generator schema options))
+  (or (instance-generator schema options)
+      (m/-fail! ::no-generator {:options options
+                                :schema schema})))
 
 (defmulti -schema-generator (fn [schema options] (m/type schema options)) :default ::default)
 
