@@ -1140,3 +1140,6 @@
 
 (deftest empty?-generator-test
   (is (every? empty? (mg/sample empty?))))
+
+(deftest instance-generator-test
+  #(:clj (mg/sample [:instance java.io.File])))

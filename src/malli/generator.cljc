@@ -8,6 +8,7 @@
             [clojure.test.check.properties :as prop]
             [clojure.test.check.random :as random]
             [clojure.test.check.rose-tree :as rose]
+            [clojure.reflect :as reflect]
             [malli.core :as m]
             [malli.registry :as mr]
             [malli.util :as mu]
@@ -112,8 +113,8 @@
                                       {:max-tries 100
                                        :ex-fn #(m/-exception ::distinct-generator-failure (assoc % :schema schema))}))))
 
-(defn- -string-gen [schema options]
-  (gen-fmap str/join (gen-vector (-min-max schema options) gen/char-alphanumeric)))
+(defn- -string-gen [min-max options]
+  (gen-fmap str/join (gen-vector min-max gen/char-alphanumeric)))
 
 (defn- -coll-gen
   ([schema options] (-coll-gen schema identity options))
@@ -379,6 +380,81 @@
                           (update :min #(some-> % double))
                           (update :max #(some-> % double))))))
 
+;;TODO handle if a we match a supertype, then use such-that to restrict generator
+(defmulti instance-generator
+  "Register a new generator for class C for schema [:instance C]."
+  (fn [schema options]
+    (-child schema options)))
+
+(doseq [[the-class ?schema] {String :string
+                             Object :some
+                             Number :number
+                             Double :double
+                             Float :float
+                             java.util.UUID :uuid}]
+  (defmethod instance-generator the-class [_ options]
+    (prn "instance-generator" the-class ?schema)
+    (generator ?schema options)))
+
+#?(:bb nil
+   :clj (defn- type-name->Class ^Class [type-name]
+          (case type-name
+            byte<> Byte/TYPE
+            (do
+              (assert (not (str/ends-with? (name type-name) "<>"))
+                      (str "TODO handle array syntax: " (pr-str type-name)))
+              (Class/forName (name type-name))))))
+
+#?(:bb nil
+   :clj (defn- Class->type-name [^Class cls]
+          (assert (not (.isArray cls))
+                  (str "TODO handle array syntax: " (pr-str cls) " " (pr-str (.getName cls))))
+          (-> cls .getName symbol)))
+
+#?(:bb nil
+   :clj (defn- ctor->gen [{ctor-name :name :keys [parameter-types parameter-type->gen]} options]
+          (let [ctor (-> ctor-name
+                         type-name->Class
+                         (.getConstructor (into-array Class (mapv type-name->Class parameter-types))))]
+            (gen/fmap (apply gen/tuple (mapv parameter-type->gen parameter-types))
+                      (fn [args]
+                        (.newInstance ctor (object-array args)))))))
+
+#?(:bb nil
+   :clj (defn- class-generator-via-reflection [^Class cls options]
+          (let [info (reflect/type-reflect cls)
+                csym (Class->type-name cls)
+                public-constructor? #(and (= (:name %) csym)
+                                          (-> % :flags :public))]
+            (some->> (:members info)
+                     (into [] (comp (filter public-constructor?)
+                                    (keep (fn [{:keys [parameter-types] :as ctor}]
+                                            (let [parameter-type->gen (into {} (comp (distinct)
+                                                                                     (map (fn [t]
+                                                                                            (when-some [g (instance-generator (type-name->Class t) options)]
+                                                                                              [t g])))
+                                                                                     (halt-when nil?))
+                                                                            parameter-types)]
+                                              (when (every? parameter-type->gen parameter-types)
+                                                (assoc ctor :parameter-type->gen parameter-type->gen)))))))
+                     not-empty
+                     (sort-by (comp count :parameter-types))
+                     (mapv ctor->gen)
+                     (gen-one-of options)))))
+
+(defmethod instance-generator :default [schema options]
+  #?(:bb nil
+     :clj (class-generator-via-reflection (-child schema) options)))
+
+(comment
+  (class-generator-via-reflection java.io.File nil)
+  (class-generator-via-reflection String nil)
+  (reflect/type-reflect Class)
+  )
+
+(defn- -instance-gen [schema options]
+  (instance-generator schema options))
+
 (defmulti -schema-generator (fn [schema options] (m/type schema options)) :default ::default)
 
 (defmethod -schema-generator ::default [schema options] (ga/gen-for-pred (m/validator schema options)))
@@ -393,6 +469,7 @@
 (defmethod -schema-generator 'pos? [_ options] (gen/one-of [(gen-double {:min 0.00001}) (gen-fmap inc gen/nat)]))
 (defmethod -schema-generator 'neg? [_ options] (gen/one-of [(gen-double {:max -0.00001}) (gen-fmap (comp dec -) gen/nat)]))
 (defmethod -schema-generator :not [schema options] (gen-such-that schema (m/validator schema options) (ga/gen-for-pred any?)))
+(defmethod -schema-generator :instance [schema options] (-instance-gen schema options))
 (defmethod -schema-generator :and [schema options] (-and-gen schema options))
 (defmethod -schema-generator :andn [schema options] (-and-gen (m/into-schema :and (m/properties schema) (map last (m/children schema)) (m/options schema)) options))
 (defmethod -schema-generator :or [schema options] (-or-gen schema options))
@@ -413,7 +490,7 @@
 (defmethod -schema-generator :any [_ _] (ga/gen-for-pred any?))
 (defmethod -schema-generator :some [_ _] gen/any-printable)
 (defmethod -schema-generator :nil [_ _] nil-gen)
-(defmethod -schema-generator :string [schema options] (-string-gen schema options))
+(defmethod -schema-generator :string [schema options] (-string-gen (-min-max schema options) options))
 (defmethod -schema-generator :int [schema options] (gen/large-integer* (-min-max schema options)))
 (defmethod -schema-generator :double [schema options] (double-gen schema options))
 (defmethod -schema-generator :float [schema options] (double-gen schema options))
