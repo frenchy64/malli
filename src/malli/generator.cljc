@@ -380,39 +380,43 @@
                           (update :min #(some-> % double))
                           (update :max #(some-> % double))))))
 
-;;TODO handle if a we match a supertype, then use such-that to restrict generator
-(defmulti instance-generator
-  "Register a new generator for class C for schema [:instance C]."
-  (fn [schema options]
-    {:pre [(= :instance (m/type schema))]
-     :post [(class? %)]} ;; TODO consider whether to allow other representations
-    (-child schema options)))
-
-(doseq [[the-class ?schema] {String :string
-                             Object :some
-                             Number number?
-                             Double :double
-                             Float :float
-                             java.util.UUID :uuid}
-        :let [schema (do (prn ?schema) (m/schema ?schema))]]
-  (defmethod instance-generator the-class [_ options]
-    (prn "instance-generator" the-class schema)
-    (generator schema options)))
-
-#?(:bb nil
-   :clj (defn- type-name->Class ^Class [type-name]
-          (case type-name
-            byte<> Byte/TYPE
-            (do
-              (assert (not (str/ends-with? (name type-name) "<>"))
-                      (str "TODO handle array syntax: " (pr-str type-name)))
-              (Class/forName (name type-name))))))
-
 #?(:bb nil
    :clj (defn- Class->type-name [^Class cls]
           (assert (not (.isArray cls))
                   (str "TODO handle array syntax: " (pr-str cls) " " (pr-str (.getName cls))))
           (-> cls .getName symbol)))
+
+;;TODO handle if a we match a supertype, then use such-that to restrict generator
+(defmulti instance-generator
+  "Register a new generator for type-name of class C for schema [:instance C]."
+  (fn [schema options]
+    {:pre [(= :instance (m/type schema))]
+     :post [(simple-symbol? %)]} ;; TODO consider whether to allow other representations
+    #?(:clj (Class->type-name (-child schema options))
+       :default (m/-fail! ::todo-instance-generator {:options options
+                                                     :schema schema}))))
+
+#?(:clj (doseq [[type-name ?schema] {`String :string
+                                     `Object :some
+                                     `Number number?
+                                     `Double :double
+                                     `Float :float
+                                     `java.util.UUID :uuid}
+                :let [schema (m/schema ?schema)]]
+          (defmethod instance-generator type-name [_ options]
+            (prn "instance-generator" type-name schema)
+            (generator schema options))))
+
+;;FIXME proper impl
+#?(:bb nil
+   :clj (defn- type-name->Class ^Class [type-name]
+          (case type-name
+            byte<> byte/1
+            int Integer
+            (do
+              (assert (not (str/ends-with? (name type-name) "<>"))
+                      (str "TODO handle array syntax: " (pr-str type-name)))
+              (Class/forName (name type-name))))))
 
 #?(:bb nil
    :clj (defn- ctor->gen [{ctor-name :name :keys [parameter-types parameter-type->gen]} options]
@@ -428,7 +432,13 @@
 #?(:bb nil
    :clj (defn- class-generator-via-reflection [^Class cls options]
           {:pre [(class? cls)]}
-          (let [info (reflect/type-reflect cls)
+          (let [options (update options ::currently-generating-class
+                                (fn [currently-generating-class]
+                                  (when (get currently-generating-class cls)
+                                    (m/-fail! ::recursive-class-generator {:class cls
+                                                                           :currently-generating-classes currently-generating-class
+                                                                           :options options}))))
+                info (reflect/type-reflect cls)
                 csym (Class->type-name cls)
                 public-constructor? #(and (= (:name %) csym)
                                           (-> % :flags :public))
@@ -460,7 +470,7 @@
 
 (defmethod instance-generator :default [schema options]
   #?(:bb nil
-     :clj (class-generator-via-reflection (-child schema) options)))
+     :clj (class-generator-via-reflection (-child schema options) options)))
 
 (comment
   (class-generator-via-reflection java.io.File nil)
