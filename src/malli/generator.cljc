@@ -8,7 +8,8 @@
             [clojure.test.check.properties :as prop]
             [clojure.test.check.random :as random]
             [clojure.test.check.rose-tree :as rose]
-            [clojure.reflect :as reflect]
+            #?@(:bb []
+                :clj [[clojure.reflect :as reflect]])
             [malli.core :as m]
             [malli.registry :as mr]
             [malli.util :as mu]
