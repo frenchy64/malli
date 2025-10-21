@@ -3637,3 +3637,12 @@
   (testing "print Schema"
     (is (= "[:map [:x :int]]"
            (pr-str (m/schema [:map [:x :int]]))))))
+
+(deftest instance-schema-test
+  #?(:clj
+     (do (is (m/validate [:instance java.io.File] (java.io.File. "a")))
+         (let [s (m/schema [:instance java.io.File])]
+           (is (= {:schema s,
+                   :value "a",
+                   :errors [{:path [0], :in [], :schema s, :value "a"}]}
+                  (m/explain s "a")))))))

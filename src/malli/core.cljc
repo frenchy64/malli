@@ -1125,6 +1125,53 @@
           #?@(:cljs [IPrintWithWriter (-pr-writer [this writer opts] (pr-writer-schema this writer opts))]))))
     #?@(:cljs [IPrintWithWriter (-pr-writer [this writer opts] (pr-writer-into-schema this writer opts))])))
 
+(defn -instance-schema []
+  ^{:type ::into-schema}
+  (reify
+    AST
+    (-from-ast [parent ast options] (-from-child-ast parent ast options))
+    IntoSchema
+    (-type [_] :instance)
+    (-type-properties [_])
+    (-properties-schema [_ _])
+    (-children-schema [_ _])
+    (-into-schema [parent properties children options]
+      (-check-children! :instance properties children 1 1)
+      (let [[the-class :as children] children ;; TODO support providing the-class as string or symbol
+            form (delay (-create-form (-type parent) properties children options))
+            pred #?(:clj (c/eval `#(instance? ~the-class %))
+                    :default #(instance? the-class %))
+            cache (-create-cache options)]
+        ^{:type ::schema}
+        (reify
+          AST
+          (-to-ast [this _] (-to-child-ast this))
+          Schema
+          (-validator [_] pred)
+          (-explainer [this path]
+            (fn explain [x in acc]
+              (if-not (pred x) (conj acc (miu/-error (conj path 0) in this x)) acc)))
+          (-parser [this] (-simple-parser this))
+          (-unparser [this] (-parser this))
+          (-transformer [this transformer method options]
+            (-parent-children-transformer this children transformer method options))
+          (-walk [this walker path options] (-walk-indexed this walker path options))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] @form)
+          Cached
+          (-cache [_] cache)
+          LensSchema
+          (-keep [_])
+          (-get [_ key default] (get children key default))
+          (-set [this key value] (-set-assoc-children this key value))
+          ParserInfo
+          (-parser-info [_] {:simple-parser true})
+          #?@(:cljs [IPrintWithWriter (-pr-writer [this writer opts] (pr-writer-schema this writer opts))]))))
+    #?@(:cljs [IPrintWithWriter (-pr-writer [this writer opts] (pr-writer-into-schema this writer opts))])))
+
 (defn -val-schema
   ([schema properties]
    (-into-schema (-val-schema) properties (list schema) (-options schema)))
@@ -2946,6 +2993,7 @@
    :or (-or-schema)
    :orn (-orn-schema)
    :not (-not-schema)
+   :instance (-instance-schema)
    :map (-map-schema)
    :map-of (-map-of-schema)
    :vector (-collection-schema {:type :vector, :pred vector?, :empty []})
