@@ -425,22 +425,27 @@
           (let [info (reflect/type-reflect cls)
                 csym (Class->type-name cls)
                 public-constructor? #(and (= (:name %) csym)
-                                          (-> % :flags :public))]
-            (some->> (:members info)
-                     (into [] (comp (filter public-constructor?)
-                                    (keep (fn [{:keys [parameter-types] :as ctor}]
-                                            (let [parameter-type->gen (into {} (comp (distinct)
-                                                                                     (map (fn [t]
-                                                                                            (when-some [g (instance-generator (type-name->Class t) options)]
-                                                                                              [t g])))
-                                                                                     (halt-when nil?))
-                                                                            parameter-types)]
-                                              (when (every? parameter-type->gen parameter-types)
-                                                (assoc ctor :parameter-type->gen parameter-type->gen)))))))
-                     not-empty
-                     (sort-by (comp count :parameter-types))
-                     (mapv ctor->gen)
-                     (gen-one-of options)))))
+                                          (-> % :flags :public))
+                gen-via-ctors (some->> (:members info)
+                                       (into [] (comp (filter public-constructor?)
+                                                      (keep (fn [{:keys [parameter-types] :as ctor}]
+                                                              (let [parameter-type->gen (into {} (comp (distinct)
+                                                                                                       (map (fn [t]
+                                                                                                              (when-some [g (instance-generator (type-name->Class t) options)]
+                                                                                                                [t g])))
+                                                                                                       (halt-when nil?))
+                                                                                              parameter-types)]
+                                                                (when (every? parameter-type->gen parameter-types)
+                                                                  (assoc ctor :parameter-type->gen parameter-type->gen)))))))
+                                       not-empty
+                                       (sort-by (comp count :parameter-types))
+                                       (mapv ctor->gen)
+                                       (gen-one-of options))]
+            (when-some [gens (not-empty
+                               (into [] (remove nil?)
+                                     [;;TODO methods
+                                      gen-via-ctors]))]
+              (gen-one-of options gens)))))
 
 (defmethod instance-generator :default [schema options]
   #?(:bb nil
