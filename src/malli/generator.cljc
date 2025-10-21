@@ -513,7 +513,7 @@
 (comment
   (class-generator-via-reflection java.io.File nil)
   (class-generator-via-reflection String nil)
-  (sample (instance-generator [:instance java.io.File] nil))
+  (sample [:instance java.io.File])
   (reflect/type-reflect Class)
   (mapv class (sample [:instance java.io.File]))
   )
