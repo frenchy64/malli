@@ -414,7 +414,7 @@
    :clj (defn- type-name->Class ^Class [type-name]
           (case type-name
             ;;FIXME proper impl !!
-            byte<> byte/1
+            byte<> (class (byte-array []))
             int Integer/TYPE
             (do
               (assert (not (str/ends-with? (name type-name) "<>"))
