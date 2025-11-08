@@ -3584,6 +3584,53 @@
                   explain))
     (is (form= y-schema (mu/get-in schema (-> explain :errors first :path))))))
 
+(deftest local-registry-shadow-test
+  (let [options {:registry (assoc (m/default-schemas) ::string (:string (m/default-schemas)))}
+        validate #(m/validate %1 %2 options)]
+    (is (m/schema ::string options))
+    (is (m/schema [::string] options))
+    (is (m/schema [::string {:foo :bar}] options))
+    (is (m/schema [::string {:foo :bar}] options))
+    (is (validate ::string "a"))
+    (is (not (validate ::string 1)))
+    (is (validate [:schema {:registry {::string :int}} ::string] 1))
+    (is (= [:schema {:registry {::string :int}} ::string]
+           (-> [:schema {:registry {::string :int}} ::string]
+               (m/form options))))
+    (is (validate [:schema {:registry {::string :int}} [::string {:foo :bar}]] 1))
+    (is (= [:schema {:registry {::string :int}} [::string {:foo :bar}]]
+           (-> [:schema {:registry {::string :int}} [::string {:foo :bar}]]
+               (m/form options))))
+    (is (= [:schema {:registry {::string [:tuple :int]}} [::string {:foo :bar}]]
+           (-> [:schema {:registry {::string [:tuple :int]}} [::string {:foo :bar}]]
+               (m/form options))))
+    (is (not (validate [:schema {:registry {::string :int}} [::string]] "a")))
+    (is (not (validate [:schema {:registry {::string :int}} [::string {:foo :bar}]] "a")))))
+
+(deftest references-vector-syntax-test
+  (is (= {:doc ""}
+         (-> (m/schema [:schema {:registry {::a [:tuple :int :int]}}
+                        [::a {:doc ""}]])
+             m/deref
+             m/properties)))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.core/references-do-not-support-children"
+        (m/schema [:schema {:registry {::a [:tuple :int :int]}}
+                   [::a {:doc ""} :int]])))
+  (let [options {:registry (assoc (m/default-schemas) ::string [:tuple :int])}
+        validate #(m/validate %1 %2 options)]
+    (is (validate ::string [1]))
+    (is (not (validate ::string 1)))
+    (is (validate [::string] [1]))
+    (is (not (validate [::string] 1)))
+    (is (validate [::string {:foo :bar}] [1]))
+    (is (not (validate [::string {:foo :bar}] 1)))
+    (is (= {:foo :bar}
+           (-> [::string {:foo :bar}]
+               (m/schema options)
+               m/properties)))))
+
 (deftest catch-infinitely-expanding-schema
   (is (thrown-with-msg?
         #?(:clj Exception, :cljs js/Error)
