@@ -3135,6 +3135,62 @@ Local registries can be persisted:
 
 See also [Recursive Schemas](#recursive-schemas).
 
+### Global registry
+
+The global registry can store schemas and custom schema types.
+It supports docstrings and compile-time metadata, including file
+location of the original definition.
+
+Use `m/reg` to register an alias for a schema. Use `m/doc` to lookup its documentation.
+
+```clojure
+(m/reg ::a-schema :int)
+(m/reg ::another-schema
+       "A documentation string"
+       {:a static-meta-map}
+       ::a-schema)
+
+(m/schema [:tuple ::a-schema ::another-schema])
+; => [:tuple ::a-schema ::another-schema]
+
+(m/doc ::a-schema)
+; -------------------------
+; Named Schema
+; 
+; :int
+; 
+; Source code:
+; (m/reg ::a-schema :int)
+
+(m/doc ::another-schema)
+; -------------------------
+; Named Schema
+; 
+; A documentation string
+; 
+; :bool
+; 
+; Source code:
+; (m/reg ::another-schema
+;        "A documentation string"
+;        {:a static-meta-map}
+;        :bool)
+```
+
+The global registry caches schemas once they are used. When schemas are overwritten,
+the global cache is cleared. Use `-register-global-cache-invalidation-watcher!` to
+register a function to watch for this event. Use `-invalidate-global-schemas!` to
+forcibly clear the global cache.
+
+Use `m/reg-type` to register new schema types.
+
+```clojure
+(m/reg-type ::any-alias (m/-any-schema))
+
+(m/validator ::any-alias)
+; => any?
+```
+
 ### Changing the default registry
 
 Passing in custom options to all public methods is a lot of boilerplate. For the lazy, there is an easier way - we can swap the (global) default registry:
