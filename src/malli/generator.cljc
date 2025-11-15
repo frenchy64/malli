@@ -8,6 +8,8 @@
             [clojure.test.check.properties :as prop]
             [clojure.test.check.random :as random]
             [clojure.test.check.rose-tree :as rose]
+            #?@(:bb []
+                :clj [[clojure.reflect :as reflect]])
             [malli.core :as m]
             [malli.registry :as mr]
             [malli.util :as mu]
@@ -112,8 +114,8 @@
                                       {:max-tries 100
                                        :ex-fn #(m/-exception ::distinct-generator-failure (assoc % :schema schema))}))))
 
-(defn- -string-gen [schema options]
-  (gen-fmap str/join (gen-vector (-min-max schema options) gen/char-alphanumeric)))
+(defn- -string-gen [min-max options]
+  (gen-fmap str/join (gen-vector min-max gen/char-alphanumeric)))
 
 (defn- -coll-gen
   ([schema options] (-coll-gen schema identity options))
@@ -375,6 +377,149 @@
                           (update :min #(some-> % double))
                           (update :max #(some-> % double))))))
 
+#?(:bb nil
+   :clj (defn- Class->type-name [^Class cls]
+          (assert (not (.isArray cls))
+                  (str "TODO handle array syntax: " (pr-str cls) " " (pr-str (.getName cls))))
+          (-> cls .getName symbol)))
+
+;;TODO handle if a we match a supertype, then use such-that to restrict generator
+(defmulti instance-generator
+  "Register a new generator for type-name of class C for schema [:instance C]."
+  (fn [schema options]
+    {:pre [(= :instance (m/type schema))]
+     :post [(simple-symbol? %)]} ;; TODO consider whether to allow other representations
+    #?(:clj (Class->type-name (-child schema options))
+       :default (m/-fail! ::todo-instance-generator {:options options
+                                                     :schema schema}))))
+
+#?(:clj (doseq [[type-name ?schema] {`String :string
+                                     `Object :some
+                                     `Number number?
+                                     ;;TODO review the mapping of these generators. might need explicit conversions in .invokeConstructor.
+                                     `Double :double
+                                     `Integer :int
+                                     `Float :float
+                                     `java.util.UUID :uuid}
+                :let [schema (m/schema ?schema)]]
+          (defmethod instance-generator type-name [_ options]
+            ;(prn "instance-generator" type-name schema)
+            (generator schema options))))
+
+#?(:bb nil
+   :clj (defn- type-name->Class ^Class [type-name]
+          (case type-name
+            ;;FIXME proper impl !!
+            byte<> (class (byte-array []))
+            int Integer/TYPE
+            (do
+              (assert (not (str/ends-with? (name type-name) "<>"))
+                      (str "TODO handle array syntax: " (pr-str type-name)))
+              (Class/forName (name type-name))))))
+
+#?(:bb nil
+   :clj (defn- ctor->args-gen [{ctor-name :name :keys [parameter-types parameter-type->gen] :as ctor-desc} options]
+          {:pre [(every? parameter-type->gen parameter-types)]}
+          (apply gen/tuple (mapv parameter-type->gen parameter-types))))
+
+#?(:bb nil
+   :clj (defn- ctor->fn [{ctor-name :name :keys [parameter-types parameter-type->gen] :as ctor-desc} options]
+          (let [ctor (-> ctor-name
+                         type-name->Class
+                         (.getConstructor (into-array Class (mapv type-name->Class parameter-types))))]
+            (assert ctor (str "failed to find constructor " (pr-str ctor-name) " " (pr-str parameter-types)))
+            (fn [args]
+              ;(prn "in newInstance")
+              (try (.newInstance ctor (object-array args))
+                   (catch Throwable _))))))
+
+#?(:bb nil
+   :clj (defn- all-ctors->gen [options ctor-descs]
+          ;; TODO generate args for all constructor simultaneously and try all constructors until one works
+          (let [ctor-fns (mapv #(ctor->fn % options) ctor-descs)]
+            (gen/such-that
+              some?
+              (gen/fmap (fn [argss]
+                          (some identity (mapv #(%1 %2) ctor-fns argss)))
+                        (apply gen/tuple (mapv #(ctor->args-gen % options) ctor-descs)))
+              {:max-tries 100 :ex-fn #(m/-exception ::such-that-failure (assoc % :ctor-descs (mapv (fn [ctor-desc] (dissoc ctor-desc :parameter-type->gen)) ctor-descs)))}))))
+
+#?(:bb nil
+   :clj (defn- class-generator-via-reflection [^Class cls options]
+          {:pre [(class? cls)]}
+          (let [options (update options ::currently-generating-class
+                                (fnil (fn [currently-generating-class]
+                                        (when (currently-generating-class cls)
+                                          (prn ::recursive-class-generator)
+                                          ((requiring-resolve `clojure.pprint/pprint)
+                                           {:class cls
+                                            :currently-generating-classes currently-generating-class
+                                            :member-generator-stack (::member-generator-stack options)
+                                            :options options})
+                                          (m/-fail! ::recursive-class-generator {:class cls
+                                                                                 :currently-generating-classes currently-generating-class
+                                                                                 :member-generator-stack (::member-generator-stack options)
+                                                                                 :options options}))
+                                        (conj currently-generating-class cls))
+                                      #{}))
+                info (reflect/type-reflect cls)
+                csym (Class->type-name cls)
+                public-constructor? #(and (= (:name %) csym)
+                                          (-> % :flags :public))
+                ;; for now, don't generate constructors that take classes we're currently creating generators for
+                ;; crude check, but good enough for initial prototype with java.io.File.
+                ;; will trigger a ::recursive-class-generator exception if a self-referencing constructor slips through
+                self-referencing-constructor? #(some #{csym} (:parameter-types %))
+                gen-via-ctors (some->> (:members info)
+                                       (into [] (comp (filter public-constructor?)
+                                                      (remove self-referencing-constructor?)
+                                                      (keep (fn [{:keys [parameter-types] :as ctor}]
+                                                              ;(prn "ctor" ctor)
+                                                              (when-some [parameter-type->gen
+                                                                          (into {}
+                                                                                (comp
+                                                                                  (distinct)
+                                                                                  (map (fn [t]
+                                                                                         ;(prn "gen" t (type-name->Class t))
+                                                                                         (when-some [g (instance-generator
+                                                                                                         [:instance (type-name->Class t)]
+                                                                                                         (update options
+                                                                                                                 ::member-generator-stack (fnil conj [])
+                                                                                                                 ctor))]
+                                                                                           ;(prn "found" g)
+                                                                                           [t g])))
+                                                                                  (halt-when nil?))
+                                                                                parameter-types)]
+                                                                (when (every? parameter-type->gen parameter-types)
+                                                                  (assoc ctor :parameter-type->gen parameter-type->gen)))))))
+                                       not-empty
+                                       (sort-by (comp count :parameter-types))
+                                       (all-ctors->gen options))]
+            ;(prn "gen-via-ctors" gen-via-ctors csym)
+            (when-some [gens (not-empty
+                               (into [] (remove nil?)
+                                     [;;TODO methods
+                                      gen-via-ctors]))]
+              ;(prn gens)
+              (gen-one-of options gens)))))
+
+(defmethod instance-generator :default [schema options]
+  #?(:bb nil
+     :clj (class-generator-via-reflection (-child schema options) options)))
+
+(comment
+  (class-generator-via-reflection java.io.File nil)
+  (class-generator-via-reflection String nil)
+  (sample [:instance java.io.File])
+  (reflect/type-reflect Class)
+  (mapv class (sample [:instance java.io.File]))
+  )
+
+(defn- -instance-gen [schema options]
+  (or (instance-generator schema options)
+      (m/-fail! ::no-generator {:options options
+                                :schema schema})))
+
 (defmulti -schema-generator (fn [schema options] (m/type schema options)) :default ::default)
 
 (defmethod -schema-generator ::default [schema options] (ga/gen-for-pred (m/validator schema options)))
@@ -389,6 +534,7 @@
 (defmethod -schema-generator 'pos? [_ options] (gen/one-of [(gen-double {:min 0.00001}) (gen-fmap inc gen/nat)]))
 (defmethod -schema-generator 'neg? [_ options] (gen/one-of [(gen-double {:max -0.00001}) (gen-fmap (comp dec -) gen/nat)]))
 (defmethod -schema-generator :not [schema options] (gen-such-that schema (m/validator schema options) (ga/gen-for-pred any?)))
+(defmethod -schema-generator :instance [schema options] (-instance-gen schema options))
 (defmethod -schema-generator :and [schema options] (-and-gen schema options))
 (defmethod -schema-generator :andn [schema options] (-and-gen (m/into-schema :and (m/properties schema) (map last (m/children schema)) (m/options schema)) options))
 (defmethod -schema-generator :or [schema options] (-or-gen schema options))
@@ -409,7 +555,7 @@
 (defmethod -schema-generator :any [_ _] (ga/gen-for-pred any?))
 (defmethod -schema-generator :some [_ _] gen/any-printable)
 (defmethod -schema-generator :nil [_ _] nil-gen)
-(defmethod -schema-generator :string [schema options] (-string-gen schema options))
+(defmethod -schema-generator :string [schema options] (-string-gen (-min-max schema options) options))
 (defmethod -schema-generator :int [schema options] (gen/large-integer* (-min-max schema options)))
 (defmethod -schema-generator :double [schema options] (double-gen schema options))
 (defmethod -schema-generator :float [schema options] (double-gen schema options))
