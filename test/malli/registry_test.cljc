@@ -63,17 +63,19 @@
       (is (= 0 (count @loads))))
 
     (testing "validating a schema pulls schema"
-      (is (true? (m/validate
-                  CloudFormation
-                  {:Type "AWS::AppSync::ApiKey"
-                   :ApiId "123"
-                   :Description "apkey"})))
+      (dotimes [_ 2]
+        (is (true? (m/validate
+                     CloudFormation
+                     {:Type "AWS::AppSync::ApiKey"
+                      :ApiId "123"
+                      :Description "apkey"})))
 
-      (is (= 1 (count @loads))))
+        (is (= 1 (count @loads)))))
 
     (testing "pulling more"
-      (is (true? (m/validate
-                  CloudFormation
-                  {:Type "AWS::ApiGateway::UsagePlan"})))
+      (dotimes [_ 2]
+        (is (true? (m/validate
+                     CloudFormation
+                     {:Type "AWS::ApiGateway::UsagePlan"})))
 
-      (is (= 2 (count @loads))))))
+        (is (= 2 (count @loads)))))))
