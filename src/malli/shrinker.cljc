@@ -18,6 +18,7 @@
 (defn -seq-parts [schema opts]
   (let [[c] (m/children schema)]
     (fn [v path]
+      ;;TODO also return partitions of collection
       [{:schema c
         :path (conj path 0)
         :vals v}])))
