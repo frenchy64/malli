@@ -32,8 +32,8 @@
     (when (coll? v)
       [{:schema schema
         :path path
-        :vals (cond->> v
-                (map? v) (apply concat))}])))
+        ;; allow maps to be divided into their map entries
+        :vals v}])))
 
 (defmethod -divider :map-of [schema opts]
   (let [[ks vs] (m/children schema)]
@@ -59,6 +59,18 @@
             _ (assert (not= ::m/invalid p))
             {:keys [key value]} p]
         ((child-dividers key) value path)))))
+
+(defmethod -divider :string [schema opts]
+  (fn [s path]
+    (let [c (count s)]
+      (when (pos? c)
+        (let [mid (quot c 2)]
+          [{:schema schema
+            :path path
+            :vals (cond-> [(subs s 0 mid)
+                           (subs s mid)]
+                    (< 3 c) (conj (subs s 1))
+                    (< 2 c) (conj (subs s 0 (dec c))))}])))))
 
 ;; public API
 

@@ -47,12 +47,24 @@
          (mapv #(update % :vals sort) (divide [:map-of :int :boolean] {1 true 2 false}))))
   (is (= [{:schema :any, :vals [1 [true] 2 false]}]
          (divide :any [1 [true] 2 false])))
+  (is (= [{:schema :any, :path [], :vals {1 [true] 2 false}}]
+         (divide :any {1 [true] 2 false})))
   (is (= [{:schema :int, :val 1}
           {:schema :boolean, :val true}]
          (divide [:orn
                   [:left [:tuple :int :boolean]]
                   [:right [:map-of :int :boolean]]]
-                 [1 true]))))
+                 [1 true])))
+  (is (= [{:schema :string, :path [], :vals ["asdf" "1234" "sdf1234" "asdf123"]}]
+         (divide :string "asdf1234")))
+  (is (= [{:schema :string, :path [], :vals ["" "a"]}]
+         (divide :string "a")))
+  (is (= [{:schema :string, :path [], :vals ["a" "b"]}]
+         (divide :string "ab")))
+  (is (= [{:schema :string, :path [], :vals ["a" "bc" "bc" "ab"]}]
+         (divide :string "abc")))
+  (is (= [{:schema :string, :path [], :vals ["ab" "cd" "bcd" "abc"]}]
+         (divide :string "abcd"))))
 
 (deftest shrink-test
   (is (= (ms/shrink Expr '[let [a 1] [inc 42]])
