@@ -29,7 +29,10 @@
      [:right [:map-of :int :boolean]]])
   )
 
-(defn divide [schema value] (mapv #(update % :schema m/form) (ms/divide schema value)))
+(defn divide
+  ([schema value] (divide schema value nil))
+  ([schema value opts] (mapv #(update % :schema m/form) (ms/divide schema value opts))))
+(defn divide-atomic [schema value] (divide schema value {::ms/divide-atomic true}))
 
 (deftest divide-test
   (is (= [{:schema :int, :path [0], :vals [1 2 3]}]
@@ -55,16 +58,20 @@
                   [:left [:tuple :int :boolean]]
                   [:right [:map-of :int :boolean]]]
                  [1 true])))
+  (is (= [] (divide :string "asdf1234"))))
+
+(deftest divide-atomic-test
   (is (= [{:schema :string, :path [], :vals ["asdf" "1234" "sdf1234" "asdf123"]}]
-         (divide :string "asdf1234")))
+         (divide-atomic :string "asdf1234")))
+  (is (= [] (divide-atomic :string "")))
   (is (= [{:schema :string, :path [], :vals ["" "a"]}]
-         (divide :string "a")))
+         (divide-atomic :string "a")))
   (is (= [{:schema :string, :path [], :vals ["a" "b"]}]
-         (divide :string "ab")))
+         (divide-atomic :string "ab")))
   (is (= [{:schema :string, :path [], :vals ["a" "bc" "bc" "ab"]}]
-         (divide :string "abc")))
+         (divide-atomic :string "abc")))
   (is (= [{:schema :string, :path [], :vals ["ab" "cd" "bcd" "abc"]}]
-         (divide :string "abcd"))))
+         (divide-atomic :string "abcd"))))
 
 (deftest shrink-test
   (is (= (ms/shrink Expr '[let [a 1] [inc 42]])

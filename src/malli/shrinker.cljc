@@ -60,17 +60,21 @@
             {:keys [key value]} p]
         ((child-dividers key) value path)))))
 
-(defmethod -divider :string [schema opts]
+;; test.check is good a shrinking strings.
+(defmethod -divider :string [schema {::keys [divide-atomic] :as opts}]
+  (when divide-atomic
+    (assert (not (seq (m/properties schema))) "TODO count"))
   (fn [s path]
-    (let [c (count s)]
-      (when (pos? c)
-        (let [mid (quot c 2)]
-          [{:schema schema
-            :path path
-            :vals (cond-> [(subs s 0 mid)
-                           (subs s mid)]
-                    (< 3 c) (conj (subs s 1))
-                    (< 2 c) (conj (subs s 0 (dec c))))}])))))
+    (when divide-atomic
+      (let [c (count s)]
+        (when (pos? c)
+          (let [mid (quot c 2)]
+            [{:schema schema
+              :path path
+              :vals (cond-> [(subs s 0 mid)
+                             (subs s mid)]
+                      (< 3 c) (conj (subs s 1))
+                      (< 2 c) (conj (subs s 0 (dec c))))}]))))))
 
 ;; public API
 
