@@ -1,5 +1,7 @@
 (ns malli.shrinker
-  (:require [malli.core :as m]))
+  (:refer-clojure :exclude [compare sort])
+  (:require [clojure.core :as c]
+            [malli.core :as m]))
 
 (defmulti -deconstructor
   (fn [schema opts] (m/type schema))
@@ -7,9 +9,13 @@
 (defmulti -divider
   (fn [schema opts] (m/type schema))
   :default ::default)
+(defmulti -compare
+  (fn [schema left right opts] (m/type schema))
+  :default ::default)
 
 (defmethod -deconstructor ::default [_ _] (fn [_ _]))
 (defmethod -divider ::default [_ _] (fn [_ _]))
+(defmethod -compare ::default [_ _ _ _] :unknown)
 
 (defmethod -deconstructor :tuple [schema opts]
   (let [cs (m/children schema)]
@@ -19,6 +25,23 @@
                       :path (conj path i)
                       :vals [v]})
                    v))))
+
+(defmethod -compare :tuple [schema left right opts]
+  (let [children (m/children schema)]
+    (reduce (fn [result i]
+              (let [r (-compare (nth children i) (nth left i) (nth right i) opts)]
+                (case r
+                  :unknown (reduced :unknown)
+                  :equal :equal
+                  (:left-smaller :right-smaller) r)))
+            :equal (range (count children)))))
+
+(defmethod -compare :int [schema left right opts]
+  (let [r (c/compare (abs left) (abs right))]
+    (cond
+      (zero? r) :equal
+      (neg? r) :left-smaller
+      :else :right-smaller)))
 
 (defn -seq-parts [schema opts]
   (let [[c] (m/children schema)]
@@ -53,6 +76,15 @@
            {:schema vs
             :path (conj path 1)
             :vals (vals m)}])))))
+
+(defmethod -compare :map-of [schema left right opts]
+  (let [cl (count left)
+        cr (count right)]
+    (cond
+      (< cl cr) :left-smaller
+      (> cl cr) :right-smaller
+      (zero? cl) :equal
+      :else :unknown)))
 
 (defmethod -divider :map-of [schema opts]
   (fn [v path]
@@ -98,10 +130,12 @@
 (defmethod -divider :string [schema opts]
   (-vector-divider (m/properties schema) #(apply str %) opts))
 
+#_
 (defn -identify-schema [schema]
   {:scope (-> schema m/-options m/-registry mr/-schemas)
    :form (m/-form schema)})
 
+#_
 (defn -recursive-paths [?schema opts]
   (let [schema (m/schema ?schema opts)
         rec-id (#'m/-identify-ref-schema schema)
@@ -146,3 +180,30 @@
   ([?schema value] (shrink ?schema value nil))
   ([?schema value opts]
    ((shrinker ?schema opts) value)))
+
+(defn compare
+  ([?schema left right] (compare ?schema left right nil))
+  ([?schema left right opts] (-compare (m/schema ?schema opts) left right opts)))
+
+(defn smaller?
+  ([?schema left right] (smaller? ?schema left right nil))
+  ([?schema left right opts] (= :left-smaller (compare ?schema left right opts))))
+
+(defn larger?
+  ([?schema left right] (larger? ?schema left right nil))
+  ([?schema left right opts] (= :right-smaller (compare ?schema left right opts))))
+
+(defn sort
+  ([?schema vs] (sort ?schema vs nil))
+  ([?schema vs opts]
+   (let [s (m/schema ?schema opts)
+         sortable? (volatile! true)
+         sorted (c/sort #(case (compare s % %2 opts)
+                           :left-smaller -1
+                           :equal 0
+                           :right-smaller 1
+                           :unknown (do (vreset! sortable? false)
+                                        0))
+                        vs)]
+     (when @sortable?
+       sorted))))

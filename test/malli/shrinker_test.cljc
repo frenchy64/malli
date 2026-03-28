@@ -1,4 +1,5 @@
 (ns malli.shrinker-test
+  (:refer-clojure :exclude [sort])
   (:require [malli.shrinker :as ms]
             [malli.core :as m]
             [clojure.test :refer [deftest is]]))
@@ -79,3 +80,47 @@
          '[1 [inc 42]]))
   (is (= (ms/shrink Expr '[inc 42])
          '[inc 42])))
+
+(defn is-smaller?
+  ([?schema left right] (is-smaller? ?schema left right nil))
+  ([?schema left right opts]
+   (let [s (m/schema ?schema opts)
+         valid? (m/validator s)]
+     (is (valid? left))
+     (is (valid? right))
+     (is (ms/smaller? s left right opts))
+     (is (ms/larger? s right left opts)))))
+
+(defn is-equal?
+  ([?schema left right] (is-equal? ?schema left right nil))
+  ([?schema left right opts]
+   (let [s (m/schema ?schema opts)
+         valid? (m/validator s)]
+     (is (valid? left))
+     (is (valid? right))
+     (is (= :equal (ms/compare s left right opts)))
+     (is (= :equal (ms/compare s right left opts))))))
+
+(defn sort
+  ([?schema vs] (sort ?schema vs nil))
+  ([?schema vs opts]
+   (let [s (m/schema ?schema opts)
+         valid? (m/validator s)]
+     (assert (every? valid? vs))
+     (vec (ms/sort s vs opts)))))
+
+(deftest sort-test
+  (is (= [0 10 -10] (sort :int [0 10 -10])))
+  (is (= [0 -9 10] (sort :int [0 10 -9])))
+  (is (= [0 -1 1] (sort :int [0 -1 1])))
+  (is (= [0 1 -1] (sort :int [0 1 -1]))))
+
+(deftest compare-test
+  (is-smaller? :int 0 10)
+  (is-smaller? :int 0 -10)
+  (is-equal? [:tuple] [] [])
+  (is-smaller? [:tuple :int] [0] [10])
+  (is-smaller? [:tuple :int] [0] [10])
+  (is-equal? [:map-of :int :boolean] {} {})
+  (is-smaller? [:map-of :int :boolean] {} {1 true})
+  )
