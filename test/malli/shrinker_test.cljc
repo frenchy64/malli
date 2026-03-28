@@ -2,6 +2,7 @@
   (:refer-clojure :exclude [sort])
   (:require [malli.shrinker :as ms]
             [malli.core :as m]
+            [clojure.core :as c]
             [clojure.test :refer [deftest is]]))
 
 (def Expr
@@ -50,7 +51,7 @@
          (deconstruct [:tuple :int :boolean :string] [1 true "a"])))
   (is (= [{:schema :int, :path [0], :vals [1 2]}
           {:schema :boolean, :path [1], :vals [false true]}]
-         (mapv #(update % :vals sort) (deconstruct [:map-of :int :boolean] {1 true 2 false}))))
+         (mapv #(update % :vals c/sort) (deconstruct [:map-of :int :boolean] {1 true 2 false}))))
   (is (= [{:schema :any, :vals [1 [true] 2 false]}]
          (deconstruct :any [1 [true] 2 false])))
   (is (= [{:schema :any, :path [], :vals {1 [true] 2 false}}]
@@ -102,39 +103,39 @@
      (is (= :equal (ms/compare s left right opts)))
      (is (= :equal (ms/compare s right left opts))))))
 
-(defn sort
-  ([?schema vs] (sort ?schema vs nil))
+(defn is-sort
+  ([?schema vs] (is-sort ?schema vs nil))
   ([?schema vs opts]
    (let [s (m/schema ?schema opts)
          valid? (m/validator s)
          _ (assert (every? valid? vs))
-         res (vec (ms/sort s vs opts))]
-     (dotimes [_ 10]
-       (is (= res (ms/sort s (shuffle vs) opts))))
-     (dotimes [_ 10]
-       (is (= res (ms/sort-by s identity (shuffle vs) opts))))
-     res)))
+         res (some-> (ms/sort s vs opts) vec)]
+     (when (is (= vs res))
+       (doseq [_ (range 10)
+               :let [vs (some-> vs shuffle)]]
+         (is (= vs (ms/sort s vs opts)) (pr-str vs)))
+       (doseq [_ (range 10)
+               :let [vs (some-> vs shuffle)]]
+         (is (= vs (ms/sort-by s identity vs opts)) (pr-str vs)))
+       vs))))
 
 (deftest sort-test
-  (is (= [0 10 -10] (sort :int [0 10 -10])))
-  (is (= [0 -9 10] (sort :int [0 10 -9])))
-  (is (= [0 1 -1] (sort :int [0 1 -1])))
-  (is (= [false true] (sort :boolean [false true])))
-  (is (= [true false] (sort [:enum true false] [true false])))
-  (is (= [false true] (sort [:enum false true] [true false])))
-  (is (= [{} {1 true} {1 true}]
-         (sort [:map-of :int :boolean] [{} {1 true} {1 true}])))
-  (is (= [{} {1 false} {1 true}]
-         (sort [:map-of :int :boolean] [{} {1 false} {1 true}])))
-  (is (= [{} {0 true} {1 false}]
-         (sort [:map-of :int :boolean] [{} {0 true} {1 false}])))
-  (is (= [nil nil {} {0 true} {1 false}]
-         (sort [:maybe [:map-of :int :boolean]] [nil {} nil {0 true} {1 false}])))
-  (is (= '[a aa ab abc] (sort :symbol '[abc aa a ab])))
-  (is (= '[:a :aa :ab :abc] (sort :keyword '[:abc :aa :a :ab])))
-  (is (= '[:a :ab :abc aa] (sort [:orn [:k :keyword] [:v :symbol]] '[:abc aa :a :ab])))
-  (is (= '[aa :a :ab :abc] (sort [:orn [:k :symbol] [:v :keyword]] '[:abc aa :a :ab])))
-  (is (= [0 1 2 5] (sort [:schema {:registry {::int :int}} ::int] [0 1 5 2])))
+  (is-sort :int [0 10 -10])
+  (is-sort :int [0 -9 10])
+  (is-sort :int [0 1 -1])
+  (is-sort :boolean [false true])
+  (is-sort [:enum true false] [true false])
+  (is-sort [:enum false true] [false true])
+  (is-sort [:map-of :int :boolean] [{} {1 true} {1 true}])
+  (is-sort [:map-of :int :boolean] [{} {1 false} {1 true}])
+  (is-sort [:map-of :int :boolean] [{} {0 true} {1 false}])
+  (is-sort [:maybe [:map-of :int :boolean]] [nil {} nil {0 true} {1 false}])
+  (is-sort :symbol '[abc aa a ab])
+  (is-sort :keyword '[:abc :aa :a :ab])
+  (is-sort [:orn [:k :keyword] [:v :symbol]] '[:abc aa :a :ab])
+  (is-sort [:orn [:k :symbol] [:v :keyword]] '[aa :a :ab :abc])
+  (is-sort [:schema {:registry {::int :int}} ::int] [0 1 2 5])
+  (is-sort [:map [:a :int] [:b :boolean]] [{:a 1 :b false} {:a 1 :b true}])
   )
 
 (deftest compare-test
