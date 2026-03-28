@@ -52,6 +52,14 @@
       (neg? r) :left-smaller
       :else :right-smaller)))
 
+(defmethod -compare :enum [schema left right opts]
+  (let [classifier (into {} (map-indexed (fn [i v] [v i])) (m/children schema))
+        r (c/compare (classifier left) (classifier right))]
+    (cond
+      (zero? r) :equal
+      (neg? r) :left-smaller
+      :else :right-smaller)))
+
 (defn -seq-parts [schema opts]
   (let [[c] (m/children schema)]
     (fn [v path]

@@ -117,6 +117,8 @@
   (is (= [false true]
          (sort :boolean [true false])
          (sort :boolean [false true])))
+  (is (= [true false] (sort [:enum true false] [true false])))
+  (is (= [false true] (sort [:enum false true] [true false])))
   (is (= [{} {1 true} {1 true}]
          (sort [:map-of :int :boolean] [{} {1 true} {1 true}])))
   (is (= [{} {1 false} {1 true}]
