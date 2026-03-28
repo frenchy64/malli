@@ -105,31 +105,29 @@
   ([?schema vs] (sort ?schema vs nil))
   ([?schema vs opts]
    (let [s (m/schema ?schema opts)
-         valid? (m/validator s)]
-     (assert (every? valid? vs))
-     (vec (ms/sort s vs opts)))))
+         valid? (m/validator s)
+         _ (assert (every? valid? vs))
+         res (vec (ms/sort s vs opts))]
+     (dotimes [_ 10]
+       (is (= res (ms/sort s (shuffle vs) opts))))
+     res)))
 
 (deftest sort-test
   (is (= [0 10 -10] (sort :int [0 10 -10])))
   (is (= [0 -9 10] (sort :int [0 10 -9])))
-  (is (= [0 1 -1]
-         (sort :int [0 -1 1])
-         (sort :int [0 1 -1])))
-  (is (= [false true]
-         (sort :boolean [true false])
-         (sort :boolean [false true])))
+  (is (= [0 1 -1] (sort :int [0 1 -1])))
+  (is (= [false true] (sort :boolean [false true])))
   (is (= [true false] (sort [:enum true false] [true false])))
   (is (= [false true] (sort [:enum false true] [true false])))
   (is (= [{} {1 true} {1 true}]
          (sort [:map-of :int :boolean] [{} {1 true} {1 true}])))
   (is (= [{} {1 false} {1 true}]
-         (sort [:map-of :int :boolean] [{} {1 true} {1 false}])
          (sort [:map-of :int :boolean] [{} {1 false} {1 true}])))
   (is (= [{} {0 true} {1 false}]
-         (sort [:map-of :int :boolean] [{} {0 true} {1 false}])
-         (sort [:map-of :int :boolean] [{} {1 false} {0 true}])))
+         (sort [:map-of :int :boolean] [{} {0 true} {1 false}])))
   (is (= [nil nil {} {0 true} {1 false}]
-         (sort [:maybe [:map-of :int :boolean]] [nil {} nil {0 true} {1 false}]))))
+         (sort [:maybe [:map-of :int :boolean]] [nil {} nil {0 true} {1 false}])))
+  (is (= '[a aa ab abc] (sort :symbol (shuffle '[abc aa a ab])))))
 
 (deftest compare-test
   (is-smaller? :int 0 10)
