@@ -113,7 +113,18 @@
   (is (= [0 10 -10] (sort :int [0 10 -10])))
   (is (= [0 -9 10] (sort :int [0 10 -9])))
   (is (= [0 -1 1] (sort :int [0 -1 1])))
-  (is (= [0 1 -1] (sort :int [0 1 -1]))))
+  (is (= [0 1 -1] (sort :int [0 1 -1])))
+  (is (= [false true]
+         (sort :boolean [true false])
+         (sort :boolean [false true])))
+  (is (= [{} {1 true} {1 true}]
+         (sort [:map-of :int :boolean] [{} {1 true} {1 true}])))
+  (is (= [{} {1 false} {1 true}]
+         (sort [:map-of :int :boolean] [{} {1 true} {1 false}])
+         (sort [:map-of :int :boolean] [{} {1 false} {1 true}])))
+  (is (= [{} {0 true} {1 false}]
+         (sort [:map-of :int :boolean] [{} {0 true} {1 false}])
+         (sort [:map-of :int :boolean] [{} {1 false} {0 true}]))))
 
 (deftest compare-test
   (is-smaller? :int 0 10)

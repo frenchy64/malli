@@ -1,7 +1,9 @@
 (ns malli.shrinker
-  (:refer-clojure :exclude [compare sort])
+  (:refer-clojure :exclude [compare sort sort-by])
   (:require [clojure.core :as c]
             [malli.core :as m]))
+
+(declare sort sort-by compare)
 
 (defmulti -deconstructor
   (fn [schema opts] (m/type schema))
@@ -28,7 +30,7 @@
 
 (defmethod -compare :tuple [schema left right opts]
   (let [children (m/children schema)]
-    (reduce (fn [result i]
+    (reduce (fn [_ i]
               (let [r (-compare (nth children i) (nth left i) (nth right i) opts)]
                 (case r
                   :unknown (reduced :unknown)
@@ -38,6 +40,13 @@
 
 (defmethod -compare :int [schema left right opts]
   (let [r (c/compare (abs left) (abs right))]
+    (cond
+      (zero? r) :equal
+      (neg? r) :left-smaller
+      :else :right-smaller)))
+
+(defmethod -compare :boolean [schema left right opts]
+  (let [r (c/compare left right)]
     (cond
       (zero? r) :equal
       (neg? r) :left-smaller
@@ -84,7 +93,21 @@
       (< cl cr) :left-smaller
       (> cl cr) :right-smaller
       (zero? cl) :equal
-      :else :unknown)))
+      :else (let [[ks vs] (m/children schema)
+                  l (vec (sort-by ks first (seq left)))
+                  r (vec (sort-by ks first (seq right)))]
+              (reduce (fn [_ i]
+                        (let [[lk lv] (nth l i)
+                              [rk rv] (nth r i)
+                              rk (compare ks lk rk opts)]
+                          (case rk
+                            (:left-smaller :right-smaller) rk
+                            :equal (let [rv (compare vs lv rv opts)]
+                                     (case rv
+                                       (:left-smaller :right-smaller :equal) rv
+                                       :unknown (reduced :unknown)))
+                            :unknown (reduced :unknown))))
+                      :equal (range cl))))))
 
 (defmethod -divider :map-of [schema opts]
   (fn [v path]
@@ -205,5 +228,21 @@
                            :unknown (do (vreset! sortable? false)
                                         0))
                         vs)]
+     (when @sortable?
+       sorted))))
+
+(defn sort-by
+  ([?schema f vs] (sort ?schema vs nil))
+  ([?schema f vs opts]
+   (let [s (m/schema ?schema opts)
+         sortable? (volatile! true)
+         sorted (c/sort-by f
+                           #(case (compare s % %2 opts)
+                              :left-smaller -1
+                              :equal 0
+                              :right-smaller 1
+                              :unknown (do (vreset! sortable? false)
+                                           0))
+                           vs)]
      (when @sortable?
        sorted))))
