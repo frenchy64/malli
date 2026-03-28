@@ -71,6 +71,13 @@
       (:left-smaller :right-smaller :unknown) co
       :equal (compare (m/-get schema lp nil) left right opts))))
 
+(defmethod -compare :schema [schema left right opts] (compare (m/deref schema) left right opts))
+(defmethod -compare ::m/schema [schema left right opts] (compare (m/deref schema) left right opts))
+(defmethod -compare :ref [schema left right opts] (compare (m/deref schema) left right opts))
+(defmethod -compare :merge [schema left right opts] (compare (m/deref schema) left right opts))
+(defmethod -compare :union [schema left right opts] (compare (m/deref schema) left right opts))
+(defmethod -compare :select-keys [schema left right opts] (compare (m/deref schema) left right opts))
+
 (defn -seq-parts [schema opts]
   (let [[c] (m/children schema)]
     (fn [v path]

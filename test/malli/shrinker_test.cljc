@@ -29,6 +29,7 @@
      [:left [:tuple :int :boolean]]
      [:right [:map-of :int :boolean]]])
   (m/parse [:sequential :int] [1 2 3])
+  (m/parse [:or :int :boolean] 2)
   )
 
 (defn deconstruct
@@ -133,6 +134,7 @@
   (is (= '[:a :aa :ab :abc] (sort :keyword '[:abc :aa :a :ab])))
   (is (= '[:a :ab :abc aa] (sort [:orn [:k :keyword] [:v :symbol]] '[:abc aa :a :ab])))
   (is (= '[aa :a :ab :abc] (sort [:orn [:k :symbol] [:v :keyword]] '[:abc aa :a :ab])))
+  (is (= [0 1 2 5] (sort [:schema {:registry {::int :int}} ::int] [0 1 5 2])))
   )
 
 (deftest compare-test
