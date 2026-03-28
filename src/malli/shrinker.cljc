@@ -38,27 +38,29 @@
                   (:left-smaller :right-smaller) r)))
             :equal (range (count children)))))
 
-(defmethod -compare :int [schema left right opts]
-  (let [r (c/compare (abs left) (abs right))]
-    (cond
-      (zero? r) :equal
-      (neg? r) :left-smaller
-      :else :right-smaller)))
+(defn -core-compare
+  ([left right] (-core-compare identity left right))
+  ([f left right]
+   (let [r (c/compare (f left) (f right))]
+     (cond
+       (zero? r) :equal
+       (neg? r) :left-smaller
+       :else :right-smaller))))
 
-(defmethod -compare :boolean [schema left right opts]
-  (let [r (c/compare left right)]
-    (cond
-      (zero? r) :equal
-      (neg? r) :left-smaller
-      :else :right-smaller)))
+(defmethod -compare :int [schema left right opts] (-core-compare (juxt abs neg?) left right))
+(defmethod -compare :boolean [schema left right opts] (-core-compare left right))
+(defmethod -compare :symbol [schema left right opts] (-core-compare left right))
+(defmethod -compare :keyword [schema left right opts] (-core-compare left right))
 
 (defmethod -compare :enum [schema left right opts]
-  (let [classifier (into {} (map-indexed (fn [i v] [v i])) (m/children schema))
-        r (c/compare (classifier left) (classifier right))]
-    (cond
-      (zero? r) :equal
-      (neg? r) :left-smaller
-      :else :right-smaller)))
+  (-core-compare (into {} (map-indexed (fn [i v] [v i])) (m/children schema)) left right))
+
+(defmethod -compare :maybe [schema left right opts]
+  (cond
+    (and (nil? left) (nil? right)) :equal
+    (nil? left) :left-smaller
+    (nil? right) :right-smaller
+    :else (compare (first (m/children schema)) left right opts)))
 
 (defn -seq-parts [schema opts]
   (let [[c] (m/children schema)]
