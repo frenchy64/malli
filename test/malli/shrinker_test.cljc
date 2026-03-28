@@ -110,6 +110,8 @@
          res (vec (ms/sort s vs opts))]
      (dotimes [_ 10]
        (is (= res (ms/sort s (shuffle vs) opts))))
+     (dotimes [_ 10]
+       (is (= res (ms/sort-by s identity (shuffle vs) opts))))
      res)))
 
 (deftest sort-test
@@ -127,7 +129,11 @@
          (sort [:map-of :int :boolean] [{} {0 true} {1 false}])))
   (is (= [nil nil {} {0 true} {1 false}]
          (sort [:maybe [:map-of :int :boolean]] [nil {} nil {0 true} {1 false}])))
-  (is (= '[a aa ab abc] (sort :symbol (shuffle '[abc aa a ab])))))
+  (is (= '[a aa ab abc] (sort :symbol '[abc aa a ab])))
+  (is (= '[:a :aa :ab :abc] (sort :keyword '[:abc :aa :a :ab])))
+  (is (= '[:a :ab :abc aa] (sort [:orn [:k :keyword] [:v :symbol]] '[:abc aa :a :ab])))
+  (is (= '[aa :a :ab :abc] (sort [:orn [:k :symbol] [:v :keyword]] '[:abc aa :a :ab])))
+  )
 
 (deftest compare-test
   (is-smaller? :int 0 10)

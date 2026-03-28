@@ -62,6 +62,15 @@
     (nil? right) :right-smaller
     :else (compare (first (m/children schema)) left right opts)))
 
+(defmethod -compare :orn [schema left right opts]
+  (let [parse (m/parser schema)
+        lp (:key (parse left))
+        rp (:key (parse right))
+        co (-core-compare (into {} (map-indexed (fn [i [k]] [k i])) (m/children schema)) lp rp)]
+    (case co
+      (:left-smaller :right-smaller :unknown) co
+      :equal (compare (m/-get schema lp nil) left right opts))))
+
 (defn -seq-parts [schema opts]
   (let [[c] (m/children schema)]
     (fn [v path]
