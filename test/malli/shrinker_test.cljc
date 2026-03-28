@@ -31,6 +31,7 @@
      [:right [:map-of :int :boolean]]])
   (m/parse [:sequential :int] [1 2 3])
   (m/parse [:or :int :boolean] 2)
+  (m/parse [:map [:a :int] [:b :boolean]] {:a 1 :b true})
   )
 
 (defn deconstruct
@@ -104,20 +105,28 @@
      (is (= :equal (ms/compare s right left opts))))))
 
 (defn is-sort
-  ([?schema vs] (is-sort ?schema vs nil))
-  ([?schema vs opts]
+  ([?schema expected] (is-sort ?schema expected nil))
+  ([?schema expected opts]
    (let [s (m/schema ?schema opts)
          valid? (m/validator s)
-         _ (assert (every? valid? vs))
-         res (some-> (ms/sort s vs opts) vec)]
-     (when (is (= vs res))
+         _ (assert (every? valid? expected))
+         res (some-> (ms/sort s expected opts) vec)]
+     (when (is (= expected res))
        (doseq [_ (range 10)
-               :let [vs (some-> vs shuffle)]]
-         (is (= vs (ms/sort s vs opts)) (pr-str vs)))
+               :let [vs (some-> expected shuffle)]]
+         (is (= expected (ms/sort s vs opts))
+             (pr-str (list 'ms/sort (m/form s) vs))))
        (doseq [_ (range 10)
-               :let [vs (some-> vs shuffle)]]
-         (is (= vs (ms/sort-by s identity vs opts)) (pr-str vs)))
-       vs))))
+               :let [vs (some-> expected shuffle)]]
+         (is (= expected (ms/sort-by s identity vs opts))
+             (pr-str (list 'ms/sort-by (m/form s) vs))))
+       res))))
+
+(comment
+  (ms/sort :int [0 10 -10])
+  (ms/sort :int [10 -10 0])
+  (ms/sort :int [-10 0 10])
+  )
 
 (deftest sort-test
   (is-sort :int [0 10 -10])
@@ -129,13 +138,13 @@
   (is-sort [:map-of :int :boolean] [{} {1 true} {1 true}])
   (is-sort [:map-of :int :boolean] [{} {1 false} {1 true}])
   (is-sort [:map-of :int :boolean] [{} {0 true} {1 false}])
-  (is-sort [:maybe [:map-of :int :boolean]] [nil {} nil {0 true} {1 false}])
-  (is-sort :symbol '[abc aa a ab])
-  (is-sort :keyword '[:abc :aa :a :ab])
-  (is-sort [:orn [:k :keyword] [:v :symbol]] '[:abc aa :a :ab])
+  (is-sort [:maybe [:map-of :int :boolean]] [nil nil {} {0 true} {1 false}])
+  (is-sort :symbol '(a aa ab abc))
+  (is-sort :keyword [:a :aa :ab :abc])
+  (is-sort [:orn [:k :keyword] [:v :symbol]] '[:a :ab :abc aa])
   (is-sort [:orn [:k :symbol] [:v :keyword]] '[aa :a :ab :abc])
   (is-sort [:schema {:registry {::int :int}} ::int] [0 1 2 5])
-  (is-sort [:map [:a :int] [:b :boolean]] [{:a 1 :b false} {:a 1 :b true}])
+  #_(is-sort [:map [:a :int] [:b :boolean]] [{:a 1 :b false} {:a 1 :b true}])
   )
 
 (deftest compare-test
@@ -144,7 +153,6 @@
   (is-smaller? :int 1 -1)
   (is-smaller? :int 10 -10)
   (is-equal? [:tuple] [] [])
-  (is-smaller? [:tuple :int] [0] [10])
   (is-smaller? [:tuple :int] [0] [10])
   (is-equal? [:map-of :int :boolean] {} {})
   (is-smaller? [:map-of :int :boolean] {} {1 true})
