@@ -27,51 +27,52 @@
     [:orn
      [:left [:tuple :int :boolean]]
      [:right [:map-of :int :boolean]]])
+  (m/parse [:sequential :int] [1 2 3])
   )
 
-(defn divide
-  ([schema value] (divide schema value nil))
-  ([schema value opts] (mapv #(update % :schema m/form) (ms/divide schema value opts))))
-(defn divide-atomic [schema value] (divide schema value {::ms/divide-atomic true}))
+(defn deconstruct
+  ([schema value] (deconstruct schema value nil))
+  ([schema value opts] (mapv #(update % :schema m/form) (ms/deconstruct schema value opts))))
+(defn deconstruct-atomic [schema value] (deconstruct schema value {::ms/deconstruct-atomic true}))
 
-(deftest divide-test
+(deftest deconstruct-test
   (is (= [{:schema :int, :path [0], :vals [1 2 3]}]
-         (divide [:sequential :int] [1 2 3])
-         (divide [:seqable :int] [1 2 3])
-         (divide [:every :int] [1 2 3])))
+         (deconstruct [:sequential :int] [1 2 3])
+         (deconstruct [:seqable :int] [1 2 3])
+         (deconstruct [:every :int] [1 2 3])))
   (is (= [{:schema :int, :path [0], :vals #{1 2 3}}]
-         (divide [:set :int] #{1 2 3})))
+         (deconstruct [:set :int] #{1 2 3})))
   (is (= [{:schema :int, :path [0], :vals [1]}
           {:schema :boolean, :path [1], :vals [true]}
           {:schema :string, :path [2], :vals ["a"]}]
-         (divide [:tuple :int :boolean :string] [1 true "a"])))
+         (deconstruct [:tuple :int :boolean :string] [1 true "a"])))
   (is (= [{:schema :int, :path [0], :vals [1 2]}
           {:schema :boolean, :path [1], :vals [false true]}]
-         (mapv #(update % :vals sort) (divide [:map-of :int :boolean] {1 true 2 false}))))
+         (mapv #(update % :vals sort) (deconstruct [:map-of :int :boolean] {1 true 2 false}))))
   (is (= [{:schema :any, :vals [1 [true] 2 false]}]
-         (divide :any [1 [true] 2 false])))
+         (deconstruct :any [1 [true] 2 false])))
   (is (= [{:schema :any, :path [], :vals {1 [true] 2 false}}]
-         (divide :any {1 [true] 2 false})))
+         (deconstruct :any {1 [true] 2 false})))
   (is (= [{:schema :int, :val 1}
           {:schema :boolean, :val true}]
-         (divide [:orn
+         (deconstruct [:orn
                   [:left [:tuple :int :boolean]]
                   [:right [:map-of :int :boolean]]]
                  [1 true])))
-  (is (= [] (divide :string "asdf1234"))))
+  (is (= [] (deconstruct :string "asdf1234"))))
 
-(deftest divide-atomic-test
+(deftest deconstruct-atomic-test
   (is (= [{:schema :string, :path [], :vals ["asdf" "1234" "sdf1234" "asdf123"]}]
-         (divide-atomic :string "asdf1234")))
-  (is (= [] (divide-atomic :string "")))
+         (deconstruct-atomic :string "asdf1234")))
+  (is (= [] (deconstruct-atomic :string "")))
   (is (= [{:schema :string, :path [], :vals ["" "a"]}]
-         (divide-atomic :string "a")))
+         (deconstruct-atomic :string "a")))
   (is (= [{:schema :string, :path [], :vals ["a" "b"]}]
-         (divide-atomic :string "ab")))
+         (deconstruct-atomic :string "ab")))
   (is (= [{:schema :string, :path [], :vals ["a" "bc" "bc" "ab"]}]
-         (divide-atomic :string "abc")))
+         (deconstruct-atomic :string "abc")))
   (is (= [{:schema :string, :path [], :vals ["ab" "cd" "bcd" "abc"]}]
-         (divide-atomic :string "abcd"))))
+         (deconstruct-atomic :string "abcd"))))
 
 (deftest shrink-test
   (is (= (ms/shrink Expr '[let [a 1] [inc 42]])
