@@ -17,7 +17,7 @@
 
 (defmethod -deconstructor ::default [_ _] (fn [_ _]))
 (defmethod -divider ::default [_ _] (fn [_ _]))
-(defmethod -comparator ::default [_ _ _ _] :unknown)
+(defmethod -comparator ::default [_ _] (fn [_ _] :unknown))
 
 (defmethod -deconstructor :tuple [schema opts]
   (let [cs (m/children schema)]
