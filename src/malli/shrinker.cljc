@@ -68,7 +68,6 @@
         (nil? right) :larger
         :else (cmp left right)))))
 
-
 (defmethod -comparator :orn [schema opts]
   (let [cmp (-core-comparator)
         validators (mapv (comp m/validator peek) (m/children schema))
@@ -153,29 +152,31 @@
             :vals (vals m)}])))))
 
 (defmethod -comparator :map-of [schema opts]
-  ;;TODO precompute
-  (fn [left right]
-    (let [cl (count left)
-          cr (count right)]
-      (cond
-        (< cl cr) :smaller
-        (> cl cr) :larger
-        (zero? cl) :equal
-        :else (let [[ks vs] (m/children schema)
-                    l (vec (sort-by ks first (seq left)))
-                    r (vec (sort-by ks first (seq right)))]
-                (reduce (fn [_ i]
-                          (let [[lk lv] (nth l i)
-                                [rk rv] (nth r i)
-                                rk (compare ks lk rk opts)]
-                            (case rk
-                              (:smaller :larger) rk
-                              :equal (let [rv (compare vs lv rv opts)]
-                                       (case rv
-                                         (:smaller :larger :equal) rv
-                                         :unknown (reduced :unknown)))
-                              :unknown (reduced :unknown))))
-                        :equal (range cl)))))))
+  (let [[ks vs] (m/children schema)
+        sort-by-keys (comp vec (sorter-by ks first opts))
+        compare-keys (comparator ks opts)
+        compare-vals (comparator vs opts)]
+    (fn [left right]
+      (let [cl (count left)
+            cr (count right)]
+        (cond
+          (< cl cr) :smaller
+          (> cl cr) :larger
+          (zero? cl) :equal
+          :else (let [l (sort-by-keys (seq left))
+                      r (sort-by-keys (seq right))]
+                  (reduce (fn [_ i]
+                            (let [[lk lv] (nth l i)
+                                  [rk rv] (nth r i)
+                                  rk (compare-keys lk rk)]
+                              (case rk
+                                (:smaller :larger) rk
+                                :equal (let [rv (compare-vals lv rv)]
+                                         (case rv
+                                           (:smaller :larger :equal) rv
+                                           :unknown (reduced :unknown)))
+                                :unknown (reduced :unknown))))
+                          :equal (range cl))))))))
 
 (defmethod -divider :map-of [schema opts]
   (fn [v path]

@@ -145,6 +145,8 @@
   (is-sort [:orn [:k :keyword] [:v :symbol]] '[:a :ab :abc aa])
   (is-sort [:orn [:k :symbol] [:v :keyword]] '[aa :a :ab :abc])
   (is-sort [:schema {:registry {::int :int}} ::int] [0 1 2 5])
+  (is-sort Expr [['let ['a 1] 'a]
+                 ['let ['abc 1] 'abc]])
   #_(is-sort [:map [:a :int] [:b :boolean]] [{:a 1 :b false} {:a 1 :b true}])
   )
 
