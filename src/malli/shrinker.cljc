@@ -70,10 +70,18 @@
 
 
 (defmethod -comparator :orn [schema opts]
-  (let [cmp (-core-comparator (into {} (map-indexed (fn [i [k]] [k i])) (m/children schema)))
-        clause-key (comp :key (m/parser schema))
+  (let [cmp (-core-comparator)
+        validators (mapv (comp m/validator peek) (m/children schema))
+        nchildren (count validators)
+        clause-key (fn [v]
+                     (or (some (fn [i]
+                                 (when ((nth validators i) v)
+                                   i))
+                               (range nchildren))
+                         (throw (ex-info "unmatched" {:schema schema
+                                                      :value v}))))
         ;; TODO tie-the-knot for eager computation
-        k->cmp (into {} (map (fn [[k _ s]] [k #((comparator s opts) % %2)])) (m/children schema))]
+        k->cmp (into {} (map-indexed (fn [i [_ _ s]] [i #((comparator s opts) % %2)])) (m/children schema))]
     (fn [left right]
       (let [lp (clause-key left)
             rp (clause-key right)
@@ -83,16 +91,18 @@
           :equal ((k->cmp lp) left right))))))
 
 (defmethod -comparator :or [schema opts]
-  (let [cmp (-core-comparator (into {} (map-indexed vector) (m/children schema)))
+  (let [cmp (-core-comparator)
         validators (mapv m/validator (m/children schema))
         nchildren (count validators)
         clause-key (fn [v]
-                     (some (fn [i]
-                             (when ((nth validators i) v)
-                               i))
-                           (range nchildren)))
+                     (or (some (fn [i]
+                                 (when ((nth validators i) v)
+                                   i))
+                               (range nchildren))
+                         (throw (ex-info "unmatched" {:schema schema
+                                                      :value v}))))
         ;; TODO tie-the-knot for eager computation
-        k->cmp (into {} (map-indexed (fn [i s] [i #((comparator s opts) % %2)])) (m/children schema))]
+        k->cmp (mapv (fn [s] #((comparator s opts) % %2)) (m/children schema))]
     (fn [left right]
       (let [lp (clause-key left)
             rp (clause-key right)
