@@ -36,7 +36,7 @@
                   (case r
                     :unknown (reduced :unknown)
                     :equal :equal
-                    (:left-smaller :right-smaller) r)))
+                    (:smaller :larger) r)))
               :equal (range (count comparators))))))
 
 (defn -core-comparator
@@ -46,8 +46,8 @@
      (let [r (c/compare (f left) (f right))]
        (cond
          (zero? r) :equal
-         (neg? r) :left-smaller
-         :else :right-smaller)))))
+         (neg? r) :smaller
+         :else :larger)))))
 
 (defmethod -comparator :int [schema opts] (-core-comparator (juxt abs neg?)))
 (defmethod -comparator :boolean [schema opts] (-core-comparator))
@@ -62,8 +62,8 @@
     (fn [left right]
       (cond
         (and (nil? left) (nil? right)) :equal
-        (nil? left) :left-smaller
-        (nil? right) :right-smaller
+        (nil? left) :smaller
+        (nil? right) :larger
         :else (cmp left right)))))
 
 (defmethod -comparator :orn [schema opts]
@@ -74,7 +74,7 @@
             rp (:key (parse right))
             co (cmp lp rp)]
         (case co
-          (:left-smaller :right-smaller :unknown) co
+          (:smaller :larger :unknown) co
           ;;TODO precompute
           :equal (compare (m/-get schema lp nil) left right opts))))))
 
@@ -125,8 +125,8 @@
     (let [cl (count left)
           cr (count right)]
       (cond
-        (< cl cr) :left-smaller
-        (> cl cr) :right-smaller
+        (< cl cr) :smaller
+        (> cl cr) :larger
         (zero? cl) :equal
         :else (let [[ks vs] (m/children schema)
                     l (vec (sort-by ks first (seq left)))
@@ -136,10 +136,10 @@
                                 [rk rv] (nth r i)
                                 rk (compare ks lk rk opts)]
                             (case rk
-                              (:left-smaller :right-smaller) rk
+                              (:smaller :larger) rk
                               :equal (let [rv (compare vs lv rv opts)]
                                        (case rv
-                                         (:left-smaller :right-smaller :equal) rv
+                                         (:smaller :larger :equal) rv
                                          :unknown (reduced :unknown)))
                               :unknown (reduced :unknown))))
                         :equal (range cl)))))))
@@ -252,7 +252,7 @@
   ([?schema opts]
    (let [cmp (comparator ?schema opts)]
      (fn [left right]
-       (= :left-smaller (cmp left right))))))
+       (= :smaller (cmp left right))))))
 
 (defn smaller?
   "True if left is strictly smaller than right. False otherwise."
@@ -264,7 +264,7 @@
   ([?schema opts]
    (let [cmp (comparator ?schema opts)]
      (fn [left right]
-       (= :right-smaller (cmp left right))))))
+       (= :larger (cmp left right))))))
 
 (defn larger?
   "True if left is strictly larger than right. False otherwise."
@@ -278,9 +278,9 @@
      (fn [vs]
        (let [sortable? (volatile! true)
              sorted (c/sort #(case (cmp % %2)
-                               :left-smaller -1
+                               :smaller -1
                                :equal 0
-                               :right-smaller 1
+                               :larger 1
                                :unknown (do (vreset! sortable? false)
                                             0))
                             vs)]
@@ -301,9 +301,9 @@
        (let [sortable? (volatile! true)
              sorted (c/sort-by f
                                #(case (cmp % %2)
-                                  :left-smaller -1
+                                  :smaller -1
                                   :equal 0
-                                  :right-smaller 1
+                                  :larger 1
                                   :unknown (do (vreset! sortable? false)
                                                0))
                                vs)]
