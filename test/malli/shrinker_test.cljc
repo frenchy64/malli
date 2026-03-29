@@ -92,6 +92,7 @@
      (is (valid? left))
      (is (valid? right))
      (is (ms/smaller? s left right opts))
+     (is (= :smaller (ms/compare s left right opts)))
      (is (ms/larger? s right left opts)))))
 
 (defn is-equal?
@@ -156,4 +157,14 @@
   (is-smaller? [:tuple :int] [0] [10])
   (is-equal? [:map-of :int :boolean] {} {})
   (is-smaller? [:map-of :int :boolean] {} {1 true})
-  (is-smaller? [:map-of :int :boolean] {1 true} {-1 true}))
+  (is-smaller? [:map-of :int :boolean] {1 true} {-1 true})
+  (is-smaller? Expr 'a ['a 'a])
+  (is-smaller? Expr ['a 'a] ['let ['a 1] 'a])
+  (is-smaller? Expr
+               ['let ['a 1] 'a]
+               ['let ['a 1] 'b]
+               )
+  (is-smaller? Expr
+               ['let ['a 1] 'a]
+               ['let ['a 1] ['let ['a 1] 'a]]
+               ))
