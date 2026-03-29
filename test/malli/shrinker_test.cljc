@@ -3,7 +3,7 @@
   (:require [malli.shrinker :as ms]
             [malli.core :as m]
             [clojure.core :as c]
-            [clojure.test :refer [deftest is]]))
+            [clojure.test :refer [deftest is testing]]))
 
 (def Expr
   [:schema {:registry {::Expr [:orn
@@ -167,4 +167,14 @@
                ['let ['a 1] 'b])
   (is-smaller? Expr
                ['let ['a 1] 'a]
-               ['let ['a 1] ['let ['a 1] 'a]]))
+               ['let ['a 1] ['let ['a 1] 'a]])
+  (is-smaller? Expr
+               ['let ['b 1] 'a]
+               ['let ['a 1] ['let ['a 1] 'a]])
+  (is-smaller? Expr
+               ['let ['a 1] 'a]
+               ['let ['b 1] ['let ['a 1] 'a]])
+  (is-smaller? Expr
+               ['let ['a 1] ['a 'a]]
+               ['let ['b 1] ['let ['a 1] 'a]])
+)

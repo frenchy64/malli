@@ -36,9 +36,8 @@
       (reduce (fn [_ i]
                 (let [r ((nth comparators i) (nth left i) (nth right i))]
                   (case r
-                    :unknown (reduced :unknown)
-                    :equal :equal
-                    (:smaller :larger) r)))
+                    (:smaller :larger :unknown) (reduced r)
+                    :equal r)))
               :equal (range (count comparators))))))
 
 (defn -core-comparator
