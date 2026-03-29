@@ -17,7 +17,9 @@
 
 (defmethod -deconstructor ::default [_ _] (fn [_ _]))
 (defmethod -divider ::default [_ _] (fn [_ _]))
-(defmethod -comparator ::default [_ _] (fn [_ _] :unknown))
+(defmethod -comparator ::default [s _]
+  (prn "unsupported: " (m/type s))
+  (fn [_ _] :unknown))
 
 (defmethod -deconstructor :tuple [schema opts]
   (let [cs (m/children schema)]
@@ -66,17 +68,38 @@
         (nil? right) :larger
         :else (cmp left right)))))
 
+
 (defmethod -comparator :orn [schema opts]
-  (let [cmp (-core-comparator (into {} (map-indexed (fn [i [k]] [k i])) (m/children schema)))]
+  (let [cmp (-core-comparator (into {} (map-indexed (fn [i [k]] [k i])) (m/children schema)))
+        clause-key (comp :key (m/parser schema))
+        ;; TODO tie-the-knot for eager computation
+        k->cmp (into {} (map (fn [[k _ s]] [k #((comparator s opts) % %2)])) (m/children schema))]
     (fn [left right]
-      (let [parse (m/parser schema)
-            lp (:key (parse left))
-            rp (:key (parse right))
+      (let [lp (clause-key left)
+            rp (clause-key right)
             co (cmp lp rp)]
         (case co
           (:smaller :larger :unknown) co
-          ;;TODO precompute
-          :equal (compare (m/-get schema lp nil) left right opts))))))
+          :equal ((k->cmp lp) left right))))))
+
+(defmethod -comparator :or [schema opts]
+  (let [cmp (-core-comparator (into {} (map-indexed vector) (m/children schema)))
+        validators (mapv m/validator (m/children schema))
+        nchildren (count validators)
+        clause-key (fn [v]
+                     (some (fn [i]
+                             (when ((nth validators i) v)
+                               i))
+                           (range nchildren)))
+        ;; TODO tie-the-knot for eager computation
+        k->cmp (into {} (map-indexed (fn [i s] [i #((comparator s opts) % %2)])) (m/children schema))]
+    (fn [left right]
+      (let [lp (clause-key left)
+            rp (clause-key right)
+            co (cmp lp rp)]
+        (case co
+          (:smaller :larger :unknown) co
+          :equal ((k->cmp lp) left right))))))
 
 (defmethod -comparator :schema [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator ::m/schema [schema opts] (-comparator (m/deref schema) opts))

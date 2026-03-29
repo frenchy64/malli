@@ -162,9 +162,7 @@
   (is-smaller? Expr ['a 'a] ['let ['a 1] 'a])
   (is-smaller? Expr
                ['let ['a 1] 'a]
-               ['let ['a 1] 'b]
-               )
+               ['let ['a 1] 'b])
   (is-smaller? Expr
                ['let ['a 1] 'a]
-               ['let ['a 1] ['let ['a 1] 'a]]
-               ))
+               ['let ['a 1] ['let ['a 1] 'a]]))
