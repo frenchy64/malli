@@ -310,34 +310,34 @@
           [0 0 :Let 2 0 :Let 1 1 0 :Atomic 0 0]
           [0 0 :Let 2 0 :Let 2 0 :Ref]]
          (leaf-paths Expr ['let ['a 1] ['let ['a 1] 'a]])))
-  (is (= '[{:schema [:enum let], :path [0 :Let 0], :value let}
-           {:schema :symbol, :path [0 :Let 1 0], :value b}
-           {:schema :int, :path [0 :Let 1 1 0 :Atomic 0 0], :value 1}
-           {:schema :symbol, :path [0 :Let 2 0 :Ref], :value a}]
+  (is (= '[{:schema [:enum let], :path [0 :Let 0], :in [0], :value let}
+           {:schema :symbol, :path [0 :Let 1 0], :in [1 0], :value b}
+           {:schema :int, :path [0 :Let 1 1 0 :Atomic 0 0], :in [1 1], :value 1}
+           {:schema :symbol, :path [0 :Let 2 0 :Ref], :in [2], :value a}]
          (leaves Expr ['let ['b 1] 'a])))
-  (is (= '[{:schema [:enum let], :path [0 :Let 0], :value let}
-           {:schema :symbol, :path [0 :Let 1 0], :value a}
-           {:schema :int, :path [0 :Let 1 1 0 :Atomic 0 0], :value 1}
-           {:schema [:enum let], :path [0 :Let 2 0 :Let 0], :value let}
-           {:schema :symbol, :path [0 :Let 2 0 :Let 1 0], :value a}
-           {:schema :int, :path [0 :Let 2 0 :Let 1 1 0 :Atomic 0 0], :value 1}
-           {:schema :symbol, :path [0 :Let 2 0 :Let 2 0 :Ref], :value a}]
+  (is (= '[{:schema [:enum let], :path [0 :Let 0], :in [0], :value let}
+           {:schema :symbol, :path [0 :Let 1 0], :in [1 0], :value a}
+           {:schema :int, :path [0 :Let 1 1 0 :Atomic 0 0], :in [1 1], :value 1}
+           {:schema [:enum let], :path [0 :Let 2 0 :Let 0], :in [2 0], :value let}
+           {:schema :symbol, :path [0 :Let 2 0 :Let 1 0], :in [2 1 0], :value a}
+           {:schema :int, :path [0 :Let 2 0 :Let 1 1 0 :Atomic 0 0], :in [2 1 1], :value 1}
+           {:schema :symbol, :path [0 :Let 2 0 :Let 2 0 :Ref], :in [2 2], :value a}]
          (leaves Expr ['let ['a 1] ['let ['a 1] 'a]])))
-  (is (= [{:schema :int, :path [0], :value 0}
-          {:schema :int, :path [0], :value 1}
-          {:schema :int, :path [0], :value 2}]
+  (is (= [{:schema :int, :path [0], :in [0], :value 0}
+          {:schema :int, :path [0], :in [0], :value 1}
+          {:schema :int, :path [0], :in [0], :value 2}]
          (leaves [:sequential :int] [0 1 2])))
-  (is (= [{:schema :int, :path [0 :left], :value 0}
-          {:schema :boolean, :path [0 :right], :value true}
-          {:schema :int, :path [0 :left], :value 2}]
+  (is (= [{:schema :int, :path [0 :left], :in [0], :value 0}
+          {:schema :boolean, :path [0 :right], :in [0], :value true}
+          {:schema :int, :path [0 :left], :in [0], :value 2}]
          (leaves [:sequential [:orn [:left :int] [:right :boolean]]] [0 true 2])))
-  (is (= [{:schema [:sequential :int], :path [], :value []}]
+  (is (= [{:schema [:sequential :int], :path [], :in [], :value []}]
          (leaves [:sequential :int] [])))
-  (is (= [{:schema [:enum :a :b :c], :path [], :inner-path [0], :value :a}]
+  (is (= [{:schema [:enum :a :b :c], :path [], :inner-path [0], :in [], :value :a}]
          (leaves [:enum :a :b :c] :a)))
-  (is (= [{:schema :int, :path [0], :value 1, :unordered-paths [[0]]}
-          {:schema :int, :path [0], :value 3, :unordered-paths [[0]]}
-          {:schema :int, :path [0], :value 2, :unordered-paths [[0]]}]
+  (is (= [{:schema :int, :path [0], :in [0], :value 1}
+          {:schema :int, :path [0], :in [1], :value 2}
+          {:schema :int, :path [0], :in [2], :value 3}]
          (leaves [:set :int] #{1 2 3})))
   (is (= [{:schema [:sequential :int], :path [0], :value [], :unordered-paths [[0]]}
           {:schema :int, :path [0 0], :value 1, :unordered-paths [[0]]}
