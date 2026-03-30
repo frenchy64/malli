@@ -206,10 +206,30 @@
 
 (deftest diff-test
   (is (= nil (diff :int 0 0)))
-  (is (= [{:result :smaller, :schema :int, :path [], :in [], :left 0, :right 1}]
-         (diff :int 0 1)))
-  (is (= [{:result :larger, :schema :int, :path [], :in [], :left 1, :right 0}]
-         (diff :int 1 0)))
+  (is (= [{:result :larger, :schema :int, :path [], :in [], :left -1, :right 1}]
+         (diff :int -1 1)))
+  (is (= [{:result :smaller, :schema :int, :path [], :in [], :left 1, :right -1}]
+         (diff :int 1 -1)))
+  (is (= nil (diff [:maybe :int] nil nil)))
+  (is (= [{:result :smaller,
+           :schema [:maybe :int],
+           :path [],
+           :in [],
+           :left nil,
+           :right 1}]
+         (diff [:maybe :int] nil 1)))
+  (is (= [{:result :larger,
+           :schema [:maybe :int],
+           :path [],
+           :in [],
+           :left 1,
+           :right nil}]
+         (diff [:maybe :int] 1 nil)))
+  (is (= nil (diff [:maybe :int] 1 1)))
+  (is (= [{:result :larger, :schema :int, :path [0], :in [], :left -1, :right 1}]
+         (diff [:maybe :int] -1 1)))
+  (is (= [{:result :smaller, :schema :int, :path [0], :in [], :left 1, :right -1}]
+         (diff [:maybe :int] 1 -1)))
   (is (= nil (diff [:tuple :int] [0] [0])))
   (is (= [{:result :smaller,
            :schema :int,

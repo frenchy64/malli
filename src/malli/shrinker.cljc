@@ -78,33 +78,49 @@
 (defmethod -comparator :symbol [schema opts] (-core-comparator))
 (defmethod -comparator :keyword [schema opts] (-core-comparator))
 
-(defn -leaf-differ [schema comparator path in opts]
-  (fn [left right]
-    (let [r (comparator left right)]
-       (when-not (= :equal r)
-         [{:result r
-           :schema schema
-           :path path
-           :in in
-           :left left
-           :right right}]))))
+(defn -leaf-differ [schema path in opts]
+  (let [c (comparator schema opts)]
+    (fn [left right]
+      (let [r (c left right)]
+        (when-not (= :equal r)
+          [{:result r
+            :schema schema
+            :path path
+            :in in
+            :left left
+            :right right}])))))
 
-(defmethod -differ :int [schema path in opts] (-leaf-differ schema (-core-comparator (juxt abs neg?)) path in opts))
-(defmethod -differ :boolean [schema path in opts] (-leaf-differ schema (-core-comparator) path in opts))
-(defmethod -differ :symbol [schema path in opts] (-leaf-differ schema (-core-comparator) path in opts))
-(defmethod -differ :keyword [schema path in opts] (-leaf-differ schema (-core-comparator) path in opts))
+(defmethod -differ :int [schema path in opts] (-leaf-differ schema path in opts))
+(defmethod -differ :boolean [schema path in opts] (-leaf-differ schema path in opts))
+(defmethod -differ :symbol [schema path in opts] (-leaf-differ schema path in opts))
+(defmethod -differ :keyword [schema path in opts] (-leaf-differ schema path in opts))
 
 (defmethod -comparator :enum [schema opts]
   (-core-comparator (into {} (map-indexed (fn [i v] [v i])) (m/children schema))))
 
+(defmethod -differ :enum [schema path in opts] (-leaf-differ schema path in opts))
+
 (defmethod -comparator :maybe [schema opts]
-  (let [cmp (-comparator (first (m/children schema)) opts)]
+  (let [cmp (-comparator (nth (m/children schema) 0) opts)]
     (fn [left right]
       (cond
         (and (nil? left) (nil? right)) :equal
         (nil? left) :smaller
         (nil? right) :larger
         :else (cmp left right)))))
+
+(defmethod -differ :maybe [schema path in opts]
+  (let [df (-differ (nth (m/children schema) 0) (conj path 0) in opts)]
+    (fn [left right]
+      (when-not (and (nil? left) (nil? right))
+        (if (or (nil? left) (nil? right))
+          [{:result (if (nil? left) :smaller :larger)
+            :schema schema
+            :path path
+            :in in
+            :left left
+            :right right}]
+          (df left right))))))
 
 (defmethod -comparator :orn [schema opts]
   (let [cmp (-core-comparator)
