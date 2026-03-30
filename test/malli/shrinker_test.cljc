@@ -37,7 +37,9 @@
 (defn deconstruct
   ([schema value] (deconstruct schema value nil))
   ([schema value opts] (mapv #(update % :schema m/form) (ms/deconstruct schema value opts))))
-(defn deconstruct-atomic [schema value] (deconstruct schema value {::ms/deconstruct-atomic true}))
+(defn divide
+  ([schema value] (divide schema value nil))
+  ([schema value opts] (mapv #(update % :schema m/form) (ms/divide schema value opts))))
 
 (deftest deconstruct-test
   (is (= [{:schema :int, :path [0], :vals [1 2 3]}]
@@ -65,18 +67,19 @@
                  [1 true])))
   (is (= [] (deconstruct :string "asdf1234"))))
 
-(deftest deconstruct-atomic-test
+#_ ;;TODO
+(deftest divide-test
   (is (= [{:schema :string, :path [], :vals ["asdf" "1234" "sdf1234" "asdf123"]}]
-         (deconstruct-atomic :string "asdf1234")))
-  (is (= [] (deconstruct-atomic :string "")))
+         (divide :string "asdf1234")))
+  (is (= [] (divide :string "")))
   (is (= [{:schema :string, :path [], :vals ["" "a"]}]
-         (deconstruct-atomic :string "a")))
+         (divide :string "a")))
   (is (= [{:schema :string, :path [], :vals ["a" "b"]}]
-         (deconstruct-atomic :string "ab")))
+         (divide :string "ab")))
   (is (= [{:schema :string, :path [], :vals ["a" "bc" "bc" "ab"]}]
-         (deconstruct-atomic :string "abc")))
+         (divide :string "abc")))
   (is (= [{:schema :string, :path [], :vals ["ab" "cd" "bcd" "abc"]}]
-         (deconstruct-atomic :string "abcd"))))
+         (divide :string "abcd"))))
 
 (deftest shrink-test
   (is (= (ms/shrink Expr '[let [a 1] [inc 42]])
@@ -168,6 +171,12 @@
   (is-smaller? Expr
                ['let ['a 1] 'a]
                ['let ['a 1] ['let ['a 1] 'a]])
+  ;; ideal comparison order for
+  ;; ['let [B0 I0] E0] vs. ['let [B1 I1] E1]
+  ;; largest depth difference
+  ;; 1. (compare I0 I1)
+  ;; 2. (compare E0 E1)
+  ;; 3. (compare B0 B1)
   (is-smaller? Expr
                ['let ['b 1] 'a]
                ['let ['a 1] ['let ['a 1] 'a]])
@@ -176,5 +185,41 @@
                ['let ['b 1] ['let ['a 1] 'a]])
   (is-smaller? Expr
                ['let ['a 1] ['a 'a]]
-               ['let ['b 1] ['let ['a 1] 'a]])
+               ['let ['b 1] ['let ['a 1] 'a]]))
+
+(def Let (m/-get (m/deref-all Expr) :Let nil))
+
+(comment
+  (do Let)
+  (paths Let)
+  ;=>
+  [[0]]
 )
+
+(defn diff [schema left right]
+  (let [schema (m/schema schema)
+        valid? (m/validator schema)]
+    (assert (valid? left))
+    (assert (valid? right))
+    (some->> (ms/diff schema left right)
+             (mapv #(update % :schema m/form)))))
+
+(deftest diff-test
+  (is (= nil (diff :int 0 0)))
+  (is (= [{:result :smaller, :schema :int, :path [], :in [], :left 0, :right 1}]
+         (diff :int 0 1)))
+  (is (= [{:result :larger, :schema :int, :path [], :in [], :left 1, :right 0}]
+         (diff :int 1 0)))
+  (is (= nil (diff [:tuple :int] [0] [0])))
+  (is (= [{:result :smaller,
+           :schema :int,
+           :path [0],
+           :in [0],
+           :left 0,
+           :right 1}]
+         (diff [:tuple :int] [0] [1])))
+  (is (= nil
+         (diff Expr
+               ['let ['a 1] 'a]
+               ['let ['a 1] ['let ['a 1] 'a]])))
+  )

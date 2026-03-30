@@ -3,7 +3,7 @@
   (:require [clojure.core :as c]
             [malli.core :as m]))
 
-(declare sort sort-by compare comparator)
+(declare sort compare comparator sorter-by)
 
 (defmulti -deconstructor
   (fn [schema opts] (m/type schema))
@@ -14,12 +14,23 @@
 (defmulti -comparator
   (fn [schema opts] (m/type schema))
   :default ::default)
+(defmulti -differ
+  (fn [schema path in opts] (m/type schema))
+  :default ::default)
 
 (defmethod -deconstructor ::default [_ _] (fn [_ _]))
 (defmethod -divider ::default [_ _] (fn [_ _]))
 (defmethod -comparator ::default [s _]
   (prn "unsupported: " (m/type s))
   (fn [_ _] :unknown))
+(defmethod -differ ::default [s path in opts]
+  (prn "unsupported: " (m/type s))
+  (fn [left right]
+    [{:result :unknown
+      :path path
+      :in in
+      :left left
+      :right right}]))
 
 (defmethod -deconstructor :tuple [schema opts]
   (let [cs (m/children schema)]
@@ -31,14 +42,26 @@
                    v))))
 
 (defmethod -comparator :tuple [schema opts]
-  (let [comparators (mapv #(-comparator % opts) (m/children schema))]
+  (let [;; TODO sort by schema complexity
+        comparators (mapv #(-comparator % opts) (m/children schema))
+        nchildren (count comparators)]
     (fn [left right]
       (reduce (fn [_ i]
                 (let [r ((nth comparators i) (nth left i) (nth right i))]
                   (case r
                     (:smaller :larger :unknown) (reduced r)
                     :equal r)))
-              :equal (range (count comparators))))))
+              :equal (range nchildren)))))
+
+(defmethod -differ :tuple [schema path in opts]
+  (let [differs (into [] (map-indexed (fn [i c] (-differ c (conj path i) (conj in i) opts))) (m/children schema))]
+    (fn [left right]
+      (not-empty
+        (into [] (comp (map-indexed
+                         (fn [i f]
+                           (f (nth left i) (nth right i))))
+                       cat)
+              differs)))))
 
 (defn -core-comparator
   ([] (-core-comparator identity))
@@ -54,6 +77,22 @@
 (defmethod -comparator :boolean [schema opts] (-core-comparator))
 (defmethod -comparator :symbol [schema opts] (-core-comparator))
 (defmethod -comparator :keyword [schema opts] (-core-comparator))
+
+(defn -leaf-differ [schema comparator path in opts]
+  (fn [left right]
+    (let [r (comparator left right)]
+       (when-not (= :equal r)
+         [{:result r
+           :schema schema
+           :path path
+           :in in
+           :left left
+           :right right}]))))
+
+(defmethod -differ :int [schema path in opts] (-leaf-differ schema (-core-comparator (juxt abs neg?)) path in opts))
+(defmethod -differ :boolean [schema path in opts] (-leaf-differ schema (-core-comparator) path in opts))
+(defmethod -differ :symbol [schema path in opts] (-leaf-differ schema (-core-comparator) path in opts))
+(defmethod -differ :keyword [schema path in opts] (-leaf-differ schema (-core-comparator) path in opts))
 
 (defmethod -comparator :enum [schema opts]
   (-core-comparator (into {} (map-indexed (fn [i v] [v i])) (m/children schema))))
@@ -116,6 +155,13 @@
 (defmethod -comparator :union [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator :select-keys [schema opts] (-comparator (m/deref schema) opts))
 
+(defmethod -differ :schema [schema path in opts] (-differ (m/deref schema) (conj path 0) in opts))
+(defmethod -differ ::m/schema [schema path in opts] (-differ (m/deref schema) (conj path 0) in opts))
+(defmethod -differ :ref [schema path in opts] (-differ (m/deref schema) (conj path 0) in opts))
+(defmethod -differ :merge [schema path in opts] (-differ (m/deref schema) (conj path ::m/in) in opts))
+(defmethod -differ :union [schema path in opts] (-differ (m/deref schema) (conj path ::m/in) in opts))
+(defmethod -differ :select-keys [schema path in opts] (-differ (m/deref schema) (conj path ::m/in) in opts))
+
 (defn -seq-parts [schema opts]
   (let [[c] (m/children schema)]
     (fn [v path]
@@ -128,7 +174,7 @@
 (defmethod -deconstructor :seqable [schema opts] (-seq-parts schema opts))
 (defmethod -deconstructor :every [schema opts] (-seq-parts schema opts))
 
-(defmethod -deconstructor :any [schema opts]
+(defmethod -divider :any [schema opts]
   (fn [v path]
     (when (coll? v)
       [{:schema schema
@@ -251,6 +297,16 @@
   ([?schema value] (deconstruct ?schema value nil))
   ([?schema value opts] ((deconstructor ?schema opts) value [])))
 
+(defn divider
+  ([?schema] (divider ?schema nil))
+  ([?schema opts] (-divider (m/schema ?schema opts) opts)))
+
+(defn divide
+  "Split a value conforming to ?schema into a sequence
+  of maps representing the children of the schema/value."
+  ([?schema value] (divide ?schema value nil))
+  ([?schema value opts] ((divider ?schema opts) value [])))
+
 (defn shrinker
   "Takes a schema and
   returns a seq of deconstructor parts of value that
@@ -279,6 +335,14 @@
 (defn compare
   ([?schema left right] (compare ?schema left right nil))
   ([?schema left right opts] ((comparator ?schema opts) left right)))
+
+(defn differ
+  ([?schema] (differ ?schema nil))
+  ([?schema opts] (-differ (m/schema ?schema opts) [] [] opts)))
+
+(defn diff
+  ([?schema left right] (diff ?schema left right nil))
+  ([?schema left right opts] ((differ ?schema opts) left right)))
 
 (defn smaller-pred
   ([?schema] (smaller-pred ?schema nil))
