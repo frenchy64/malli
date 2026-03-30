@@ -252,7 +252,7 @@
                [:enum let]
                [:tuple :symbol [:ref :malli.shrinker-test/Expr]]
                [:ref :malli.shrinker-test/Expr]]]],
-            :path [0 0 3 2 0],
+            :path [0 0 :Let 2 0],
             :in [2],
             :left a,
             :right [let [a 1] a]}]
@@ -261,7 +261,7 @@
                ['let ['a 1] ['let ['a 1] 'a]])))
   (is (= '[{:result :larger,
             :schema :symbol,
-            :path [0 0 3 1 0],
+            :path [0 0 :Let 1 0],
             :in [1 0],
             :left b,
             :right a}
@@ -279,10 +279,32 @@
                [:enum let]
                [:tuple :symbol [:ref :malli.shrinker-test/Expr]]
                [:ref :malli.shrinker-test/Expr]]]],
-            :path [0 0 3 2 0],
+            :path [0 0 :Let 2 0],
             :in [2],
             :left a,
             :right [let [a 1] a]}]
          (diff Expr
                ['let ['b 1] 'a]
                ['let ['a 1] ['let ['a 1] 'a]]))))
+
+(defn leaf-paths [schema v]
+  (let [schema (m/schema schema)
+        valid? (m/validator schema)]
+    (assert (valid? v))
+    (ms/leaf-paths schema v)))
+
+(deftest leaf-paths-test
+  (is (= [[]] (leaf-paths :int 0)))
+  (is (= [[0]] (leaf-paths [:tuple :int] [0])))
+  (is (= [[0 0]] (leaf-paths [:tuple [:tuple :int]] [[0]])))
+  (is (= [[0 0] [0 1]] (leaf-paths [:tuple [:tuple :int [:enum :a]]] [[0 :a]])))
+  (is (= [[0 0 :Ref]] (leaf-paths Expr 'a)))
+  (is (= [[0 0 :Let 0]
+          [0 0 :Let 1 0]
+          [0 0 :Let 1 1 0 :Atomic 0 0]
+          [0 0 :Let 2 0 :Let 0]
+          [0 0 :Let 2 0 :Let 1 0]
+          [0 0 :Let 2 0 :Let 1 1 0 :Atomic 0 0]
+          [0 0 :Let 2 0 :Let 2 0 :Ref]]
+         (leaf-paths Expr ['let ['a 1] ['let ['a 1] 'a]])))
+)

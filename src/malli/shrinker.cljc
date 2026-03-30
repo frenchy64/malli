@@ -17,6 +17,9 @@
 (defmulti -differ
   (fn [schema path in opts] (m/type schema))
   :default ::default)
+(defmulti -leaf-paths-fn
+  (fn [schema path opts] (m/type schema))
+  :default ::default)
 
 (defmethod -deconstructor ::default [_ _] (fn [_ _]))
 (defmethod -divider ::default [_ _] (fn [_ _]))
@@ -32,6 +35,9 @@
       :in in
       :left left
       :right right}]))
+(defmethod -leaf-paths-fn ::default [s path opts]
+  (prn "unsupported: " (m/type s))
+  (fn [v] []))
 
 (defmethod -deconstructor :tuple [schema opts]
   (let [cs (m/children schema)]
@@ -63,6 +69,15 @@
                            (f (nth left i) (nth right i))))
                        cat)
               differs)))))
+
+(defmethod -leaf-paths-fn :tuple [schema path opts]
+  (let [leaf-paths-fns (into [] (map-indexed (fn [i c] (-leaf-paths-fn c (conj path i) opts))) (m/children schema))]
+    (fn [v]
+      (into [] (comp (map-indexed
+                       (fn [i f]
+                         ((nth leaf-paths-fns i) (nth v i))))
+                     cat)
+            leaf-paths-fns))))
 
 (defn -core-comparator
   ([] (-core-comparator identity))
@@ -96,10 +111,17 @@
 (defmethod -differ :symbol [schema path in opts] (-leaf-differ schema path in opts))
 (defmethod -differ :keyword [schema path in opts] (-leaf-differ schema path in opts))
 
+(defmethod -leaf-paths-fn :int [schema path opts] (fn [_] [path]))
+(defmethod -leaf-paths-fn :boolean [schema path opts] (fn [_] [path]))
+(defmethod -leaf-paths-fn :symbol [schema path opts] (fn [_] [path]))
+(defmethod -leaf-paths-fn :keyword [schema path opts] (fn [_] [path]))
+
 (defmethod -comparator :enum [schema opts]
   (-core-comparator (into {} (map-indexed (fn [i v] [v i])) (m/children schema))))
 
 (defmethod -differ :enum [schema path in opts] (-leaf-differ schema path in opts))
+
+(defmethod -leaf-paths-fn :enum [schema path opts] (fn [_] [path]))
 
 (defmethod -comparator :maybe [schema opts]
   (let [cmp (-comparator (nth (m/children schema) 0) opts)]
@@ -122,6 +144,13 @@
             :left left
             :right right}]
           (df left right))))))
+
+(defmethod -leaf-paths-fn :maybe [schema path opts]
+  (let [lp (-leaf-paths-fn (nth (m/children schema) 0) (conj path 0) opts)]
+    (fn [v]
+      (if (nil? v)
+        [path]
+        (lp v)))))
 
 (defmethod -comparator :orn [schema opts]
   (let [cmp (-core-comparator)
@@ -156,7 +185,7 @@
                          (throw (ex-info "unmatched" {:schema schema
                                                       :value v}))))
         ;; TODO tie-the-knot for eager computation
-        k->diff (into {} (map-indexed (fn [i [_ _ s]] [i #((-differ s (conj path i) in opts) % %2)])) (m/children schema))]
+        k->diff (into {} (map-indexed (fn [i [k _ s]] [i #((-differ s (conj path k) in opts) % %2)])) (m/children schema))]
     (fn [left right]
       (let [lp (clause-key left)
             rp (clause-key right)
@@ -169,6 +198,21 @@
                                         :left left
                                         :right right}]
           :equal ((k->diff lp) left right))))))
+
+(defmethod -leaf-paths-fn :orn [schema path opts]
+  (let [validators (mapv (comp m/validator peek) (m/children schema))
+        nchildren (count validators)
+        clause-key (fn [v]
+                     (or (some (fn [i]
+                                 (when ((nth validators i) v)
+                                   i))
+                               (range nchildren))
+                         (throw (ex-info "unmatched" {:schema schema
+                                                      :value v}))))
+        ;; TODO tie-the-knot for eager computation
+        k->lp (into {} (map-indexed (fn [i [k _ s]] [i #((-leaf-paths-fn s (conj path k) opts) %)])) (m/children schema))]
+    (fn [v]
+      ((k->lp (clause-key v)) v))))
 
 (defmethod -comparator :or [schema opts]
   (let [cmp (-core-comparator)
@@ -217,6 +261,21 @@
                                         :right right}]
           :equal ((k->diff lp) left right))))))
 
+(defmethod -leaf-paths-fn :or [schema path opts]
+  (let [validators (mapv m/validator (m/children schema))
+        nchildren (count validators)
+        clause-key (fn [v]
+                     (or (some (fn [i]
+                                 (when ((nth validators i) v)
+                                   i))
+                               (range nchildren))
+                         (throw (ex-info "unmatched" {:schema schema
+                                                      :value v}))))
+        ;; TODO tie-the-knot for eager computation
+        k->lp (into [] (map-indexed (fn [i s] #((-leaf-paths-fn s (conj path i) opts) %))) (m/children schema))]
+    (fn [v]
+      ((k->lp (clause-key v)) v))))
+
 (defmethod -comparator :schema [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator ::m/schema [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator :ref [schema opts] (-comparator (m/deref schema) opts))
@@ -230,6 +289,13 @@
 (defmethod -differ :merge [schema path in opts] (-differ (m/deref schema) (conj path ::m/in) in opts))
 (defmethod -differ :union [schema path in opts] (-differ (m/deref schema) (conj path ::m/in) in opts))
 (defmethod -differ :select-keys [schema path in opts] (-differ (m/deref schema) (conj path ::m/in) in opts))
+
+(defmethod -leaf-paths-fn :schema [schema path opts] (-leaf-paths-fn (m/deref schema) (conj path 0) opts))
+(defmethod -leaf-paths-fn ::m/schema [schema path opts] (-leaf-paths-fn (m/deref schema) (conj path 0) opts))
+(defmethod -leaf-paths-fn :ref [schema path opts] (-leaf-paths-fn (m/deref schema) (conj path 0) opts))
+(defmethod -leaf-paths-fn :merge [schema path opts] (-leaf-paths-fn (m/deref schema) (conj path ::m/in) opts))
+(defmethod -leaf-paths-fn :union [schema path opts] (-leaf-paths-fn (m/deref schema) (conj path ::m/in) opts))
+(defmethod -leaf-paths-fn :select-keys [schema path opts] (-leaf-paths-fn (m/deref schema) (conj path ::m/in) opts))
 
 (defn -seq-parts [schema opts]
   (let [[c] (m/children schema)]
@@ -412,6 +478,14 @@
 (defn diff
   ([?schema left right] (diff ?schema left right nil))
   ([?schema left right opts] ((differ ?schema opts) left right)))
+
+(defn leaf-paths-fn
+  ([?schema] (leaf-paths-fn ?schema nil))
+  ([?schema opts] (-leaf-paths-fn (m/schema ?schema opts) [] opts)))
+
+(defn leaf-paths
+  ([?schema v] (leaf-paths ?schema v nil))
+  ([?schema v opts] ((leaf-paths-fn ?schema opts) v)))
 
 (defn smaller-pred
   ([?schema] (smaller-pred ?schema nil))
