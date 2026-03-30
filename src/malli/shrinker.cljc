@@ -48,9 +48,11 @@
                       :vals [v]})
                    v))))
 
+;; TODO give higher weights to deeper values, using leaf-paths.
+;; e.g, ['let ['b 1] 'a] should be smaller than ['let ['a 1] ['let ['a 1] 'a]]
+;; but with left-to-right weights, right is smaller since (c/compare 'b 'a) => 1
 (defmethod -comparator :tuple [schema opts]
-  (let [;; TODO sort by schema complexity
-        comparators (mapv #(-comparator % opts) (m/children schema))
+  (let [comparators (mapv #(-comparator % opts) (m/children schema))
         nchildren (count comparators)]
     (fn [left right]
       (reduce (fn [_ i]
