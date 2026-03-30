@@ -258,7 +258,7 @@
         ;; TODO tie-the-knot for eager computation
         k->lp (into {} (map-indexed (fn [i [k _ s]]
                                       [i (fn [v path in]
-                                           ((-leaves-fn s opts) v (conj path k) in))]))
+                                           ((-leaves-fn s opts) v (conj path [i k]) in))]))
                     (m/children schema))]
     (fn [v path in]
       ((k->lp (clause-key v)) v path in))))
@@ -371,14 +371,23 @@
             (+' n 1 (count in)))
           0 ls))
 
+(defn -compare-by-leaf-score [left-leaves right-leaves]
+  (let [left-score (-leaf-complexity left-leaves)
+        right-score (-leaf-complexity right-leaves)]
+    (if (< left-score right-score)
+      :smaller
+      (if (> left-score right-score)
+        :larger
+        :equal))))
+
 (defn -leaf-in-depth [ls]
   (reduce (fn [n {:keys [in]}]
             (+' n (count in)))
           0 ls))
 
-(defn -compare-by-leaf-score [left-leaves right-leaves]
-  (let [left-score (-leaf-complexity left-leaves)
-        right-score (-leaf-complexity right-leaves)]
+(defn -compare-by-leaf-in-depth [left-leaves right-leaves]
+  (let [left-score (-leaf-in-depth left-leaves)
+        right-score (-leaf-in-depth right-leaves)]
     (if (< left-score right-score)
       :smaller
       (if (> left-score right-score)
@@ -395,15 +404,28 @@
             by-leaf-score (-compare-by-leaf-score left-leaves right-leaves)]
         (case by-leaf-score
           (:smaller :larger) by-leaf-score
-          :equal (let [left-count (count left-leaves)
-                       right-count (count right-leaves)]
-                   (if (< left-count right-count)
-                     :left
-                     (if (> left-count right-count)
-                       :right
-                       (assert nil))
-                     
-                     )))
+          :equal (let [by-in-depth (-compare-by-leaf-in-depth left-leaves right-leaves)]
+                   (prn "by-in-depth" by-in-depth)
+                   (case by-in-depth
+                     (:smaller :larger) by-in-depth
+                     :equal (loop [left-leaves (seq left-leaves)
+                                   right-leaves (seq right-leaves)]
+                              (if (and left-leaves right-leaves)
+                                (let [left-leaf (first left-leaves)
+                                      right-leaf (first right-leaves)
+                                      compare-paths (c/compare
+                                                      (into (:path left-leaf) (:inner-path left-leaf))
+                                                      (into (:path right-leaf) (:inner-path right-leaf)))]
+                                  ;;TODO check if either are sorted
+                                  (if 
+                                    )
+                                  nil)
+                                (if left-leaves
+                                  :larger
+                                  (if right-leaves)
+                                  )
+                                )
+                              ))))
         ))))
 
 (defmethod -divider :any [schema opts]
