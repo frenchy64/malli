@@ -287,11 +287,13 @@
                ['let ['b 1] 'a]
                ['let ['a 1] ['let ['a 1] 'a]]))))
 
-(defn leaf-paths [schema v]
+(defn leaves [schema v]
   (let [schema (m/schema schema)
         valid? (m/validator schema)]
     (assert (valid? v))
-    (ms/leaf-paths schema v)))
+    (mapv #(update % :schema m/form) (ms/leaves schema v))))
+
+(defn leaf-paths [schema v] (mapv :path (leaves schema v)))
 
 (deftest leaf-paths-test
   (is (= [[]] (leaf-paths :int 0)))
@@ -307,4 +309,16 @@
           [0 0 :Let 2 0 :Let 1 1 0 :Atomic 0 0]
           [0 0 :Let 2 0 :Let 2 0 :Ref]]
          (leaf-paths Expr ['let ['a 1] ['let ['a 1] 'a]])))
+  (is (= '[{:schema [:enum let], :path [0 0 :Let 0], :value let}
+           {:schema :symbol, :path [0 0 :Let 1 0], :value a}
+           {:schema :int, :path [0 0 :Let 1 1 0 :Atomic 0 0], :value 1}
+           {:schema [:enum let], :path [0 0 :Let 2 0 :Let 0], :value let}
+           {:schema :symbol, :path [0 0 :Let 2 0 :Let 1 0], :value a}
+           {:schema :int, :path [0 0 :Let 2 0 :Let 1 1 0 :Atomic 0 0], :value 1}
+           {:schema :symbol, :path [0 0 :Let 2 0 :Let 2 0 :Ref], :value a}]
+         (leaves Expr ['let ['a 1] ['let ['a 1] 'a]])))
+  (is (= [{:schema :int, :path [0], :value 0}
+          {:schema :int, :path [0], :value 1}
+          {:schema :int, :path [0], :value 2}]
+         (leaves [:sequential :int] [0 1 2])))
 )
