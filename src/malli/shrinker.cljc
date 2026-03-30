@@ -410,21 +410,35 @@
                      (:smaller :larger) by-in-depth
                      :equal (loop [left-leaves (seq left-leaves)
                                    right-leaves (seq right-leaves)]
+                              ;;TODO check both are sorted wrt to other leaves
                               (if (and left-leaves right-leaves)
                                 (let [left-leaf (first left-leaves)
                                       right-leaf (first right-leaves)
-                                      compare-paths (c/compare
-                                                      (into (:path left-leaf) (:inner-path left-leaf))
-                                                      (into (:path right-leaf) (:inner-path right-leaf)))]
-                                  ;;TODO check if either are sorted
-                                  (if 
-                                    )
-                                  nil)
+                                      _ (assert (not (:unordered-paths left-leaf)))
+                                      _ (assert (not (:unordered-paths right-leaf)))
+                                      ->comparable-path (fn [path]
+                                                          {:post [(every? int? %)]}
+                                                          (mapv #(cond-> % (vector? %) first) path))
+                                      compare-paths
+                                      (c/compare
+                                        (->comparable-path (into (:path left-leaf) (:inner-path left-leaf)))
+                                        (->comparable-path (into (:path right-leaf) (:inner-path right-leaf))))]
+                                  (if (neg? compare-paths)
+                                    :smaller
+                                    (if (pos? compare-paths)
+                                      :larger
+                                      (let [compare-vals (compare (:schema left-leaf)
+                                                                  (:value left-leaf)
+                                                                  (:value right-leaf)
+                                                                  opts)]
+                                        (case compare-vals
+                                          (:smaller :larger :unknown) compare-vals
+                                          :equal (recur (next left-leaves) (next right-leaves)))))))
                                 (if left-leaves
                                   :larger
-                                  (if right-leaves)
-                                  )
-                                )
+                                  (if right-leaves
+                                    :smaller
+                                    :unknown)))
                               ))))
         ))))
 
