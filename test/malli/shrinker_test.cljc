@@ -258,4 +258,31 @@
             :right [let [a 1] a]}]
          (diff Expr
                ['let ['a 1] 'a]
+               ['let ['a 1] ['let ['a 1] 'a]])))
+  (is (= '[{:result :larger,
+            :schema :symbol,
+            :path [0 0 3 1 0],
+            :in [1 0],
+            :left b,
+            :right a}
+           {:result :smaller,
+            :schema
+            [:orn
+             [:Atomic [:maybe [:or :int :boolean]]]
+             [:Ref :symbol]
+             [:App
+              [:tuple
+               [:ref :malli.shrinker-test/Expr]
+               [:ref :malli.shrinker-test/Expr]]]
+             [:Let
+              [:tuple
+               [:enum let]
+               [:tuple :symbol [:ref :malli.shrinker-test/Expr]]
+               [:ref :malli.shrinker-test/Expr]]]],
+            :path [0 0 3 2 0],
+            :in [2],
+            :left a,
+            :right [let [a 1] a]}]
+         (diff Expr
+               ['let ['b 1] 'a]
                ['let ['a 1] ['let ['a 1] 'a]]))))
