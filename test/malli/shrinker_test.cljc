@@ -310,13 +310,13 @@
           [0 0 :Let 2 0 :Let 1 1 0 :Atomic 0 0]
           [0 0 :Let 2 0 :Let 2 0 :Ref]]
          (leaf-paths Expr ['let ['a 1] ['let ['a 1] 'a]])))
-  (is (= '[{:schema [:enum let], :path [0 0 :Let 0], :value let}
-           {:schema :symbol, :path [0 0 :Let 1 0], :value a}
-           {:schema :int, :path [0 0 :Let 1 1 0 :Atomic 0 0], :value 1}
-           {:schema [:enum let], :path [0 0 :Let 2 0 :Let 0], :value let}
-           {:schema :symbol, :path [0 0 :Let 2 0 :Let 1 0], :value a}
-           {:schema :int, :path [0 0 :Let 2 0 :Let 1 1 0 :Atomic 0 0], :value 1}
-           {:schema :symbol, :path [0 0 :Let 2 0 :Let 2 0 :Ref], :value a}]
+  (is (= '[{:schema [:enum let], :path [0 :Let 0], :value let}
+           {:schema :symbol, :path [0 :Let 1 0], :value a}
+           {:schema :int, :path [0 :Let 1 1 0 :Atomic 0 0], :value 1}
+           {:schema [:enum let], :path [0 :Let 2 0 :Let 0], :value let}
+           {:schema :symbol, :path [0 :Let 2 0 :Let 1 0], :value a}
+           {:schema :int, :path [0 :Let 2 0 :Let 1 1 0 :Atomic 0 0], :value 1}
+           {:schema :symbol, :path [0 :Let 2 0 :Let 2 0 :Ref], :value a}]
          (leaves Expr ['let ['a 1] ['let ['a 1] 'a]])))
   (is (= [{:schema :int, :path [0], :value 0}
           {:schema :int, :path [0], :value 1}
@@ -339,4 +339,9 @@
           {:schema :int, :path [0 0], :value 2, :unordered-paths [[0]]}
           {:schema :int, :path [0 0], :value 1, :unordered-paths [[0]]}]
          (leaves [:set [:sequential :int]] #{[] [1] [1 2]})))
+  (is (= [{:schema :int, :path [0 0 0], :value 1, :unordered-paths [[0 0] [0]]}
+          {:schema :int, :path [0 0 0], :value 2, :unordered-paths [[0 0] [0]]}
+          {:schema [:sequential :int], :path [0 0], :value [], :unordered-paths [[0 0] [0]]}
+          {:schema :int, :path [0 0 0], :value 1, :unordered-paths [[0 0] [0]]}]
+         (leaves [:set [:set [:sequential :int]]] #{#{[] [1]} #{[1 2]}})))
 )
