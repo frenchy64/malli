@@ -366,12 +366,45 @@
 (defmethod -deconstructor :seqable [schema opts] (-seq-parts schema opts))
 (defmethod -deconstructor :every [schema opts] (-seq-parts schema opts))
 
+(defn -leaf-complexity [ls]
+  (reduce (fn [n {:keys [path in]}]
+            (+' n 1 (count in)))
+          0 ls))
+
+(defn -leaf-in-depth [ls]
+  (reduce (fn [n {:keys [in]}]
+            (+' n (count in)))
+          0 ls))
+
+(defn -compare-by-leaf-score [left-leaves right-leaves]
+  (let [left-score (-leaf-complexity left-leaves)
+        right-score (-leaf-complexity right-leaves)]
+    (if (< left-score right-score)
+      :smaller
+      (if (> left-score right-score)
+        :larger
+        :equal))))
+
 (defmethod -comparator :sequential [schema opts]
   (let [child (nth (m/children schema) 0)
-        cmp (-comparator child opts)]
+        cmp (-comparator child opts)
+        lf (-leaves-fn child opts)]
     (fn [left right]
-      (assert nil)
-      )))
+      (let [left-leaves (lf left [] [])
+            right-leaves (lf right [] [])
+            by-leaf-score (-compare-by-leaf-score left-leaves right-leaves)]
+        (case by-leaf-score
+          (:smaller :larger) by-leaf-score
+          :equal (let [left-count (count left-leaves)
+                       right-count (count right-leaves)]
+                   (if (< left-count right-count)
+                     :left
+                     (if (> left-count right-count)
+                       :right
+                       (assert nil))
+                     
+                     )))
+        ))))
 
 (defmethod -divider :any [schema opts]
   (fn [v path]

@@ -339,14 +339,36 @@
           {:schema :int, :path [0], :in [1], :value 2}
           {:schema :int, :path [0], :in [2], :value 3}]
          (leaves [:set :int] #{1 2 3})))
-  (is (= [{:schema [:sequential :int], :path [0], :value [], :unordered-paths [[0]]}
-          {:schema :int, :path [0 0], :value 1, :unordered-paths [[0]]}
-          {:schema :int, :path [0 0], :value 2, :unordered-paths [[0]]}
-          {:schema :int, :path [0 0], :value 1, :unordered-paths [[0]]}]
+  (is (= nil
          (leaves [:set [:sequential :int]] #{[] [1] [1 2]})))
-  (is (= [{:schema :int, :path [0 0 0 0], :value 1, :unordered-paths [[0]]}
-          {:schema :int, :path [0 0 0 0], :value 2, :unordered-paths [[0]]}
-          {:schema [:sequential :int], :path [0 0], :value [], :unordered-paths [[0 0] [0]]}
-          {:schema :int, :path [0 0 0], :value 1, :unordered-paths [[0 0] [0]]}]
+  (is (= nil
          (leaves [:set [:set [:sequential :int]]] #{#{[] [1]} #{[1 2]}})))
+)
+
+(defn leaf-complexity [schema v]
+  (ms/-leaf-complexity (leaves schema v)))
+
+(deftest leaf-complexity-test
+  (is (= 1  (leaf-complexity :int 0)))
+  (is (= 1  (leaf-complexity [:sequential :int] [])))
+  (is (= 6  (leaf-complexity [:sequential :int] [0 1 2])))
+  (is (= 12 (leaf-complexity [:sequential :int] [0 1 2 4 5 6])))
+  (is (= 9  (leaf-complexity [:sequential [:sequential :int]] [[0 1 2]])))
+  (is (= 18 (leaf-complexity [:sequential [:sequential :int]] [[0 1 2 4 5 6]])))
+  (is (= 18 (leaf-complexity [:sequential [:sequential :int]] [[0 1 2] [4 5 6]])))
+  (is (= 18 (leaf-complexity [:set [:sequential :int]] #{[] [1] [1 2]})))
+)
+
+(defn leaf-in-depth [schema v]
+  (ms/-leaf-in-depth (leaves schema v)))
+
+(deftest leaf-in-depth-test
+  (is (= 0  (leaf-in-depth :int 0)))
+  (is (= 0  (leaf-in-depth [:sequential :int] [])))
+  (is (= 3  (leaf-in-depth [:sequential :int] [0 1 2])))
+  (is (= 6  (leaf-in-depth [:sequential :int] [0 1 2 4 5 6])))
+  (is (= 6  (leaf-in-depth [:sequential [:sequential :int]] [[0 1 2]])))
+  (is (= 12 (leaf-in-depth [:sequential [:sequential :int]] [[0 1 2 4 5 6]])))
+  (is (= 12 (leaf-in-depth [:sequential [:sequential :int]] [[0 1 2] [4 5 6]])))
+  (is (= 18 (leaf-in-depth [:set [:sequential :int]] #{[] [1] [1 2]})))
 )
