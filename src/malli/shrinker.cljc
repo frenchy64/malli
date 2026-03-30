@@ -133,18 +133,23 @@
         [{:schema schema :path path :value v}]))))
 
 (defmethod -leaves-fn :set [schema opts]
-  (let [lf (-leaves-fn (nth (m/children schema) 0) opts)]
+  (let [child-id 0
+        child (nth (m/children schema) child-id)
+        lf (-leaves-fn child opts)
+        sort (sorter child opts)]
     (fn [v path]
       (let [cv (count v)]
         (if (zero? cv)
           [{:schema schema :path path :value v}]
-          (let [path (conj path 0)]
+          (let [path (conj path child-id)]
             (if (= 1 cv)
-              (lf (first v) (conj path 0))
-              (mapcat (fn [e]
-                        (map #(update % :unordered-paths (fnil conj []) path)
-                             (lf e path)))
-                      v))))))))
+              (lf (first v) (conj path child-id))
+              (let [vsorted (sort v)
+                    v (or vsorted v)]
+                (mapcat (fn [e]
+                          (cond->> (lf e path)
+                            (not vsorted) (map #(update % :unordered-paths (fnil conj []) path))))
+                        v)))))))))
 
 (defmethod -comparator :enum [schema opts]
   (-core-comparator (into {} (map-indexed (fn [i v] [v i])) (m/children schema))))
