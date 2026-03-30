@@ -339,8 +339,8 @@
           {:schema :int, :path [0 0], :value 2, :unordered-paths [[0]]}
           {:schema :int, :path [0 0], :value 1, :unordered-paths [[0]]}]
          (leaves [:set [:sequential :int]] #{[] [1] [1 2]})))
-  (is (= [{:schema :int, :path [0 0 0], :value 1, :unordered-paths [[0 0] [0]]}
-          {:schema :int, :path [0 0 0], :value 2, :unordered-paths [[0 0] [0]]}
+  (is (= [{:schema :int, :path [0 0 0 0], :value 1, :unordered-paths [[0]]}
+          {:schema :int, :path [0 0 0 0], :value 2, :unordered-paths [[0]]}
           {:schema [:sequential :int], :path [0 0], :value [], :unordered-paths [[0 0] [0]]}
           {:schema :int, :path [0 0 0], :value 1, :unordered-paths [[0 0] [0]]}]
          (leaves [:set [:set [:sequential :int]]] #{#{[] [1]} #{[1 2]}})))
