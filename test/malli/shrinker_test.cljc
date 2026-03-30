@@ -238,8 +238,24 @@
            :left 0,
            :right 1}]
          (diff [:tuple :int] [0] [1])))
-  (is (= nil
+  (is (= '[{:result :smaller,
+            :schema
+            [:orn
+             [:Atomic [:maybe [:or :int :boolean]]]
+             [:Ref :symbol]
+             [:App
+              [:tuple
+               [:ref :malli.shrinker-test/Expr]
+               [:ref :malli.shrinker-test/Expr]]]
+             [:Let
+              [:tuple
+               [:enum let]
+               [:tuple :symbol [:ref :malli.shrinker-test/Expr]]
+               [:ref :malli.shrinker-test/Expr]]]],
+            :path [0 0 3 2 0],
+            :in [2],
+            :left a,
+            :right [let [a 1] a]}]
          (diff Expr
                ['let ['a 1] 'a]
-               ['let ['a 1] ['let ['a 1] 'a]])))
-  )
+               ['let ['a 1] ['let ['a 1] 'a]]))))

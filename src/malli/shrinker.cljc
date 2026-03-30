@@ -27,6 +27,7 @@
   (prn "unsupported: " (m/type s))
   (fn [left right]
     [{:result :unknown
+      :schema s
       :path path
       :in in
       :left left
@@ -143,6 +144,32 @@
           (:smaller :larger :unknown) co
           :equal ((k->cmp lp) left right))))))
 
+(defmethod -differ :orn [schema path in opts]
+  (let [cmp (-core-comparator)
+        validators (mapv (comp m/validator peek) (m/children schema))
+        nchildren (count validators)
+        clause-key (fn [v]
+                     (or (some (fn [i]
+                                 (when ((nth validators i) v)
+                                   i))
+                               (range nchildren))
+                         (throw (ex-info "unmatched" {:schema schema
+                                                      :value v}))))
+        ;; TODO tie-the-knot for eager computation
+        k->diff (into {} (map-indexed (fn [i [_ _ s]] [i #((-differ s (conj path i) in opts) % %2)])) (m/children schema))]
+    (fn [left right]
+      (let [lp (clause-key left)
+            rp (clause-key right)
+            co (cmp lp rp)]
+        (case co
+          (:smaller :larger :unknown) [{:result co
+                                        :schema schema
+                                        :path path
+                                        :in in
+                                        :left left
+                                        :right right}]
+          :equal ((k->diff lp) left right))))))
+
 (defmethod -comparator :or [schema opts]
   (let [cmp (-core-comparator)
         validators (mapv m/validator (m/children schema))
@@ -163,6 +190,32 @@
         (case co
           (:smaller :larger :unknown) co
           :equal ((k->cmp lp) left right))))))
+
+(defmethod -differ :or [schema path in opts]
+  (let [cmp (-core-comparator)
+        validators (mapv m/validator (m/children schema))
+        nchildren (count validators)
+        clause-key (fn [v]
+                     (or (some (fn [i]
+                                 (when ((nth validators i) v)
+                                   i))
+                               (range nchildren))
+                         (throw (ex-info "unmatched" {:schema schema
+                                                      :value v}))))
+        ;; TODO tie-the-knot for eager computation
+        k->diff (into [] (map-indexed (fn [i s] #((-differ s (conj path i) in opts) % %2))) (m/children schema))]
+    (fn [left right]
+      (let [lp (clause-key left)
+            rp (clause-key right)
+            co (cmp lp rp)]
+        (case co
+          (:smaller :larger :unknown) [{:result co
+                                        :schema schema
+                                        :path path
+                                        :in in
+                                        :left left
+                                        :right right}]
+          :equal ((k->diff lp) left right))))))
 
 (defmethod -comparator :schema [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator ::m/schema [schema opts] (-comparator (m/deref schema) opts))
