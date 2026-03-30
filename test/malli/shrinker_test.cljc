@@ -298,6 +298,7 @@
 (deftest leaf-paths-test
   (is (= [[]] (leaf-paths :int 0)))
   (is (= [[0]] (leaf-paths [:tuple :int] [0])))
+  (is (= [[]] (leaf-paths [:tuple] [])))
   (is (= [[0 0]] (leaf-paths [:tuple [:tuple :int]] [[0]])))
   (is (= [[0 0] [0 1]] (leaf-paths [:tuple [:tuple :int [:enum :a]]] [[0 :a]])))
   (is (= [[0 0 :Ref]] (leaf-paths Expr 'a)))
@@ -321,4 +322,21 @@
           {:schema :int, :path [0], :value 1}
           {:schema :int, :path [0], :value 2}]
          (leaves [:sequential :int] [0 1 2])))
+  (is (= [{:schema :int, :path [0 :left], :value 0}
+          {:schema :boolean, :path [0 :right], :value true}
+          {:schema :int, :path [0 :left], :value 2}]
+         (leaves [:sequential [:orn [:left :int] [:right :boolean]]] [0 true 2])))
+  (is (= [{:schema [:sequential :int], :path [], :value []}]
+         (leaves [:sequential :int] [])))
+  (is (= [{:schema [:enum :a :b :c], :path [], :inner-path [0], :value :a}]
+         (leaves [:enum :a :b :c] :a)))
+  (is (= [{:schema :int, :path [0], :value 1, :unordered-paths [[0]]}
+          {:schema :int, :path [0], :value 3, :unordered-paths [[0]]}
+          {:schema :int, :path [0], :value 2, :unordered-paths [[0]]}]
+         (leaves [:set :int] #{1 2 3})))
+  (is (= [{:schema [:sequential :int], :path [0], :value [], :unordered-paths [[0]]}
+          {:schema :int, :path [0 0], :value 1, :unordered-paths [[0]]}
+          {:schema :int, :path [0 0], :value 2, :unordered-paths [[0]]}
+          {:schema :int, :path [0 0], :value 1, :unordered-paths [[0]]}]
+         (leaves [:set [:sequential :int]] #{[] [1] [1 2]})))
 )

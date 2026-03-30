@@ -39,9 +39,9 @@
       :in in
       :left left
       :right right}]))
-(defmethod -leaves-fn ::default [s path opts]
+(defmethod -leaves-fn ::default [s opts]
   (prn "[-leaves-fn] unsupported: " (m/type s))
-  (fn [v] []))
+  (fn [v path] []))
 
 (defmethod -deconstructor :tuple [schema opts]
   (let [cs (m/children schema)]
@@ -76,14 +76,16 @@
                        cat)
               differs)))))
 
-(defmethod -leaves-fn :tuple [schema path opts]
-  (let [leaves-fns (mapv (fn [i c] (-leaves-fn c opts)) (m/children schema))]
+(defmethod -leaves-fn :tuple [schema opts]
+  (let [lfs (mapv (fn [i c] (-leaves-fn c opts)) (m/children schema))]
     (fn [v path]
-      (into [] (comp (map-indexed
-                       (fn [i f]
-                         ((nth leaves-fns i) (nth v i) (conj path i))))
-                     cat)
-            leaves-fns))))
+      (if (empty? v)
+        [{:schema schema :path path :value v}]
+        (into [] (comp (map-indexed
+                         (fn [i lf]
+                           (lf (nth v i) (conj path i))))
+                       cat)
+              lfs)))))
 
 (defn -core-comparator
   ([] (-core-comparator identity))
@@ -123,15 +125,33 @@
 (defmethod -leaves-fn :keyword [schema opts] (fn [v path] [{:schema schema :path path :value v}]))
 
 (defmethod -leaves-fn :sequential [schema opts]
-  (let [lp (-leaves-fn (nth (m/children schema) 0) opts)]
-    (fn [v path] (into [] (mapcat #(lp % (conj path 0))) v))))
+  (let [lf (-leaves-fn (nth (m/children schema) 0) opts)]
+    (fn [v path]
+      (if-some [v (seq v)]
+        (let [path (conj path 0)]
+          (mapcat #(lf % path) v))
+        [{:schema schema :path path :value v}]))))
+
+(defmethod -leaves-fn :set [schema opts]
+  (let [lf (-leaves-fn (nth (m/children schema) 0) opts)]
+    (fn [v path]
+      (if-some [v (seq v)]
+        (let [path (conj path 0)]
+          (mapcat (fn [e]
+                    (map #(update % :unordered-paths (fnil conj []) path)
+                         (lf e path)))
+                  v))
+        [{:schema schema :path path :value v}]))))
 
 (defmethod -comparator :enum [schema opts]
   (-core-comparator (into {} (map-indexed (fn [i v] [v i])) (m/children schema))))
 
 (defmethod -differ :enum [schema path in opts] (-leaf-differ schema path in opts))
 
-(defmethod -leaves-fn :enum [schema opts] (fn [v path] [{:schema schema :path path :value v}]))
+(defmethod -leaves-fn :enum [schema opts]
+  (let [v->i (into {} (map-indexed (fn [i v] [v i])) (m/children schema))]
+    (fn [v path]
+      [{:schema schema :path path :inner-path [(v->i v)] :value v}])))
 
 (defmethod -comparator :maybe [schema opts]
   (let [cmp (-comparator (nth (m/children schema) 0) opts)]
@@ -224,8 +244,8 @@
                                       [i (fn [v path]
                                            ((-leaves-fn s opts) v (conj path k)))]))
                     (m/children schema))]
-    (fn [v]
-      ((k->lp (clause-key v)) v))))
+    (fn [v path]
+      ((k->lp (clause-key v)) v path))))
 
 (defmethod -comparator :or [schema opts]
   (let [cmp (-core-comparator)
@@ -289,8 +309,8 @@
                                       (fn [v path]
                                         ((-leaves-fn s opts) v (conj path i)))))
                     (m/children schema))]
-    (fn [v]
-      ((k->lp (clause-key v)) v))))
+    (fn [v path]
+      ((k->lp (clause-key v)) v path))))
 
 (defmethod -comparator :schema [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator ::m/schema [schema opts] (-comparator (m/deref schema) opts))
