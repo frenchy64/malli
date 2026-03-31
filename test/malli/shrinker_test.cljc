@@ -461,47 +461,25 @@
          (explode [:schema {:registry {"Cons" [:maybe [:sequential [:ref "Cons"]]]}} "Cons"]
                   [])))
   (is (= [{:schema [:maybe [:sequential [:ref "Cons"]]],
-           :path [0],
-           :in [],
-           :value [[[[nil]]]]}
+           :id 0, :path [0 0], :in [], :value [[[[nil]]]]}
           {:schema [:sequential [:ref "Cons"]],
-           :path [0 0],
-           :in [],
-           :value [[[[nil]]]]}
+           :id 1, :path [0 0 0], :in [], :value [[[[nil]]]]}
           {:schema [:maybe [:sequential [:ref "Cons"]]],
-           :path [0 0 0 0],
-           :in [0],
-           :value [[[nil]]]}
+           :id 0, :path [0 0 0 0 0], :in [0], :value [[[nil]]]}
           {:schema [:sequential [:ref "Cons"]],
-           :path [0 0 0 0 0],
-           :in [0],
-           :value [[[nil]]]}
+           :id 1, :path [0 0 0 0 0 0], :in [0], :value [[[nil]]]}
           {:schema [:maybe [:sequential [:ref "Cons"]]],
-           :path [0 0 0 0 0 0 0],
-           :in [0 0],
-           :value [[nil]]}
+           :id 0, :path [0 0 0 0 0 0 0 0], :in [0 0], :value [[nil]]}
           {:schema [:sequential [:ref "Cons"]],
-           :path [0 0 0 0 0 0 0 0],
-           :in [0 0],
-           :value [[nil]]}
+           :id 1, :path [0 0 0 0 0 0 0 0 0], :in [0 0], :value [[nil]]}
           {:schema [:maybe [:sequential [:ref "Cons"]]],
-           :path [0 0 0 0 0 0 0 0 0 0],
-           :in [0 0 0],
-           :value [nil]}
+           :id 0, :path [0 0 0 0 0 0 0 0 0 0 0], :in [0 0 0], :value [nil]}
           {:schema [:sequential [:ref "Cons"]],
-           :path [0 0 0 0 0 0 0 0 0 0 0],
-           :in [0 0 0],
-           :value [nil]}
+           :id 1, :path [0 0 0 0 0 0 0 0 0 0 0 0], :in [0 0 0], :value [nil]}
           {:schema [:maybe [:sequential [:ref "Cons"]]],
-           :path [0 0 0 0 0 0 0 0 0 0 0 0 0],
-           :in [0 0 0 0],
-           :value nil,
-           :leaf true}
+           :id 0, :path [0 0 0 0 0 0 0 0 0 0 0 0 0 0], :in [0 0 0 0], :value nil, :leaf true}
           {:schema [:sequential [:ref "Cons"]],
-           :path [0 0 0 0 0 0 0 0 0 0 0 0 0 0],
-           :in [0 0 0 0],
-           :value nil,
-           :leaf true}]
+           :id 1, :path [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0], :in [0 0 0 0], :value nil, :leaf true}]
          (explode [:schema {:registry {"Cons" [:maybe [:sequential [:ref "Cons"]]]}} "Cons"]
                   [[[[nil]]]])))
   )
