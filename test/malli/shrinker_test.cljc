@@ -199,7 +199,22 @@
   (is-smaller? [:set :int] #{0} #{1 2})
   (is-smaller? [:set [:set [:sequential :int]]]
                #{#{[] [1]}}
-               #{#{[] [1]} #{[1 2]}}))
+               #{#{[] [1]} #{[1 2]}})
+  (is-smaller? [:set [:set [:sequential :int]]]
+               #{}
+               #{#{}})
+  (is-equal? [:set [:set [:sequential :int]]]
+             #{}
+             #{})
+  (is-equal? [:set [:set [:sequential :int]]]
+             #{#{}}
+             #{#{}})
+  (is-smaller? [:set [:set [:sequential :int]]]
+               #{#{}}
+               #{#{[]}})
+  (is-smaller? [:set [:set [:sequential :int]]]
+               #{#{[] [1]}}
+               #{#{[] [2]}}))
 
 (def Let (m/-get (m/deref-all Expr) :Let nil))
 
@@ -309,7 +324,7 @@
 
 (defn leaf-paths [schema v] (mapv :path (leaves schema v)))
 
-(deftest leaf-paths-test
+(deftest leaves-test
   (is (= [[]] (leaf-paths :int 0)))
   (is (= [[0]] (leaf-paths [:tuple :int] [0])))
   (is (= [[]] (leaf-paths [:tuple] [])))
@@ -372,11 +387,12 @@
           {:schema :int, :path [0 0], :in [2 0], :value 1}
           {:schema :int, :path [0 0], :in [2 1], :value 2}]
          (leaves [:set [:sequential :int]] #{[] [1] [1 2]})))
-  ;;FIXME
-  (is (= [{:schema :int, :path [0 0 0], :in [0 0 0], :value 1, :unordered-paths [[0]]}
-          {:schema :int, :path [0 0 0], :in [0 0 1], :value 2, :unordered-paths [[0]]}
-          {:schema [:sequential :int], :path [0 0], :in [0 0], :value [], :unordered-paths [[0]]}
-          {:schema :int, :path [0 0 0], :in [0 1 0], :value 1, :unordered-paths [[0]]}]
+  (is (= [{:schema [:set [:sequential :int]], :path [0], :in [0], :value #{}}]
+         (leaves [:set [:set [:sequential :int]]] #{#{}})))
+  (is (= [{:schema [:sequential :int], :path [0 0], :in [0 0], :value []}
+          {:schema :int, :path [0 0 0], :in [0 1 0], :value 1}
+          {:schema :int, :path [0 0 0], :in [1 0 0], :value 1}
+          {:schema :int, :path [0 0 0], :in [1 0 1], :value 2}]
          (leaves [:set [:set [:sequential :int]]] #{#{[] [1]} #{[1 2]}}))))
 
 (defn leaf-complexity [schema v]
