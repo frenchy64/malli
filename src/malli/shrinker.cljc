@@ -130,14 +130,13 @@
 (defmethod -exploder :sequential [schema opts]
   (let [lf (-exploder (nth (m/children schema) 0) opts)]
     (fn [v path in]
-      (if (seq v)
-        (cond->> (let [path (conj path 0)]
-                   (sequence
-                     (comp (map-indexed #(lf %2 path (conj in %)))
-                           cat)
-                     v))
-          (seq in) (cons {:schema schema :path path :in in :value v}))
-        [{:schema schema :path path :in in :leaf true :value v}]))))
+      (cons (cond-> {:schema schema :path path :in in :value v}
+              (empty? v) (assoc :leaf true))
+            (let [path (conj path 0)]
+              (sequence
+                (comp (map-indexed #(lf %2 path (conj in %)))
+                      cat)
+                v))))))
 
 (defmethod -exploder :set [schema opts]
   (let [child (nth (m/children schema) 0)
@@ -145,24 +144,23 @@
         sort (sorter child opts)]
     (fn [v path in]
       (let [cv (count v)]
-        (if (zero? cv)
-          [{:schema schema :path path :in in :leaf true :value v}]
-          (cond->>
-            (let [path (conj path 0)]
-              (if (= 1 cv)
-                (lf (first v) path (conj in 0))
-                (let [vsorted (sort v)
-                      v (or vsorted v)]
-                  (sequence
-                    (if vsorted
-                      (comp (map-indexed (fn [i e] (lf e path (conj in i))))
-                            cat)
-                      (let [in (conj in 0)] ;;unordered, use same in
-                        (comp
-                          (mapcat (fn [e] (lf e path in)))
-                          (map #(update % :unordered-paths (fnil conj []) path)))))
-                    v))))
-            (seq in) (cons {:schema schema :path path :in in :value v})))))))
+        (cons
+          (cond-> {:schema schema :path path :in in :value v}
+            (zero? cv) (assoc :leaf true))
+          (let [path (conj path 0)]
+            (if (= 1 cv)
+              (lf (first v) path (conj in 0))
+              (let [vsorted (sort v)
+                    v (or vsorted v)]
+                (sequence
+                  (if vsorted
+                    (comp (map-indexed (fn [i e] (lf e path (conj in i))))
+                          cat)
+                    (let [in (conj in 0)] ;;unordered, use same in
+                      (comp
+                        (mapcat (fn [e] (lf e path in)))
+                        (map #(update % :unordered-paths (fnil conj []) path)))))
+                  v)))))))))
 
 (defmethod -comparator :enum [schema opts]
   (-core-comparator (into {} (map-indexed (fn [i v] [v i])) (m/children schema))))
@@ -336,6 +334,7 @@
     (fn [v path in]
       ((k->lp (clause-key v)) v path in))))
 
+;;FIXME handle recursion (see -exploder-add-path)
 (defmethod -comparator :schema [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator ::m/schema [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator :ref [schema opts] (-comparator (m/deref schema) opts))
@@ -343,6 +342,7 @@
 (defmethod -comparator :union [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator :select-keys [schema opts] (-comparator (m/deref schema) opts))
 
+;;FIXME handle recursion (see -exploder-add-path)
 (defmethod -differ :schema [schema path in opts] (-differ (m/deref schema) (conj path 0) in opts))
 (defmethod -differ ::m/schema [schema path in opts] (-differ (m/deref schema) (conj path 0) in opts))
 (defmethod -differ :ref [schema path in opts] (-differ (m/deref schema) (conj path 0) in opts))
@@ -360,9 +360,9 @@
 (defmethod -exploder :schema [schema opts] (-exploder-add-path (m/deref schema) 0 opts))
 (defmethod -exploder ::m/schema [schema opts] (-exploder-add-path (m/deref schema) 0 opts))
 (defmethod -exploder :ref [schema opts] (-exploder-add-path (m/deref schema) 0 opts))
-(defmethod -exploder :merge [schema opts] (-exploder-add-path (m/deref schema) ::m/in opts))
-(defmethod -exploder :union [schema opts] (-exploder-add-path (m/deref schema) ::m/in opts))
-(defmethod -exploder :select-keys [schema opts] (-exploder-add-path (m/deref schema) ::m/in opts))
+(defmethod -exploder :merge [schema opts] (-exploder-add-path (m/deref schema) [0 ::m/in] opts))
+(defmethod -exploder :union [schema opts] (-exploder-add-path (m/deref schema) [0 ::m/in] opts))
+(defmethod -exploder :select-keys [schema opts] (-exploder-add-path (m/deref schema) [0 ::m/in] opts))
 
 (defn -seq-parts [schema opts]
   (let [[c] (m/children schema)]
