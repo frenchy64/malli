@@ -443,10 +443,26 @@
           {:schema [:sequential :int], :path [0], :in [1], :value [1]}
           {:schema :int, :path [0 0], :in [1 0], :leaf true, :value 1}]
          (explode [:set [:sequential :int]] #{[] [1]})))
-  (is (= [{:schema [:sequential :int], :path [0 0], :in [0 0], :value [1 2], :unordered-paths [[0]]}
-          {:schema :int, :path [0 0 0], :in [0 0 0], :leaf true, :value 1, :unordered-paths [[0]]}
-          {:schema :int, :path [0 0 0], :in [0 0 1], :leaf true, :value 2, :unordered-paths [[0]]}
-          {:schema [:sequential :int], :path [0 0], :in [0 0], :leaf true, :value [], :unordered-paths [[0]]}
-          {:schema [:sequential :int], :path [0 0], :in [0 1], :value [1], :unordered-paths [[0]]}
-          {:schema :int, :path [0 0 0], :in [0 1 0], :leaf true, :value 1, :unordered-paths [[0]]}]
-         (explode [:set [:set [:sequential :int]]] #{#{[] [1]} #{[1 2]}}))))
+  (is (= [{:schema [:set [:sequential :int]], :path [0], :in [0], :value #{[] [1]}}
+          {:schema [:sequential :int], :path [0 0], :in [0 0], :leaf true, :value []}
+          {:schema [:sequential :int], :path [0 0], :in [0 1], :value [1]}
+          {:schema :int, :path [0 0 0], :in [0 1 0], :leaf true, :value 1}
+          {:schema [:set [:sequential :int]], :path [0], :in [1], :value #{[1 2]}}
+          {:schema [:sequential :int], :path [0 0], :in [1 0], :value [1 2]}
+          {:schema :int, :path [0 0 0], :in [1 0 0], :leaf true, :value 1}
+          {:schema :int, :path [0 0 0], :in [1 0 1], :leaf true, :value 2}]
+         (explode [:set [:set [:sequential :int]]] #{#{[] [1]} #{[1 2]}})))
+  (is (= [{:schema [:sequential [:ref :malli.shrinker-test/Cons]], :path [0 0], :in [], :leaf true, :value []}]
+         (explode [:schema {:registry {::Cons [:maybe [:sequential [:ref ::Cons]]]}} ::Cons]
+                  [])))
+  (is (= [{:schema [:sequential [:ref :malli.shrinker-test/Cons]],
+           :path [0 0 0 0 0], :in [0], :value [[[nil]]]}
+          {:schema [:sequential [:ref :malli.shrinker-test/Cons]],
+           :path [0 0 0 0 0 0 0 0], :in [0 0], :value [[nil]]}
+          {:schema [:sequential [:ref :malli.shrinker-test/Cons]],
+           :path [0 0 0 0 0 0 0 0 0 0 0], :in [0 0 0], :value [nil]}
+          {:schema [:maybe [:sequential [:ref :malli.shrinker-test/Cons]]],
+           :path [0 0 0 0 0 0 0 0 0 0 0 0 0], :in [0 0 0 0], :leaf true, :value nil}]
+         (explode [:schema {:registry {::Cons [:maybe [:sequential [:ref ::Cons]]]}} ::Cons]
+                  [[[[nil]]]])))
+  )

@@ -147,20 +147,22 @@
       (let [cv (count v)]
         (if (zero? cv)
           [{:schema schema :path path :in in :leaf true :value v}]
-          (let [path (conj path 0)]
-            (if (= 1 cv)
-              (lf (first v) path (conj in 0))
-              (let [vsorted (sort v)
-                    v (or vsorted v)]
-                (sequence
-                  (if vsorted
-                    (comp (map-indexed (fn [i e] (lf e path (conj in i))))
-                          cat)
-                    (let [in (conj in 0)] ;;unordered, use same in
-                      (comp
-                        (mapcat (fn [e] (lf e path in)))
-                        (map #(update % :unordered-paths (fnil conj []) path)))))
-                  v)))))))))
+          (cond->>
+            (let [path (conj path 0)]
+              (if (= 1 cv)
+                (lf (first v) path (conj in 0))
+                (let [vsorted (sort v)
+                      v (or vsorted v)]
+                  (sequence
+                    (if vsorted
+                      (comp (map-indexed (fn [i e] (lf e path (conj in i))))
+                            cat)
+                      (let [in (conj in 0)] ;;unordered, use same in
+                        (comp
+                          (mapcat (fn [e] (lf e path in)))
+                          (map #(update % :unordered-paths (fnil conj []) path)))))
+                    v))))
+            (seq in) (cons {:schema schema :path path :in in :value v})))))))
 
 (defmethod -comparator :enum [schema opts]
   (-core-comparator (into {} (map-indexed (fn [i v] [v i])) (m/children schema))))
@@ -349,9 +351,11 @@
 (defmethod -differ :select-keys [schema path in opts] (-differ (m/deref schema) (conj path ::m/in) in opts))
 
 (defn -exploder-add-path [schema path-elem opts]
-  (let [lf (-exploder (m/deref schema) opts)]
+  ;;FIXME tie-the-knot
+  ;;FIXME eagerly compute lf
+  (let [lf (m/-memoize (fn [] (-exploder (m/deref schema) opts)))]
     (fn [v path in]
-      (lf v (conj path path-elem) in))))
+      ((lf) v (conj path path-elem) in))))
 
 (defmethod -exploder :schema [schema opts] (-exploder-add-path (m/deref schema) 0 opts))
 (defmethod -exploder ::m/schema [schema opts] (-exploder-add-path (m/deref schema) 0 opts))
