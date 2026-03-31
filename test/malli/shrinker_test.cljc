@@ -185,7 +185,14 @@
                ['let ['b 1] ['let ['a 1] 'a]])
   (is-smaller? Expr
                ['let ['a 1] ['a 'a]]
-               ['let ['b 1] ['let ['a 1] 'a]]))
+               ['let ['b 1] ['let ['a 1] 'a]])
+  (is-smaller? [:sequential :int] [0 1 2] [0 1 2 4 5 6])
+  (is-smaller? [:sequential :int]
+               [0 1 2]
+               [0 1 2 4 5 6])
+  (is-smaller? [:sequential [:sequential :int]]
+               [[0 1 2 4 5 6]]
+               [[0 1 2] [4 5 6]]))
 
 (def Let (m/-get (m/deref-all Expr) :Let nil))
 
@@ -356,7 +363,7 @@
   (is (= 9  (leaf-complexity [:sequential [:sequential :int]] [[0 1 2]])))
   (is (= 18 (leaf-complexity [:sequential [:sequential :int]] [[0 1 2 4 5 6]])))
   (is (= 18 (leaf-complexity [:sequential [:sequential :int]] [[0 1 2] [4 5 6]])))
-  (is (= 18 (leaf-complexity [:set [:sequential :int]] #{[] [1] [1 2]})))
+  (is (= 11 (leaf-complexity [:set [:sequential :int]] #{[] [1] [1 2]})))
 )
 
 (defn leaf-in-depth [schema v]
@@ -370,5 +377,6 @@
   (is (= 6  (leaf-in-depth [:sequential [:sequential :int]] [[0 1 2]])))
   (is (= 12 (leaf-in-depth [:sequential [:sequential :int]] [[0 1 2 4 5 6]])))
   (is (= 12 (leaf-in-depth [:sequential [:sequential :int]] [[0 1 2] [4 5 6]])))
-  (is (= 18 (leaf-in-depth [:set [:sequential :int]] #{[] [1] [1 2]})))
+  (is (= 3 (leaf-in-depth [:set :int] #{1 2 3})))
+  (is (= 7 (leaf-in-depth [:set [:sequential :int]] #{[] [1] [1 2]})))
 )

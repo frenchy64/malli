@@ -91,6 +91,7 @@
   ([] (-core-comparator identity))
   ([f]
    (fn [left right]
+     (prn left right)
      (let [r (c/compare (f left) (f right))]
        (cond
          (zero? r) :equal
@@ -397,7 +398,7 @@
 (defmethod -comparator :sequential [schema opts]
   (let [child (nth (m/children schema) 0)
         cmp (-comparator child opts)
-        lf (-leaves-fn child opts)]
+        lf (-leaves-fn schema opts)]
     (fn [left right]
       (let [left-leaves (lf left [] [])
             right-leaves (lf right [] [])
@@ -405,7 +406,6 @@
         (case by-leaf-score
           (:smaller :larger) by-leaf-score
           :equal (let [by-in-depth (-compare-by-leaf-in-depth left-leaves right-leaves)]
-                   (prn "by-in-depth" by-in-depth)
                    (case by-in-depth
                      (:smaller :larger) by-in-depth
                      :equal (loop [left-leaves (seq left-leaves)
