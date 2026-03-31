@@ -187,9 +187,9 @@
                ['let ['a 1] ['a 'a]]
                ['let ['b 1] ['let ['a 1] 'a]])
   (is-smaller? [:sequential :int] [0 1 2] [0 1 2 4 5 6])
-  (is-smaller? [:sequential :int]
-               [0 1 2]
-               [0 1 2 4 5 6])
+  (is-smaller? [:sequential [:sequential :int]]
+               [[0 1 2]]
+               [[0 1 2 4 5 6]])
   (is-smaller? [:sequential [:sequential :int]]
                [[0 1 2 4 5 6]]
                [[0 1 2] [4 5 6]]))
