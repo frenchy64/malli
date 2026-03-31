@@ -192,7 +192,14 @@
                [[0 1 2 4 5 6]])
   (is-smaller? [:sequential [:sequential :int]]
                [[0 1 2 4 5 6]]
-               [[0 1 2] [4 5 6]]))
+               [[0 1 2] [4 5 6]])
+  (is-smaller? [:set [:sequential :int]]
+               #{[] [1]}
+               #{[] [1]} #{[1 2]})
+  (is-smaller? [:set :int] #{0} #{1 2})
+  (is-smaller? [:set [:set [:sequential :int]]]
+               #{#{[] [1]}}
+               #{#{[] [1]} #{[1 2]}}))
 
 (def Let (m/-get (m/deref-all Expr) :Let nil))
 

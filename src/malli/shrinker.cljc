@@ -402,7 +402,6 @@
 
 (defmethod -comparator :sequential [schema opts]
   (let [child (nth (m/children schema) 0)
-        cmp (-comparator child opts)
         lf (leaves-fn schema opts)]
     (fn [left right]
       (let [left-leaves (lf left [] [])
@@ -450,6 +449,25 @@
                                     :smaller
                                     :equal)))))))
         ))))
+
+(defmethod -comparator :set [schema opts]
+  (let [child (nth (m/children schema) 0)
+        cmp (-comparator child opts)
+        lf (leaves-fn child opts)]
+    (fn [left right]
+      (if (and (empty? left) (empty? right))
+        :equal
+        (if (empty? left)
+          :smaller
+          (if (empty? right)
+            :larger
+            (let [left-leaves (mapcat #(lf % [] []) left)
+                  right-leaves (mapcat #(lf % [] []) right)
+                  by-leaf-score (-compare-by-leaf-score left-leaves right-leaves)]
+              (case by-leaf-score
+                (:smaller :larger) by-leaf-score
+                ;TODO
+                ))))))))
 
 (defmethod -divider :any [schema opts]
   (fn [v path]
