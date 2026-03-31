@@ -309,18 +309,18 @@
   (is (= [[0 0]] (leaf-paths [:tuple [:tuple :int]] [[0]])))
   (is (= [[0 0] [0 1]] (leaf-paths [:tuple [:tuple :int [:enum :a]]] [[0 :a]])))
   (is (= [[0 0 :Ref]] (leaf-paths Expr 'a)))
-  (is (= [[0 0 :Let 0]
-          [0 0 :Let 1 0]
-          [0 0 :Let 1 1 0 :Atomic 0 0]
-          [0 0 :Let 2 0 :Let 0]
-          [0 0 :Let 2 0 :Let 1 0]
-          [0 0 :Let 2 0 :Let 1 1 0 :Atomic 0 0]
-          [0 0 :Let 2 0 :Let 2 0 :Ref]]
+  (is (= [[0 [3 :Let] 0]
+          [0 [3 :Let] 1 0]
+          [0 [3 :Let] 1 1 0 [0 :Atomic] 0 0]
+          [0 [3 :Let] 2 0 [3 :Let] 0]
+          [0 [3 :Let] 2 0 [3 :Let] 1 0]
+          [0 [3 :Let] 2 0 [3 :Let] 1 1 0 [0 :Atomic] 0 0]
+          [0 [3 :Let] 2 0 [3 :Let] 2 0 [1 :Ref]]]
          (leaf-paths Expr ['let ['a 1] ['let ['a 1] 'a]])))
-  (is (= '[{:schema [:enum let], :path [0 :Let 0], :in [0], :value let}
-           {:schema :symbol, :path [0 :Let 1 0], :in [1 0], :value b}
-           {:schema :int, :path [0 :Let 1 1 0 :Atomic 0 0], :in [1 1], :value 1}
-           {:schema :symbol, :path [0 :Let 2 0 :Ref], :in [2], :value a}]
+  (is (= '[{:schema [:enum let], :path [0 [3 :Let] 0], :in [0], :value let}
+           {:schema :symbol, :path [0 [3 :Let] 1 0], :in [1 0], :value b}
+           {:schema :int, :path [0 [3 :Let] 1 1 0 [0 :Atomic] 0 0], :in [1 1], :value 1}
+           {:schema :symbol, :path [0 [3 :Let] 2 0 [1 :Ref]], :in [2], :value a}]
          (leaves Expr ['let ['b 1] 'a])))
   (is (= '[{:schema [:enum let], :path [0 [3 :Let] 0], :in [0], :value let}
            {:schema :symbol, :path [0 [3 :Let] 1 0], :in [1 0], :value a}
@@ -346,11 +346,16 @@
           {:schema :int, :path [0], :in [1], :value 2}
           {:schema :int, :path [0], :in [2], :value 3}]
          (leaves [:set :int] #{1 2 3})))
-  (is (= nil
+  (is (= [{:schema [:sequential :int], :path [0], :in [0], :value []}
+          {:schema :int, :path [0 0], :in [1 0], :value 1}
+          {:schema :int, :path [0 0], :in [2 0], :value 1}
+          {:schema :int, :path [0 0], :in [2 0], :value 2}]
          (leaves [:set [:sequential :int]] #{[] [1] [1 2]})))
-  (is (= nil
-         (leaves [:set [:set [:sequential :int]]] #{#{[] [1]} #{[1 2]}})))
-)
+  (is (= [{:schema :int, :path [0 0 0], :in [0 0 0], :value 1, :unordered-paths [[0]]}
+          {:schema :int, :path [0 0 0], :in [0 0 0], :value 2, :unordered-paths [[0]]}
+          {:schema [:sequential :int], :path [0 0], :in [0 0], :value [], :unordered-paths [[0]]}
+          {:schema :int, :path [0 0 0], :in [0 1 0], :value 1, :unordered-paths [[0]]}]
+         (leaves [:set [:set [:sequential :int]]] #{#{[] [1]} #{[1 2]}}))))
 
 (defn leaf-complexity [schema v]
   (ms/-leaf-complexity (leaves schema v)))
