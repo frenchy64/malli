@@ -91,7 +91,6 @@
   ([] (-core-comparator identity))
   ([f]
    (fn [left right]
-     (prn left right)
      (let [r (c/compare (f left) (f right))]
        (cond
          (zero? r) :equal
@@ -131,10 +130,13 @@
 (defmethod -exploder :sequential [schema opts]
   (let [lf (-exploder (nth (m/children schema) 0) opts)]
     (fn [v path in]
-      (if-some [v (seq v)]
-        (let [path (conj path 0)
-              in (conj in 0)]
-          (mapcat #(lf % path in) v))
+      (if (seq v)
+        (cond->> (let [path (conj path 0)]
+                   (sequence
+                     (comp (map-indexed #(lf %2 path (conj in %)))
+                           cat)
+                     v))
+          (seq in) (cons {:schema schema :path path :in in :value v}))
         [{:schema schema :path path :in in :leaf true :value v}]))))
 
 (defmethod -exploder :set [schema opts]
@@ -413,19 +415,24 @@
                      (:smaller :larger) by-in-depth
                      :equal (loop [left-leaves (seq left-leaves)
                                    right-leaves (seq right-leaves)]
-                              ;;TODO check both are sorted wrt to other leaves
                               (if (and left-leaves right-leaves)
                                 (let [left-leaf (first left-leaves)
                                       right-leaf (first right-leaves)
+                                      ;;TODO
                                       _ (assert (not (:unordered-paths left-leaf)))
                                       _ (assert (not (:unordered-paths right-leaf)))
                                       ->comparable-path (fn [path]
                                                           {:post [(every? int? %)]}
+                                                          ;; extract position from tagged (e.g., :orn) path elements
                                                           (mapv #(cond-> % (vector? %) first) path))
                                       compare-paths
                                       (c/compare
-                                        (->comparable-path (into (:path left-leaf) (:inner-path left-leaf)))
-                                        (->comparable-path (into (:path right-leaf) (:inner-path right-leaf))))]
+                                        (conj (->comparable-path (:path left-leaf))
+                                              (->comparable-path (:inner-path left-leaf))
+                                              (->comparable-path (:in left-leaf)))
+                                        (conj (->comparable-path (:path right-leaf))
+                                              (->comparable-path (:inner-path right-leaf))
+                                              (->comparable-path (:in right-leaf))))]
                                   (if (neg? compare-paths)
                                     :smaller
                                     (if (pos? compare-paths)
@@ -441,8 +448,7 @@
                                   :larger
                                   (if right-leaves
                                     :smaller
-                                    :unknown)))
-                              ))))
+                                    :equal)))))))
         ))))
 
 (defmethod -divider :any [schema opts]
@@ -623,6 +629,14 @@
 (defn leaves
   ([?schema v] (leaves ?schema v nil))
   ([?schema v opts] ((leaves-fn ?schema opts) v [] [])))
+
+(defn exploder
+  ([?schema] (exploder ?schema nil))
+  ([?schema opts] (-exploder (m/schema ?schema opts) opts)))
+
+(defn explode
+  ([?schema v] (explode ?schema v nil))
+  ([?schema v opts] ((exploder ?schema opts) v [] [])))
 
 (defn smaller-pred
   ([?schema] (smaller-pred ?schema nil))

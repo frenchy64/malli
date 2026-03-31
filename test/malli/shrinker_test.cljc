@@ -331,8 +331,8 @@
            {:schema :symbol, :path [0 [3 :Let] 2 0 [3 :Let] 2 0 [1 :Ref]], :in [2 2], :value a}]
          (leaves Expr ['let ['a 1] ['let ['a 1] 'a]])))
   (is (= [{:schema :int, :path [0], :in [0], :value 0}
-          {:schema :int, :path [0], :in [0], :value 1}
-          {:schema :int, :path [0], :in [0], :value 2}]
+          {:schema :int, :path [0], :in [1], :value 1}
+          {:schema :int, :path [0], :in [2], :value 2}]
          (leaves [:sequential :int] [0 1 2])))
   (is (= [{:schema :int, :path [0 [0 :left]], :in [0], :value 0}
           {:schema :boolean, :path [0 [1 :right]], :in [0], :value true}
@@ -340,6 +340,20 @@
          (leaves [:sequential [:orn [:left :int] [:right :boolean]]] [0 true 2])))
   (is (= [{:schema [:sequential :int], :path [], :in [], :value []}]
          (leaves [:sequential :int] [])))
+  (is (= [{:schema :int, :path [0 0], :in [0 0], :value 0}
+          {:schema :int, :path [0 0], :in [0 1], :value 1}
+          {:schema :int, :path [0 0], :in [0 2], :value 2}
+          {:schema :int, :path [0 0], :in [0 3], :value 4}
+          {:schema :int, :path [0 0], :in [0 4], :value 5}
+          {:schema :int, :path [0 0], :in [0 5], :value 6}]
+         (leaves [:sequential [:sequential :int]] [[0 1 2 4 5 6]])))
+  (is (= [{:schema :int, :path [0 0], :in [0 0], :value 0}
+          {:schema :int, :path [0 0], :in [0 1], :value 1}
+          {:schema :int, :path [0 0], :in [0 2], :value 2}
+          {:schema :int, :path [0 0], :in [1 0], :value 4}
+          {:schema :int, :path [0 0], :in [1 1], :value 5}
+          {:schema :int, :path [0 0], :in [1 2], :value 6}]
+         (leaves [:sequential [:sequential :int]] [[0 1 2] [4 5 6]])))
   (is (= [{:schema [:enum :a :b :c], :path [], :inner-path [0], :in [], :value :a}]
          (leaves [:enum :a :b :c] :a)))
   (is (= [{:schema :int, :path [0], :in [0], :value 1}
@@ -349,10 +363,11 @@
   (is (= [{:schema [:sequential :int], :path [0], :in [0], :value []}
           {:schema :int, :path [0 0], :in [1 0], :value 1}
           {:schema :int, :path [0 0], :in [2 0], :value 1}
-          {:schema :int, :path [0 0], :in [2 0], :value 2}]
+          {:schema :int, :path [0 0], :in [2 1], :value 2}]
          (leaves [:set [:sequential :int]] #{[] [1] [1 2]})))
+  ;;FIXME
   (is (= [{:schema :int, :path [0 0 0], :in [0 0 0], :value 1, :unordered-paths [[0]]}
-          {:schema :int, :path [0 0 0], :in [0 0 0], :value 2, :unordered-paths [[0]]}
+          {:schema :int, :path [0 0 0], :in [0 0 1], :value 2, :unordered-paths [[0]]}
           {:schema [:sequential :int], :path [0 0], :in [0 0], :value [], :unordered-paths [[0]]}
           {:schema :int, :path [0 0 0], :in [0 1 0], :value 1, :unordered-paths [[0]]}]
          (leaves [:set [:set [:sequential :int]]] #{#{[] [1]} #{[1 2]}}))))
@@ -368,8 +383,7 @@
   (is (= 9  (leaf-complexity [:sequential [:sequential :int]] [[0 1 2]])))
   (is (= 18 (leaf-complexity [:sequential [:sequential :int]] [[0 1 2 4 5 6]])))
   (is (= 18 (leaf-complexity [:sequential [:sequential :int]] [[0 1 2] [4 5 6]])))
-  (is (= 11 (leaf-complexity [:set [:sequential :int]] #{[] [1] [1 2]})))
-)
+  (is (= 11 (leaf-complexity [:set [:sequential :int]] #{[] [1] [1 2]}))))
 
 (defn leaf-in-depth [schema v]
   (ms/-leaf-in-depth (leaves schema v)))
@@ -383,5 +397,33 @@
   (is (= 12 (leaf-in-depth [:sequential [:sequential :int]] [[0 1 2 4 5 6]])))
   (is (= 12 (leaf-in-depth [:sequential [:sequential :int]] [[0 1 2] [4 5 6]])))
   (is (= 3 (leaf-in-depth [:set :int] #{1 2 3})))
-  (is (= 7 (leaf-in-depth [:set [:sequential :int]] #{[] [1] [1 2]})))
-)
+  (is (= 7 (leaf-in-depth [:set [:sequential :int]] #{[] [1] [1 2]}))))
+
+(defn explode [schema v]
+  (let [schema (m/schema schema)
+        valid? (m/validator schema)]
+    (assert (valid? v))
+    (mapv #(update % :schema m/form) (ms/explode schema v))))
+
+(deftest explode-test
+  (is (= '[{:schema :int, :path [0], :in [0], :leaf true, :value 1}
+           {:schema :int, :path [0], :in [0], :leaf true, :value 2}
+           {:schema :int, :path [0], :in [0], :leaf true, :value 3}]
+         (explode [:sequential :int] [1 2 3])))
+  (is (= [{:schema [:sequential :int], :path [0], :in [0], :value [1 2]}
+          {:schema :int, :path [0 0], :in [0 0], :leaf true, :value 1}
+          {:schema :int, :path [0 0], :in [0 1], :leaf true, :value 2}
+          {:schema [:sequential :int], :path [0], :in [1], :value [3]}
+          {:schema :int, :path [0 0], :in [1 0], :leaf true, :value 3}]
+         (explode [:sequential [:sequential :int]] [[1 2] [3]])))
+  (is (= [{:schema [:sequential :int], :path [0], :in [0], :leaf true, :value []}
+          {:schema [:sequential :int], :path [0], :in [1], :value [1]}
+          {:schema :int, :path [0 0], :in [1 0], :leaf true, :value 1}]
+         (explode [:set [:sequential :int]] #{[] [1]})))
+  (is (= [{:schema [:sequential :int], :path [0 0], :in [0 0], :value [1 2], :unordered-paths [[0]]}
+          {:schema :int, :path [0 0 0], :in [0 0 0], :leaf true, :value 1, :unordered-paths [[0]]}
+          {:schema :int, :path [0 0 0], :in [0 0 1], :leaf true, :value 2, :unordered-paths [[0]]}
+          {:schema [:sequential :int], :path [0 0], :in [0 0], :leaf true, :value [], :unordered-paths [[0]]}
+          {:schema [:sequential :int], :path [0 0], :in [0 1], :value [1], :unordered-paths [[0]]}
+          {:schema :int, :path [0 0 0], :in [0 1 0], :leaf true, :value 1, :unordered-paths [[0]]}]
+         (explode [:set [:set [:sequential :int]]] #{#{[] [1]} #{[1 2]}}))))
