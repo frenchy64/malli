@@ -437,7 +437,7 @@
   (let [schema (m/schema schema)
         valid? (m/validator schema)]
     (assert (valid? v))
-    (mapv #(update % :schema m/form) (ms/explode schema v))))
+    (into [] (comp (remove :ref) (map #(update % :schema m/form))) (ms/explode schema v))))
 
 (deftest explode-test
   (is (= [{:schema [:sequential :int], :id 0, :path [], :in [], :value [1 2 3]}
@@ -496,12 +496,23 @@
   (is (= [{:schema :map, :id 0, :path [], :in [], :leaf true, :value {}}]
          (explode [:map] {})))
   (is (= [{:schema [:map [:a :int]], :id 0, :path [], :in [], :value {:a 1}}
+          ;;TODO represent keys? which :path/:in?
           {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value :a}]
          (explode [:map [:a :int]] {:a 1})))
+  (is (= [{:schema [:map [:a :int] [:malli.core/default [:map-of :int :boolean]]],
+           :id 0, :path [], :in [], :value {:a 1, 1 true}}
+          {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value 1}
+          ;;TODO parse extra keys
+          ::FIXME]
+         (explode [:map [:a :int] [::m/default [:map-of :int :boolean]]] {:a 1 1 true})))
   (is (= [{:schema [:map [:a :int]], :id 0, :path [], :in [], :value {:a 1 :b 2}}
           {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value :a}
           ::FIXME]
          (explode [:map [:a :int]] {:a 1 :b 2})))
+  (is (= [{:schema [:tuple :int :boolean], :id 0, :path [], :in [], :value [1 true]}
+          {:schema :int, :id 1, :path [0], :in [0], :leaf true, :value 1}
+          {:schema :boolean, :id 2, :path [1], :in [1], :leaf true, :value true}]
+         (explode [:tuple :int :boolean] [1 true])))
   (is (= [::FIXME]
          (explode Address
                   {:id "a"

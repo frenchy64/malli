@@ -93,13 +93,15 @@
 (defmethod -exploder :tuple [schema shared-id opts]
   (let [exploders (mapv (fn [c] (-exploder* c opts)) (m/children schema))]
     (fn [v path in]
-      (if (empty? v)
-        [{:schema schema :id shared-id :path path :in in :leaf true :value v}]
-        (into [] (comp (map-indexed
-                         (fn [i lf]
-                           (lf (nth v i) (conj path i) (conj in i))))
-                       cat)
-              exploders)))))
+      (cons
+        (cond-> {:schema schema :id shared-id :path path :in in :value v}
+          (empty? v) (assoc :leaf true))
+        (sequence
+          (comp (map-indexed
+                  (fn [i lf]
+                    (lf (nth v i) (conj path i) (conj in i))))
+                cat)
+          exploders)))))
 
 (defn -core-comparator
   ([] (-core-comparator identity))
@@ -266,8 +268,22 @@
           :equal ((k->diff lp) left right))))))
 
 (defmethod -exploder :map [schema id opts]
-  (let [exploders (mapv (fn [[k _ s]] [k (-exploder* s opts)])
-                        (m/children schema))]
+  (let [children (m/children schema)
+        explicit-keys (mapv first children)
+        default-schema (m/-default-entry-schema children)
+        default-nth (when default-schema
+                      (some (fn [i]
+                              (when (= default-schema (peek (nth children i)))
+                                i))
+                            (range (count children))))
+        default-schema (some-> default-schema (m/schema opts))
+        exploders (into []
+                        (comp (if default-schema
+                                (remove m/-default-entry)
+                                identity)
+                              (map (fn [[k _ s]] [k (-exploder* s opts)])))
+                        children)
+        default-exploder (some-> default-schema (-exploder* opts))]
     (fn [m path in]
       (cons (cond-> {:schema schema :id id :path path :in in :value m}
               (empty? m) (assoc :leaf true))
@@ -277,9 +293,17 @@
                   (map-indexed
                     (fn [i [k ef]]
                       (when-some [[_ v] (find m k)]
-                        (ef k (conj path [i k]) (conj in k)))))
+                        (ef v (conj path [i k]) (conj in k)))))
                   cat)
-                exploders))))))
+                exploders)
+              (let [without (apply dissoc m explicit-keys)]
+                (if default-exploder
+                  (default-exploder
+                    (apply dissoc m explicit-keys)
+                    (conj path [default-nth ::m/default])
+                    in)
+                  (when (not-empty without)
+                    (assert nil "TODO extra keys")))))))))
 
 (defmethod -exploder :orn [schema id opts]
   (let [validators (mapv (comp m/validator peek) (m/children schema))
@@ -366,7 +390,7 @@
       (cons {:schema schema :id id :path path :in in :value v}
             ((k->lp (clause-key v)) v path in)))))
 
-;;FIXME handle recursion (see -exploder-deref-path)
+;;FIXME handle recursion (see -ref-exploder)
 (defmethod -comparator :schema [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator ::m/schema [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator :ref [schema opts] (-comparator (m/deref schema) opts))
@@ -374,7 +398,7 @@
 (defmethod -comparator :union [schema opts] (-comparator (m/deref schema) opts))
 (defmethod -comparator :select-keys [schema opts] (-comparator (m/deref schema) opts))
 
-;;FIXME handle recursion (see -exploder-deref-path)
+;;FIXME handle recursion (see -ref-exploder)
 (defmethod -differ :schema [schema path in opts] (-differ (m/deref schema) (conj path 0) in opts))
 (defmethod -differ ::m/schema [schema path in opts] (-differ (m/deref schema) (conj path 0) in opts))
 (defmethod -differ :ref [schema path in opts] (-differ (m/deref schema) (conj path 0) in opts))
@@ -382,19 +406,20 @@
 (defmethod -differ :union [schema path in opts] (-differ (m/deref schema) (conj path ::m/in) in opts))
 (defmethod -differ :select-keys [schema path in opts] (-differ (m/deref schema) (conj path ::m/in) in opts))
 
-(defn -exploder-deref-path [schema path-elem opts]
+(defn -ref-exploder [schema path-elem opts]
   ;;FIXME tie-the-knot
   ;;FIXME eagerly compute lf
-  (let [lf (m/-memoize (fn [] (-exploder* (m/deref schema) opts)))]
+  (let [ef (m/-memoize #(-exploder* (m/deref schema) opts))]
     (fn [v path in]
-      ((lf) v (conj path path-elem) in))))
+      (cons {:schema schema :path path :in in :ref true :value v}
+            ((ef) v (conj path path-elem) in)))))
 
-(defmethod -exploder :schema [schema _ opts] (-exploder-deref-path schema 0 opts))
-(defmethod -exploder ::m/schema [schema _ opts] (-exploder-deref-path schema 0 opts))
-(defmethod -exploder :ref [schema _ opts] (-exploder-deref-path schema 0 opts))
-(defmethod -exploder :merge [schema _ opts] (-exploder-deref-path schema [0 ::m/in] opts))
-(defmethod -exploder :union [schema _ opts] (-exploder-deref-path schema [0 ::m/in] opts))
-(defmethod -exploder :select-keys [schema _ opts] (-exploder-deref-path schema [0 ::m/in] opts))
+(defmethod -exploder :schema [schema _ opts] (-ref-exploder schema 0 opts))
+(defmethod -exploder ::m/schema [schema _ opts] (-ref-exploder schema 0 opts))
+(defmethod -exploder :ref [schema _ opts] (-ref-exploder schema 0 opts))
+(defmethod -exploder :merge [schema _ opts] (-ref-exploder schema [0 ::m/in] opts))
+(defmethod -exploder :union [schema _ opts] (-ref-exploder schema [0 ::m/in] opts))
+(defmethod -exploder :select-keys [schema _ opts] (-ref-exploder schema [0 ::m/in] opts))
 
 (defn -seq-parts [schema opts]
   (let [[c] (m/children schema)]
