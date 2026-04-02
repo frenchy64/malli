@@ -5,6 +5,17 @@
             [clojure.core :as c]
             [clojure.test :refer [deftest is testing]]))
 
+(def Address
+  [:map
+   [:id :string]
+   [:tags [:set :keyword]]
+   [:address
+    [:map
+     [:street :string]
+     [:city :string]
+     [:zip :int]
+     [:lonlat [:tuple :double :double]]]]])
+
 (def Expr
   [:schema {:registry {::Expr [:orn
                                [:Atomic [:maybe [:or :int :boolean]]]
@@ -482,4 +493,63 @@
            :id 1, :path [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0], :in [0 0 0 0], :value nil, :leaf true}]
          (explode [:schema {:registry {"Cons" [:maybe [:sequential [:ref "Cons"]]]}} "Cons"]
                   [[[[nil]]]])))
+  (is (= [{:schema :map, :id 0, :path [], :in [], :leaf true, :value {}}]
+         (explode [:map] {})))
+  (is (= [{:schema [:map [:a :int]], :id 0, :path [], :in [], :value {:a 1}}
+          {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value :a}]
+         (explode [:map [:a :int]] {:a 1})))
+  (is (= [{:schema [:map [:a :int]], :id 0, :path [], :in [], :value {:a 1 :b 2}}
+          {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value :a}
+          ::FIXME]
+         (explode [:map [:a :int]] {:a 1 :b 2})))
+  (is (= [::FIXME]
+         (explode Address
+                  {:id "a"
+                   :tags #{:b}
+                   :address {:street "somewhere"
+                             :city "a city"
+                             :zip 234
+                             :lonlat [1.0 2.0]}})))
   )
+
+(defn substitutable-vals [schema v]
+  (-> (group-by :id (explode schema v))
+      (update-vals #(mapv :value %))))
+
+(deftest substitutable-vals-test
+  (is (= {0 [[[[[nil]]]] [[[nil]]] [[nil]] [nil] nil],
+          1 [[[[[nil]]]] [[[nil]]] [[nil]] [nil] nil]}
+         (substitutable-vals [:schema {:registry {"Cons" [:maybe [:sequential [:ref "Cons"]]]}} "Cons"]
+                             [[[[nil]]]])))
+  (is (= '{0 [[let [a 1] [let [a 1] a]]
+              1
+              [let [a 1] a]
+              1
+              a],
+           2 [let let],
+           4 [a a a],
+           5 [1 1],
+           6 [1 1],
+           7 [1 1]}
+         (substitutable-vals Expr ['let ['a 1] ['let ['a 1] 'a]])))
+  )
+
+(defn schema-at-key [schema v k]
+  (keep (fn [{:keys [schema value in]}]
+          (let [last-in (peek k)
+                last-in (cond-> last-in
+                          (vector? last-in) peek)]
+            (when (= last-in k)
+              schema)))
+        (explode schema v)))
+
+(deftest schema-at-key-test
+  (is (= ::FIXME
+         (schema-at-key Address
+                        {:id "a"
+                         :tags #{:b}
+                         :address {:street "somewhere"
+                                   :city "a city"
+                                   :zip 234
+                                   :lonlat [1.0 2.0]}}
+                        :lonlat))))

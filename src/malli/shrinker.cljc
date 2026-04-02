@@ -265,6 +265,22 @@
                                         :right right}]
           :equal ((k->diff lp) left right))))))
 
+(defmethod -exploder :map [schema id opts]
+  (let [exploders (mapv (fn [[k _ s]] [k (-exploder* s opts)])
+                        (m/children schema))]
+    (fn [m path in]
+      (cons (cond-> {:schema schema :id id :path path :in in :value m}
+              (empty? m) (assoc :leaf true))
+            (concat
+              (sequence
+                (comp
+                  (map-indexed
+                    (fn [i [k ef]]
+                      (when-some [[_ v] (find m k)]
+                        (ef k (conj path [i k]) (conj in k)))))
+                  cat)
+                exploders))))))
+
 (defmethod -exploder :orn [schema id opts]
   (let [validators (mapv (comp m/validator peek) (m/children schema))
         nchildren (count validators)
