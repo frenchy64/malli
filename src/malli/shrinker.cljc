@@ -727,9 +727,10 @@
   ([?schema left right opts] ((larger-pred ?schema opts) left right)))
 
 (defn sorter
-  ([?schema] (sorter ?schema nil))
-  ([?schema opts]
-   (let [cmp (comparator ?schema opts)]
+  ([?schema] (sorter ?schema nil nil))
+  ([?schema comp] (sorter ?schema comp nil))
+  ([?schema comp opts]
+   (let [cmp (or comp (comparator ?schema opts))]
      (fn [vs]
        (let [sortable? (volatile! true)
              sorted (c/sort #(case (cmp % %2)
@@ -752,17 +753,16 @@
   ([?schema keyfn] (sorter-by ?schema keyfn nil nil))
   ([?schema keyfn comp] (sorter-by ?schema keyfn comp nil))
   ([?schema keyfn comp opts]
-   (let [cmp (comparator ?schema opts)]
+   (let [cmp (or comp (comparator ?schema opts))]
      (fn [vs]
        (let [sortable? (volatile! true)
              sorted (c/sort-by keyfn
-                               (cond->> #(case (cmp % %2)
-                                          :smaller -1
-                                          :equal 0
-                                          :larger 1
-                                          :unknown (do (vreset! sortable? false)
-                                                       0))
-                                 comp (c/comp comp))
+                               #(case (cmp % %2)
+                                  :smaller -1
+                                  :equal 0
+                                  :larger 1
+                                  :unknown (do (vreset! sortable? false)
+                                               0))
                                vs)]
          (when @sortable?
            sorted))))))
@@ -781,7 +781,8 @@
   [?schema opts]
   (let [schema (m/schema ?schema opts)
         explode (exploder schema opts)
-        sort (sorter-by schema identity - opts)]
+        cmp (comparator schema opts)
+        sort (sorter schema #(cmp %2 %) opts)]
     (fn [value]
       (sort
         (sequence
@@ -798,4 +799,3 @@
   ([?schema value] (shrink ?schema value nil))
   ([?schema value opts]
    ((shrinker ?schema opts) value)))
-
