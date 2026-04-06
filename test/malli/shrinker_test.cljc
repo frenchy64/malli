@@ -92,18 +92,24 @@
   (is (= [{:schema :string, :path [], :vals ["ab" "cd" "bcd" "abc"]}]
          (divide :string "abcd"))))
 
+(defn shrink [?schema v]
+  (let [schema (m/schema ?schema)
+        valid? (m/validator schema)]
+    (is (valid? v))
+    (mapv :value (ms/shrink schema v))))
+
 (deftest shrink-test
-  (is (= (ms/shrink Expr '[let [a 1] [inc 42]])
+  (is (= (shrink Expr '[let [a 1] [inc 42]])
          '([inc 42]
            inc
            42
            1)))
-  (is (= (ms/shrink Expr '[inc [inc [inc 42]]])
+  (is (= (shrink Expr '[inc [inc [inc 42]]])
          '([inc [inc 42]]
            [inc 42]
            inc
            42)))
-  (is (= (ms/shrink Expr '[inc 42])
+  (is (= (shrink Expr '[inc 42])
          '(inc 42))))
 
 (defn is-smaller?

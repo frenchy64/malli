@@ -774,6 +774,31 @@
   ([?schema f vs comp] (sort-by ?schema f vs comp nil))
   ([?schema f vs comp opts] ((sorter-by ?schema f comp opts) vs)))
 
+(defn- distinct-by
+  ([f]
+   (fn [rf]
+     (let [seen (volatile! #{})]
+       (fn
+         ([] (rf))
+         ([result] (rf result))
+         ([result input]
+          (let [id (f input)]
+            (if (contains? @seen id)
+              result
+              (do (vswap! seen conj id)
+                  (rf result input)))))))))
+  ([f coll]
+   (let [step (fn step [xs seen]
+                (lazy-seq
+                  ((fn [[fst :as xs] seen]
+                     (when-let [s (seq xs)]
+                       (let [id (f fst)]
+                         (if (contains? seen id)
+                           (recur (rest s) seen)
+                           (cons fst (step (rest s) (conj seen id)))))))
+                   xs seen)))]
+     (step coll #{}))))
+
 (defn shrinker
   "Takes a schema and
   returns a seq of deconstructor parts of value that
@@ -782,14 +807,13 @@
   (let [schema (m/schema ?schema opts)
         explode (exploder schema opts)
         cmp (comparator schema opts)
-        sort (sorter schema #(cmp %2 %) opts)]
+        sort (sorter-by schema :value #(cmp %2 %) opts)]
     (fn [value]
       (sort
         (sequence
           (comp (remove #(= (:in %) []))
                 (filter #(= (:id %) 0))
-                (map :value)
-                (distinct))
+                (distinct-by :value))
           (explode value))))))
 
 (defn shrink
