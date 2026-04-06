@@ -94,9 +94,11 @@
 
 (deftest shrink-test
   (is (= (ms/shrink Expr '[let [a 1] [inc 42]])
-         '[1 [inc 42]]))
+         '(1 [inc 42] inc 42)))
+  (is (= (ms/shrink Expr '[inc [inc [inc 42]]])
+         '(inc [inc [inc 42]] [inc 42] 42)))
   (is (= (ms/shrink Expr '[inc 42])
-         '[inc 42])))
+         '(inc 42))))
 
 (defn is-smaller?
   ([?schema left right] (is-smaller? ?schema left right nil))
@@ -496,14 +498,12 @@
   (is (= [{:schema :map, :id 0, :path [], :in [], :leaf true, :value {}}]
          (explode [:map] {})))
   (is (= [{:schema [:map [:a :int]], :id 0, :path [], :in [], :value {:a 1}}
-          ;;TODO represent keys? which :path/:in?
-          {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value :a}]
+          {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value 1}]
          (explode [:map [:a :int]] {:a 1})))
+  ;;TODO explode :map-of
   (is (= [{:schema [:map [:a :int] [:malli.core/default [:map-of :int :boolean]]],
            :id 0, :path [], :in [], :value {:a 1, 1 true}}
-          {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value 1}
-          ;;TODO parse extra keys
-          ::FIXME]
+          {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value 1}]
          (explode [:map [:a :int] [::m/default [:map-of :int :boolean]]] {:a 1 1 true})))
   (is (= [{:schema [:map [:a :int]], :id 0, :path [], :in [], :value {:a 1 :b 2}}
           {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value :a}
@@ -521,6 +521,24 @@
                              :city "a city"
                              :zip 234
                              :lonlat [1.0 2.0]}})))
+  (is (= '[[0 [let [a 1] [inc 42]]]
+           [1 [let [a 1] [inc 42]]]
+           [2 let]
+           [3 [a 1]]
+           [4 a]
+           [0 1]
+           [5 1]
+           [6 1]
+           [7 1]
+           [0 [inc 42]]
+           [8 [inc 42]]
+           [0 inc]
+           [4 inc]
+           [0 42]
+           [5 42]
+           [6 42]
+           [7 42]]
+         (mapv (juxt :id :value) (explode Expr '[let [a 1] [inc 42]]))))
   )
 
 (defn substitutable-vals [schema v]

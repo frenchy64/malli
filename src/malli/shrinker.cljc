@@ -281,6 +281,7 @@
                         (comp (if default-schema
                                 (remove m/-default-entry)
                                 identity)
+                              ;; idea: also explode key using := schema?
                               (map (fn [[k _ s]] [k (-exploder* s opts)])))
                         children)
         default-exploder (some-> default-schema (-exploder* opts))]
@@ -663,27 +664,6 @@
   ([?schema value] (divide ?schema value nil))
   ([?schema value opts] ((divider ?schema opts) value [])))
 
-(defn shrinker
-  "Takes a schema and
-  returns a seq of deconstructor parts of value that
-  still conform to the overall schema."
-  [?schema opts]
-  (let [schema (m/deref-all (m/schema ?schema opts))
-        parse (m/parser schema opts)
-        unparse (m/unparser schema opts)]
-    (fn [value]
-      (let [p (parse value)
-            _ (assert (not= p ::m/invalid))]
-        ))))
-
-(defn shrink
-  "Takes a schema and a value conforming to it,
-  returns a seq of deconstructor parts of value that
-  still conform to the overall schema."
-  ([?schema value] (shrink ?schema value nil))
-  ([?schema value opts]
-   ((shrinker ?schema opts) value)))
-
 (defn comparator
   ([?schema] (comparator ?schema nil))
   ([?schema opts] (-comparator (m/schema ?schema opts) opts)))
@@ -702,12 +682,16 @@
 
 (defn exploder
   ([?schema] (exploder ?schema nil))
-  ([?schema opts] (-exploder* (m/schema ?schema opts)
-                              (assoc opts ::exploder-seen-schemas (atom {})))))
+  ([?schema opts]
+   (let [f (-exploder* (m/schema ?schema opts)
+                       (assoc opts ::exploder-seen-schemas (atom {})))]
+     (fn
+       ([value] (f value [] []))
+       ([value path in] (f value path in))))))
 
 (defn explode
   ([?schema v] (explode ?schema v nil))
-  ([?schema v opts] ((exploder ?schema opts) v [] [])))
+  ([?schema v opts] ((exploder ?schema opts) v)))
 
 (defn leaves-fn
   ([?schema] (leaves-fn ?schema nil))
@@ -786,3 +770,26 @@
   If unsortable, returns nil."
   ([?schema f vs] (sort-by ?schema f vs nil))
   ([?schema f vs opts] ((sorter-by ?schema f opts) vs)))
+
+(defn shrinker
+  "Takes a schema and
+  returns a seq of deconstructor parts of value that
+  still conform to the overall schema."
+  [?schema opts]
+  (let [explode (exploder ?schema opts)]
+    (fn [value]
+      (sequence
+        (comp (remove #(= (:in %) []))
+              (filter #(= (:id %) 0))
+              (map :value)
+              (distinct))
+        (explode value)))))
+
+(defn shrink
+  "Takes a schema and a value conforming to it,
+  returns a seq of deconstructor parts of value that
+  still conform to the overall schema."
+  ([?schema value] (shrink ?schema value nil))
+  ([?schema value opts]
+   ((shrinker ?schema opts) value)))
+
