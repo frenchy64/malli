@@ -94,9 +94,15 @@
 
 (deftest shrink-test
   (is (= (ms/shrink Expr '[let [a 1] [inc 42]])
-         '(1 [inc 42] inc 42)))
+         '([inc 42]
+           inc
+           42
+           1)))
   (is (= (ms/shrink Expr '[inc [inc [inc 42]]])
-         '(inc [inc [inc 42]] [inc 42] 42)))
+         '([inc [inc 42]]
+           [inc 42]
+           inc
+           42)))
   (is (= (ms/shrink Expr '[inc 42])
          '(inc 42))))
 

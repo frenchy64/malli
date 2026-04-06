@@ -749,18 +749,20 @@
   ([?schema vs opts] ((sorter ?schema opts) vs)))
 
 (defn sorter-by
-  ([?schema f] (sorter-by ?schema f nil))
-  ([?schema f opts]
+  ([?schema keyfn] (sorter-by ?schema keyfn nil nil))
+  ([?schema keyfn comp] (sorter-by ?schema keyfn comp nil))
+  ([?schema keyfn comp opts]
    (let [cmp (comparator ?schema opts)]
      (fn [vs]
        (let [sortable? (volatile! true)
-             sorted (c/sort-by f
-                               #(case (cmp % %2)
-                                  :smaller -1
-                                  :equal 0
-                                  :larger 1
-                                  :unknown (do (vreset! sortable? false)
-                                               0))
+             sorted (c/sort-by keyfn
+                               (cond->> #(case (cmp % %2)
+                                          :smaller -1
+                                          :equal 0
+                                          :larger 1
+                                          :unknown (do (vreset! sortable? false)
+                                                       0))
+                                 comp (c/comp comp))
                                vs)]
          (when @sortable?
            sorted))))))
@@ -768,22 +770,26 @@
 (defn sort-by
   "Sort vs, a collection of values where (f v) is assumed to pass ?schema.
   If unsortable, returns nil."
-  ([?schema f vs] (sort-by ?schema f vs nil))
-  ([?schema f vs opts] ((sorter-by ?schema f opts) vs)))
+  ([?schema f vs] (sort-by ?schema f vs nil nil))
+  ([?schema f vs comp] (sort-by ?schema f vs comp nil))
+  ([?schema f vs comp opts] ((sorter-by ?schema f comp opts) vs)))
 
 (defn shrinker
   "Takes a schema and
   returns a seq of deconstructor parts of value that
   still conform to the overall schema."
   [?schema opts]
-  (let [explode (exploder ?schema opts)]
+  (let [schema (m/schema ?schema opts)
+        explode (exploder schema opts)
+        sort (sorter-by schema identity - opts)]
     (fn [value]
-      (sequence
-        (comp (remove #(= (:in %) []))
-              (filter #(= (:id %) 0))
-              (map :value)
-              (distinct))
-        (explode value)))))
+      (sort
+        (sequence
+          (comp (remove #(= (:in %) []))
+                (filter #(= (:id %) 0))
+                (map :value)
+                (distinct))
+          (explode value))))))
 
 (defn shrink
   "Takes a schema and a value conforming to it,
