@@ -5,6 +5,17 @@
             [clojure.core :as c]
             [clojure.test :refer [deftest is testing]]))
 
+(defn all-schema-types [] (keys (m/default-schemas)))
+
+(defn todo-multimethods []
+  (let [ts (set (all-schema-types))]
+    (into {} (comp (filter #(instance? clojure.lang.MultiFn @%))
+                   (map (fn [v] {(symbol v) (apply disj ts (keys (methods @v)))})))
+          (vals (ns-publics 'malli.shrinker)))))
+
+(comment
+  (todo-multimethods))
+
 (def Address
   [:map
    [:id :string]
