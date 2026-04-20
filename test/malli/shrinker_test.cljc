@@ -525,7 +525,87 @@
           {:schema :int, :id 1, :path [0], :in [0], :leaf true, :value 1}
           {:schema :boolean, :id 2, :path [1], :in [1], :leaf true, :value true}]
          (explode [:tuple :int :boolean] [1 true])))
-  (is (= [::FIXME]
+  (is (= [{:schema
+           [:map
+            [:id :string]
+            [:tags [:set :keyword]]
+            [:address
+             [:map
+              [:street :string]
+              [:city :string]
+              [:zip :int]
+              [:lonlat [:tuple :double :double]]]]],
+           :id 0,
+           :path [],
+           :in [],
+           :value
+           {:id "a",
+            :tags #{:b},
+            :address
+            {:street "somewhere", :city "a city", :zip 234, :lonlat [1.0 2.0]}}}
+          {:schema :string,
+           :id 1,
+           :path [[0 :id]],
+           :in [:id],
+           :leaf true,
+           :value "a"}
+          {:schema [:set :keyword],
+           :id 2,
+           :path [[1 :tags]],
+           :in [:tags],
+           :value #{:b}}
+          {:schema :keyword,
+           :id 3,
+           :path [[1 :tags] 0],
+           :in [:tags 0],
+           :leaf true,
+           :value :b}
+          {:schema
+           [:map
+            [:street :string]
+            [:city :string]
+            [:zip :int]
+            [:lonlat [:tuple :double :double]]],
+           :id 4,
+           :path [[2 :address]],
+           :in [:address],
+           :value
+           {:street "somewhere", :city "a city", :zip 234, :lonlat [1.0 2.0]}}
+          {:schema :string,
+           :id 1,
+           :path [[2 :address] [0 :street]],
+           :in [:address :street],
+           :leaf true,
+           :value "somewhere"}
+          {:schema :string,
+           :id 1,
+           :path [[2 :address] [1 :city]],
+           :in [:address :city],
+           :leaf true,
+           :value "a city"}
+          {:schema :int,
+           :id 5,
+           :path [[2 :address] [2 :zip]],
+           :in [:address :zip],
+           :leaf true,
+           :value 234}
+          {:schema [:tuple :double :double],
+           :id 6,
+           :path [[2 :address] [3 :lonlat]],
+           :in [:address :lonlat],
+           :value [1.0 2.0]}
+          {:schema :double,
+           :id 7,
+           :path [[2 :address] [3 :lonlat] 0],
+           :in [:address :lonlat 0],
+           :leaf true,
+           :value 1.0}
+          {:schema :double,
+           :id 7,
+           :path [[2 :address] [3 :lonlat] 1],
+           :in [:address :lonlat 1],
+           :leaf true,
+           :value 2.0}]
          (explode Address
                   {:id "a"
                    :tags #{:b}
