@@ -654,16 +654,17 @@
   )
 
 (defn schema-at-key [schema v k]
-  (keep (fn [{:keys [schema value in]}]
-          (let [last-in (peek k)
-                last-in (cond-> last-in
-                          (vector? last-in) peek)]
-            (when (= last-in k)
-              schema)))
+  (into []
+        (keep (fn [{:keys [schema value in]}]
+                (let [last-in (peek in)
+                      last-in (cond-> last-in
+                                (vector? last-in) peek)]
+                  (when (= last-in k)
+                    schema))))
         (explode schema v)))
 
 (deftest schema-at-key-test
-  (is (= ::FIXME
+  (is (= [[:tuple :double :double]]
          (schema-at-key Address
                         {:id "a"
                          :tags #{:b}
