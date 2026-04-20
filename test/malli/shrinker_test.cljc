@@ -660,7 +660,11 @@
                    [:map [:a :int]]
                    [:map [:a number?]]]
                   {:a 1})))
-  )
+  (is (= [{:schema [:fn any?], :id 0, :path [], :in [], :leaf true, :value 1}]
+         (explode [:fn any?] 1)))
+  (is (= [{:schema :any, :id 0, :path [], :in [], :leaf true, :value 1}]
+         (explode :any 1)))
+)
 
 (defn substitutable-vals [schema v]
   (-> (group-by :id (explode schema v))

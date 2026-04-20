@@ -163,6 +163,8 @@
 (defn -leaf-exploder [schema id opts]
   (fn [v path in] [{:schema schema :id id :path path :in in :leaf true :value v}]))
 
+(defmethod -exploder :fn [schema id opts] (-leaf-exploder schema id opts))
+(defmethod -exploder :any [schema id opts] (-leaf-exploder schema id opts))
 (defmethod -exploder :int [schema id opts] (-leaf-exploder schema id opts))
 (defmethod -exploder 'number? [schema id opts] (-leaf-exploder schema id opts))
 (defmethod -exploder :boolean [schema id opts] (-leaf-exploder schema id opts))
