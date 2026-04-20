@@ -91,10 +91,13 @@
               differs)))))
 
 (defmethod -exploder :and [schema shared-id opts]
-  (let [[fc & rc] (m/children schema)
-        exploder (-exploder* fc opts)]
+  (let [exploders (mapv #(-exploder* % opts) (m/children schema))]
     (fn [v path in]
-      (exploder v (conj path 0) in))))
+      (sequence
+        (comp (map-indexed (fn [i exploder]
+                             (exploder v (conj path i) in)))
+              cat)
+        exploders))))
 
 (defmethod -exploder :vector [schema shared-id opts]
   (let [exploder (-exploder* (first (m/children schema)) opts)
@@ -161,6 +164,7 @@
   (fn [v path in] [{:schema schema :id id :path path :in in :leaf true :value v}]))
 
 (defmethod -exploder :int [schema id opts] (-leaf-exploder schema id opts))
+(defmethod -exploder 'number? [schema id opts] (-leaf-exploder schema id opts))
 (defmethod -exploder :boolean [schema id opts] (-leaf-exploder schema id opts))
 (defmethod -exploder :symbol [schema id opts] (-leaf-exploder schema id opts))
 (defmethod -exploder :keyword [schema id opts] (-leaf-exploder schema id opts))

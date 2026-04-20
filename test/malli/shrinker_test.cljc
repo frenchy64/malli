@@ -642,6 +642,24 @@
            [6 42]
            [7 42]]
          (mapv (juxt :id :value) (explode Expr '[let [a 1] [inc 42]]))))
+  (is (= '[{:schema [:map [:a :int]], :id 1, :path [0], :in [], :value {:a 1}}
+           {:schema :int,
+            :id 2,
+            :path [0 [0 :a]],
+            :in [:a],
+            :leaf true,
+            :value 1}
+           {:schema [:map [:a number?]], :id 3, :path [1], :in [], :value {:a 1}}
+           {:schema number?,
+            :id 4,
+            :path [1 [0 :a]],
+            :in [:a],
+            :leaf true,
+            :value 1}]
+         (explode [:and
+                   [:map [:a :int]]
+                   [:map [:a number?]]]
+                  {:a 1})))
   )
 
 (defn substitutable-vals [schema v]
