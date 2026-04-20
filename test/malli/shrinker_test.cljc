@@ -673,3 +673,40 @@
                                    :zip 234
                                    :lonlat [1.0 2.0]}}
                         :lonlat))))
+
+(defn schema-at-val [schema v leaf-val]
+  (into []
+        (keep (fn [{:keys [schema value]}]
+                (when (= value leaf-val)
+                  schema)))
+        (explode schema v)))
+
+(deftest schema-at-val-test
+  (is (= [:string]
+         (schema-at-val Address
+                        {:id "a"
+                         :tags #{:b}
+                         :address {:street "somewhere"
+                                   :city "a city"
+                                   :zip 234
+                                   :lonlat [1.0 2.0]}}
+                        "a")))
+  (is (= [:double]
+         (schema-at-val Address
+                        {:id "a"
+                         :tags #{:b}
+                         :address {:street "somewhere"
+                                   :city "a city"
+                                   :zip 234
+                                   :lonlat [1.0 2.0]}}
+                        1.0)))
+  (is (= [] ;; weird case, :id is a mandatory :map key, not a schema position
+         (schema-at-val Address
+                        {:id "a"
+                         :tags #{:b}
+                         :address {:street "somewhere"
+                                   :city "a city"
+                                   :zip 234
+                                   :lonlat [1.0 2.0]}}
+                        :id))))
+
