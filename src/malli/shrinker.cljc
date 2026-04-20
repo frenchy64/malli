@@ -164,6 +164,8 @@
 (defmethod -exploder :boolean [schema id opts] (-leaf-exploder schema id opts))
 (defmethod -exploder :symbol [schema id opts] (-leaf-exploder schema id opts))
 (defmethod -exploder :keyword [schema id opts] (-leaf-exploder schema id opts))
+(defmethod -exploder :string [schema id opts] (-leaf-exploder schema id opts))
+(defmethod -exploder :double [schema id opts] (-leaf-exploder schema id opts))
 
 (defmethod -exploder :sequential [schema id opts]
   (let [ef (-exploder* (nth (m/children schema) 0) opts)]
