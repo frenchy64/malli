@@ -594,3 +594,17 @@
                                    :zip 234
                                    :lonlat [1.0 2.0]}}
                         :lonlat))))
+
+;; TCHECK-112: bind doesn't shrink very well
+
+(def matrix-2d [:and [:vector [:vector :int]]
+                [:fn #(apply = (map count %))]])
+
+(deftest matrix-2d-shrink-test
+  (shrink [:vector [:vector :int]] [[52 534 2 34 42]
+                                    [55 324 2 31 45]
+                                    [55 354 4 31 45]])
+  (shrink matrix-2d [[52 534 2 34 42]
+                     [55 324 2 31 45]
+                     [55 354 4 31 45]])
+)

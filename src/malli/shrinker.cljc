@@ -90,6 +90,26 @@
                        cat)
               differs)))))
 
+(defmethod -exploder :and [schema shared-id opts]
+  (let [[fc & rc] (m/children schema)
+        exploder (-exploder* fc opts)]
+    (fn [v path in]
+      (exploder v (conj path 0) in))))
+
+(defmethod -exploder :vector [schema shared-id opts]
+  (let [exploder (-exploder* (first (m/children schema)) opts)
+        {:keys [min max]} (m/properties schema)
+        pred #(and (or (not min)
+                       (<= min (count %)))
+                   (or (not max)
+                       (<= (count %) max)))]
+    (fn [v path in]
+      (sequence
+        (comp (map-indexed (fn [i v]
+                             (exploder v (conj path 0) (conj in i))))
+              cat)
+        v))))
+
 (defmethod -exploder :tuple [schema shared-id opts]
   (let [exploders (mapv (fn [c] (-exploder* c opts)) (m/children schema))]
     (fn [v path in]
@@ -98,8 +118,8 @@
           (empty? v) (assoc :leaf true))
         (sequence
           (comp (map-indexed
-                  (fn [i lf]
-                    (lf (nth v i) (conj path i) (conj in i))))
+                  (fn [i ef]
+                    (ef (nth v i) (conj path i) (conj in i))))
                 cat)
           exploders)))))
 
@@ -117,6 +137,8 @@
 (defmethod -comparator :boolean [schema opts] (-core-comparator))
 (defmethod -comparator :symbol [schema opts] (-core-comparator))
 (defmethod -comparator :keyword [schema opts] (-core-comparator))
+
+(defmethod -comparator :and [schema opts] (-comparator (first (m/children schema)) opts))
 
 (defn -leaf-differ [schema path in opts]
   (let [c (comparator schema opts)]
@@ -462,7 +484,7 @@
         :larger
         :equal))))
 
-(defmethod -comparator :sequential [schema opts]
+(defn -comparator-sequential [schema opts]
   (let [child (nth (m/children schema) 0)
         lf (leaves-fn schema opts)]
     (fn [left right]
@@ -511,6 +533,9 @@
                                     :smaller
                                     :equal)))))))
         ))))
+
+(defmethod -comparator :sequential [schema opts] (-comparator-sequential schema opts))
+(defmethod -comparator :vector [schema opts] (-comparator-sequential schema opts))
 
 (defmethod -comparator :set [schema opts]
   (let [child (nth (m/children schema) 0)
