@@ -562,12 +562,10 @@
           1 [[[[[nil]]]] [[[nil]]] [[nil]] [nil] nil]}
          (substitutable-vals [:schema {:registry {"Cons" [:maybe [:sequential [:ref "Cons"]]]}} "Cons"]
                              [[[[nil]]]])))
-  (is (= '{0 [[let [a 1] [let [a 1] a]]
-              1
-              [let [a 1] a]
-              1
-              a],
+  (is (= '{0 [[let [a 1] [let [a 1] a]] 1 [let [a 1] a] 1 a],
+           1 [[let [a 1] [let [a 1] a]] [let [a 1] a]],
            2 [let let],
+           3 [[a 1] [a 1]],
            4 [a a a],
            5 [1 1],
            6 [1 1],
