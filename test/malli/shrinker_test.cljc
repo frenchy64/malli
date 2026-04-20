@@ -10,7 +10,7 @@
 (defn todo-multimethods []
   (let [ts (set (all-schema-types))]
     (into {} (comp (filter #(instance? clojure.lang.MultiFn @%))
-                   (map (fn [v] {(symbol v) (apply disj ts (keys (methods @v)))})))
+                   (map (fn [v] {(symbol (name (symbol v))) (apply disj ts (keys (methods @v)))})))
           (vals (ns-publics 'malli.shrinker)))))
 
 (comment
