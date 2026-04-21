@@ -4,7 +4,7 @@
             [malli.core :as m]
             [malli.registry :as mr]))
 
-(declare sort compare comparator sorter sorter-by leaves-fn)
+(declare sort compare comparator sorter sorter-by leaves-fn -leaf-exploder)
 
 (defmulti -deconstructor
   (fn [schema opts] (m/type schema))
@@ -40,9 +40,9 @@
       :in in
       :left left
       :right right}]))
-(defmethod -exploder ::default [s shared-id opts]
-  (prn "[-exploder] unsupported: " (m/type s))
-  (fn [v path in] []))
+(defmethod -exploder ::default [schema id opts]
+  (prn "[-exploder] assumed leaf for unsupported type: " (m/type schema))
+  (-leaf-exploder schema id opts))
 
 (defn -identify-schema [schema opts]
   (let [dschema (m/deref-all schema)]
@@ -807,52 +807,24 @@
   ([?schema f vs comp] (sort-by ?schema f vs comp nil))
   ([?schema f vs comp opts] ((sorter-by ?schema f comp opts) vs)))
 
-(defn- distinct-by
-  ([f]
-   (fn [rf]
-     (let [seen (volatile! #{})]
-       (fn
-         ([] (rf))
-         ([result] (rf result))
-         ([result input]
-          (let [id (f input)]
-            (if (contains? @seen id)
-              result
-              (do (vswap! seen conj id)
-                  (rf result input)))))))))
-  ([f coll]
-   (let [step (fn step [xs seen]
-                (lazy-seq
-                  ((fn [[fst :as xs] seen]
-                     (when-let [s (seq xs)]
-                       (let [id (f fst)]
-                         (if (contains? seen id)
-                           (recur (rest s) seen)
-                           (cons fst (step (rest s) (conj seen id)))))))
-                   xs seen)))]
-     (step coll #{}))))
-
-(defn shrinker
+(defn recursor
   "Takes a schema and
   returns a seq of deconstructor parts of value that
   still conform to the overall schema."
-  [?schema opts]
-  (let [schema (m/schema ?schema opts)
-        explode (exploder schema opts)
-        cmp (comparator schema opts)
-        sort (sorter-by schema :value #(cmp %2 %) opts)]
-    (fn [value]
-      (sort
-        (sequence
-          (comp (remove #(= (:in %) []))
-                (filter #(= (:id %) 0))
-                (distinct-by :value))
-          (explode value))))))
+  ([?schema] (recursor ?schema nil))
+  ([?schema opts]
+   (let [schema (m/schema ?schema opts)
+         explode (exploder schema opts)]
+     (fn [value]
+       (keep (fn [{:keys [in id] :as m}]
+               (when (and (not-empty in) (= 0 id))
+                 m))
+             (explode value))))))
 
-(defn shrink
+(defn recurs
   "Takes a schema and a value conforming to it,
   returns a seq of deconstructor parts of value that
   still conform to the overall schema."
   ([?schema value] (shrink ?schema value nil))
   ([?schema value opts]
-   ((shrinker ?schema opts) value)))
+   ((recursor ?schema opts) value)))

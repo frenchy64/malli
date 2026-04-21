@@ -103,25 +103,34 @@
   (is (= [{:schema :string, :path [], :vals ["ab" "cd" "bcd" "abc"]}]
          (divide :string "abcd"))))
 
-(defn shrink [?schema v]
+(defn recurs [?schema v]
   (let [schema (m/schema ?schema)
         valid? (m/validator schema)]
     (is (valid? v))
-    (mapv :value (ms/shrink schema v))))
+    (mapv #(dissoc % :schema) (ms/recurs schema v))))
 
-(deftest shrink-test
-  (is (= (shrink Expr '[let [a 1] [inc 42]])
-         '([inc 42]
-           inc
-           42
-           1)))
-  (is (= (shrink Expr '[inc [inc [inc 42]]])
-         '([inc [inc 42]]
-           [inc 42]
-           inc
-           42)))
-  (is (= (shrink Expr '[inc 42])
-         '(inc 42))))
+(defn recurs-values [?schema v]
+  (mapv :value (recurs ?schema v)))
+
+(deftest recurs-test
+  (is (= [] (recurs-values :int 1)))
+  (is (= '[1 [inc 42] inc 42]
+         (recurs-values Expr '[let [a 1] [inc 42]])))
+  (is (= '[inc [dec [inc' 42]] dec [inc' 42] inc' 42]
+         (recurs-values Expr '[inc [dec [inc' 42]]])))
+  (is (= '[{:id 0, :path [0 0 [2 :App] 0 0], :in [0], :value inc}
+           {:id 0, :path [0 0 [2 :App] 1 0], :in [1], :value [dec [inc' 42]]}
+           {:id 0, :path [0 0 [2 :App] 1 0 [2 :App] 0 0], :in [1 0], :value dec}
+           {:id 0, :path [0 0 [2 :App] 1 0 [2 :App] 1 0], :in [1 1], :value [inc' 42]}
+           {:id 0, :path [0 0 [2 :App] 1 0 [2 :App] 1 0 [2 :App] 0 0], :in [1 1 0], :value inc'}
+           {:id 0, :path [0 0 [2 :App] 1 0 [2 :App] 1 0 [2 :App] 1 0], :in [1 1 1], :value 42}])
+      (recurs Expr '[inc [dec [inc' 42]]]))
+  (is (= '[inc 42]
+         (recurs-values Expr '[inc 42])))
+  (is (= '[{:id 0, :path [0 0 [2 :App] 0 0], :in [0], :value inc}
+           {:id 0, :path [0 0 [2 :App] 1 0], :in [1], :value 42}]
+         (recurs Expr '[inc 42])))
+  )
 
 (defn is-smaller?
   ([?schema left right] (is-smaller? ?schema left right nil))
@@ -524,9 +533,19 @@
           {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value 1}]
          (explode [:map [:a :int]] {:a 1})))
   ;;TODO explode :map-of
-  (is (= [{:schema [:map [:a :int] [:malli.core/default [:map-of :int :boolean]]],
-           :id 0, :path [], :in [], :value {:a 1, 1 true}}
-          {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value 1}]
+  (is (= [{:schema
+           [:map [:a :int] [:malli.core/default [:map-of :int :boolean]]],
+           :id 0,
+           :path [],
+           :in [],
+           :value {:a 1, 1 true}}
+          {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value 1}
+          {:schema [:map-of :int :boolean],
+           :id 2,
+           :path [[1 :malli.core/default]],
+           :in [],
+           :leaf true,
+           :value {1 true}}]
          (explode [:map [:a :int] [::m/default [:map-of :int :boolean]]] {:a 1 1 true})))
   (is (= [{:schema [:map [:a :int]], :id 0, :path [], :in [], :value {:a 1 :b 2}}
           {:schema :int, :id 1, :path [[0 :a]], :in [:a], :leaf true, :value :a}
