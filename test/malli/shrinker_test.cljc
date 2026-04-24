@@ -777,3 +777,15 @@
                                    :zip 234
                                    :lonlat [1.0 2.0]}}
                         :id))))
+
+#_
+(deftest collapses-test
+  (is (= '#{[inc [inc' 42]]
+            [dec 42]
+            [inc [dec 42]]
+            42
+            [inc' 42]
+            [inc 42]
+            [dec [inc' 42]]}
+         (set (collapses Expr '[inc [dec [inc' 42]]]))))
+  )
