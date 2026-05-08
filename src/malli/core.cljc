@@ -1050,6 +1050,58 @@
           #?@(:cljs [IPrintWithWriter (-pr-writer [this writer opts] (-pr-writer-schema this writer opts))]))))
     #?@(:cljs [IPrintWithWriter (-pr-writer [this writer opts] (-pr-writer-into-schema this writer opts))])))
 
+(defn -if-schema []
+  ^{:type ::into-schema}
+  (reify IntoSchema
+    (-type [_] :if)
+    (-type-properties [_])
+    (-properties-schema [_ _])
+    (-children-schema [_ _])
+    (-into-schema [parent properties children options]
+      (-check-children! type properties children 3 3)
+      (let [children (-vmap #(schema % options) children)
+            nchildren (count children)
+            neg-children (delay (-vmap #(schema [:not nil %] options) children))
+            form (delay (-simple-form parent properties children -form options))
+            cache (-create-cache options)
+            ->parser (fn [f] (let [[test then else] (-vmap f children)
+                                   neg-test (f (first children))]
+                               (fn [x]
+                                 (let [x' (test x)]
+                                   (if (miu/-invalid? x')
+                                     (-> x neg-test else)
+                                     (then x'))))))]
+        ^{:type ::schema}
+        (reify
+          Schema
+          (-validator [_] (miu/-if-pred (-vmap -validator children)))
+          (-explainer [_ path]
+            (let [[test then else] (-vmap (fn [[i c]] (-explainer c (conj path i))) (map-indexed vector children))]
+              (fn explain-if [x in acc]
+                (if (identical? acc (test x in acc))
+                  (then x in acc)
+                  (else x in acc)))))
+          (-parser [_] (->parser -parser))
+          (-unparser [_] (->parser -unparser))
+          (-transformer [this transformer method options]
+            (-or-transformer this transformer children method options))
+          (-walk [this walker path options] (-walk-indexed this walker path options))
+          (-properties [_] properties)
+          (-options [_] options)
+          (-children [_] children)
+          (-parent [_] parent)
+          (-form [_] @form)
+          Cached
+          (-cache [_] cache)
+          LensSchema
+          (-keep [_])
+          (-get [_ key default] (get children key default))
+          (-set [this key value] (-set-assoc-children this key value))
+          ParserInfo
+          (-parser-info [_ opts] {:simple-parser (every? (-comp :simple-parser #(-parser-info % opts)) children)})
+          #?@(:cljs [IPrintWithWriter (-pr-writer [this writer opts] (-pr-writer-schema this writer opts))]))))
+    #?@(:cljs [IPrintWithWriter (-pr-writer [this writer opts] (-pr-writer-into-schema this writer opts))])))
+
 (defn -orn-schema []
   ^{:type ::into-schema}
   (reify
@@ -3029,6 +3081,7 @@
    :or (-or-schema)
    :orn (-orn-schema)
    :not (-not-schema)
+   :if (-if-schema)
    :map (-map-schema)
    :map-of (-map-of-schema)
    :vector (-collection-schema {:type :vector, :pred vector?, :empty []})

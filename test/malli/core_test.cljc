@@ -3697,3 +3697,18 @@
     (is (= @count-into-schemas 3)) ;; was 6
     (is (m/coerce ConsCell [1 [2 [3 [4 [1 [2 [3 [4 nil]]]]]]]]))
     (is (= @count-into-schemas 3)))) ;; was 10
+
+(def has-user [:map [:user :any]])
+(def has-pass [:map [:pass :any]])
+(def has-secret [:map [:secret :any]])
+
+(deftest if-test
+  (is (= [:if has-user has-pass has-secret] (m/form (m/schema [:if has-user has-pass has-secret]))))
+  (is (true? (m/validate [:if has-user has-pass has-secret] {:user nil :pass nil})))
+  (is (true? (m/validate [:if has-user has-pass has-secret] {:secret nil})))
+  (is (true? (m/validate [:if has-user has-pass has-secret] {:user nil :pass nil :secret nil})))
+  (is (true? (m/validate [:if has-user has-pass has-secret] {:pass nil :secret nil})))
+  (is (false? (m/validate [:if has-user has-pass has-secret] {})))
+  (is (false? (m/validate [:if has-user has-pass has-secret] {:user nil})))
+  (is (= {:secret ["missing required key"]} (me/humanize (m/explain [:if has-user has-pass has-secret] {}))))
+  (is (= {:pass ["missing required key"]} (me/humanize (m/explain [:if has-user has-pass has-secret] {:user nil})))))
