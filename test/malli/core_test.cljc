@@ -3769,13 +3769,12 @@
              :type nil,
              :message nil}]}
          (with-schema-forms (m/explain [:cond
-                                        [[:map-of :any :any] {:key ::any-map} empty?]] {:a 1}))))
-)
+                                        [[:map-of :any :any] {:key ::any-map} empty?]] {:a 1})))))
 
 (def has-user [:map [:user :any]])
 (def has-pass [:map [:pass :any]])
 (def has-secret [:map [:secret :any]])
-(def if-user-then-pass-or-secret [:if has-user has-pass has-secret]
+(def if-user-then-pass-or-secret [:if has-user has-pass has-secret])
 
 (deftest if-test
   (is (= if-user-then-pass-or-secret (m/form (m/schema if-user-then-pass-or-secret))))
