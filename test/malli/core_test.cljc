@@ -3775,15 +3775,16 @@
 (def has-user [:map [:user :any]])
 (def has-pass [:map [:pass :any]])
 (def has-secret [:map [:secret :any]])
+(def if-user-then-pass-or-secret [:if has-user has-pass has-secret]
 
 (deftest if-test
-  (is (= [:if has-user has-pass has-secret] (m/form (m/schema [:if has-user has-pass has-secret]))))
-  (is (true? (m/validate [:if has-user has-pass has-secret] {:user nil :pass nil})))
-  (is (true? (m/validate [:if has-user has-pass has-secret] {:secret nil})))
-  (is (true? (m/validate [:if has-user has-pass has-secret] {:user nil :pass nil :secret nil})))
-  (is (true? (m/validate [:if has-user has-pass has-secret] {:pass nil :secret nil})))
-  (is (false? (m/validate [:if has-user has-pass has-secret] {})))
-  (is (false? (m/validate [:if has-user has-pass has-secret] {:user nil})))
+  (is (= if-user-then-pass-or-secret (m/form (m/schema if-user-then-pass-or-secret))))
+  (is (true? (m/validate if-user-then-pass-or-secret {:user nil :pass nil})))
+  (is (true? (m/validate if-user-then-pass-or-secret {:secret nil})))
+  (is (true? (m/validate if-user-then-pass-or-secret {:user nil :pass nil :secret nil})))
+  (is (true? (m/validate if-user-then-pass-or-secret {:pass nil :secret nil})))
+  (is (false? (m/validate if-user-then-pass-or-secret {})))
+  (is (false? (m/validate if-user-then-pass-or-secret {:user nil})))
   (is (= {:schema
           [:if [:map [:user :any]] [:map [:pass :any]] [:map [:secret :any]]],
           :value {},
@@ -3794,9 +3795,11 @@
             :value nil,
             :type :malli.core/missing-key,
             :message nil}]}
-         (with-schema-forms (m/explain [:if has-user has-pass has-secret] {}))))
-  (is (= (m/tag :then {:user nil :pass nil}) (m/parse [:if has-user has-pass has-secret] {:user nil :pass nil})))
-  (is (= (m/tag :else {:secret nil}) (m/parse [:if has-user has-pass has-secret] {:secret nil})))
-  (is (= ::m/invalid (m/parse [:if has-user has-pass has-secret] {})))
-  (is (= {:secret ["missing required key"]} (me/humanize (m/explain [:if has-user has-pass has-secret] {}))))
-  (is (= {:pass ["missing required key"]} (me/humanize (m/explain [:if has-user has-pass has-secret] {:user nil})))))
+         (with-schema-forms (m/explain if-user-then-pass-or-secret {}))))
+  (is (= (m/tag :then {:user nil :pass nil}) (m/parse if-user-then-pass-or-secret {:user nil :pass nil})))
+  (is (= (m/tag :else {:secret nil}) (m/parse if-user-then-pass-or-secret {:secret nil})))
+  (is (= ::m/invalid (m/parse if-user-then-pass-or-secret {})))
+  (is (= {:user nil :pass nil} (m/unparse if-user-then-pass-or-secret (m/tag :then {:user nil :pass nil}))))
+  (is (= {:secret nil} (m/unparse if-user-then-pass-or-secret (m/tag :else {:secret nil}))))
+  (is (= {:secret ["missing required key"]} (me/humanize (m/explain if-user-then-pass-or-secret {}))))
+  (is (= {:pass ["missing required key"]} (me/humanize (m/explain if-user-then-pass-or-secret {:user nil})))))

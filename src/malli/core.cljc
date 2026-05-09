@@ -2005,11 +2005,30 @@
                   ;;TODO improve ::invalid-value name
                   (conj acc (miu/-error path in this x ::invalid-value))))))
           (-parser [_]
-            (c/assert nil)
-            )
+            (let [ps (-vmap (fn [[test {:keys [key]} then]]
+                              [(-validator test)
+                               (let [then (-parser then)]
+                                 (fn [x]
+                                   (miu/-map-valid #(tag key %) (then x))))])
+                            explicit-children)
+                  dp (some-> default-schema -parser)
+                  find (fn [x]
+                         (or (some (fn [[test then]] (when (test x) then)) ps)
+                             dp))]
+              (fn [x]
+                (if-let [parser (find x)]
+                  (parser x)
+                  ::invalid))))
           (-unparser [_]
-            (c/assert nil)
-            )
+            (let [unparsers (cond-> (into {} (map (fn [[_ {:keys [key]} then]]
+                                                    [key (-unparser then)]))
+                                          explicit-children)
+                              default-schema (assoc ::default (-unparser default-schema)))]
+              (fn [x]
+                (if (tag? x)
+                  (if-some [then (unparsers (:key x))]
+                    (then (:value x))
+                    ::invalid)))))
           (-transformer [this transformer method options]
             (c/assert nil)
             )
