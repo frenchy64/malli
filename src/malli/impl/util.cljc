@@ -76,10 +76,3 @@
   `(-> {}
        ~@(for [vsym var-syms]
            `(malli.core/-register-var '~vsym ~vsym))))
-
-(defn -if-pred
-  [[test then else]]
-  (fn [x]
-    (if (test x)
-      (then x)
-      (else x))))
