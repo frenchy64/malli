@@ -3698,6 +3698,80 @@
     (is (m/coerce ConsCell [1 [2 [3 [4 [1 [2 [3 [4 nil]]]]]]]]))
     (is (= @count-into-schemas 3)))) ;; was 10
 
+(deftest cond-test
+  (is (= :cond (m/form :cond)))
+  (is (= [:cond [:int :int] [:any :any]] (m/form [:cond [:int :int] [:any :any]])))
+  (is (= [:cond [:int {:key :first} :int] [:any :any]] (m/form [:cond [:int {:key :first} :int] [:any :any]])))
+  (is (true? (m/validate [:cond [:int :int]] 1)))
+  (is (false? (m/validate [:cond [:int :int]] 1.2)))
+  (is (nil? (m/explain [:cond [:int :int]] 1)))
+  (is (nil? (m/explain [:cond [:int :int] [::m/default :any]] 1.2)))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.core/duplicate-keys"
+        (m/schema [:cond [:int :int] [:int :int]])))
+  (is (thrown-with-msg?
+        #?(:clj Exception, :cljs js/Error)
+        #":malli\.core/duplicate-cond-key"
+        (m/schema [:cond [:int :int] [[:int {:a :prop}] :int]])))
+  (is (= {:schema [:cond [:int :int]],
+          :value 1.2,
+          :errors
+          [{:path [],
+            :in [],
+            :schema [:cond [:int :int]],
+            :value 1.2,
+            :type :malli.core/invalid-value,
+            :message nil}]}
+         (with-schema-forms (m/explain [:cond [:int :int]] 1.2))))
+  (is (= {:schema [:cond [:int :string]],
+          :value 1,
+          :errors
+          [{:path [:int],
+            :in [],
+            :schema :string,
+            :value 1,
+            :type nil,
+            :message nil}]}
+         (with-schema-forms (m/explain [:cond [:int :string]] 1))))
+  (is (= '{:schema [:cond [[:map-of :any :any] empty?]],
+           :value {:a 1},
+           :errors
+           [{:path [:map-of],
+             :in [],
+             :schema empty?,
+             :value {:a 1},
+             :type nil,
+             :message nil}]}
+         (with-schema-forms (m/explain [:cond [[:map-of :any :any] empty?]] {:a 1}))))
+  (is (= '{:schema
+           [:cond
+            {:registry {:malli.core-test/any-map [:map-of :any :any]}}
+            [:malli.core-test/any-map empty?]],
+           :value {:a 1},
+           :errors
+           [{:path [:malli.core-test/any-map],
+             :in [],
+             :schema empty?,
+             :value {:a 1},
+             :type nil,
+             :message nil}]}
+         (with-schema-forms (m/explain [:cond {:registry {::any-map [:map-of :any :any]}}
+                                        [::any-map empty?]] {:a 1}))))
+  (is (= '{:schema
+           [:cond [[:map-of :any :any] {:key :malli.core-test/any-map} empty?]],
+           :value {:a 1},
+           :errors
+           [{:path [:malli.core-test/any-map],
+             :in [],
+             :schema empty?,
+             :value {:a 1},
+             :type nil,
+             :message nil}]}
+         (with-schema-forms (m/explain [:cond
+                                        [[:map-of :any :any] {:key ::any-map} empty?]] {:a 1}))))
+)
+
 (def has-user [:map [:user :any]])
 (def has-pass [:map [:pass :any]])
 (def has-secret [:map [:secret :any]])
@@ -3710,5 +3784,19 @@
   (is (true? (m/validate [:if has-user has-pass has-secret] {:pass nil :secret nil})))
   (is (false? (m/validate [:if has-user has-pass has-secret] {})))
   (is (false? (m/validate [:if has-user has-pass has-secret] {:user nil})))
+  (is (= {:schema
+          [:if [:map [:user :any]] [:map [:pass :any]] [:map [:secret :any]]],
+          :value {},
+          :errors
+          [{:path [:malli.core/in :else :secret],
+            :in [:secret],
+            :schema [:map [:secret :any]],
+            :value nil,
+            :type :malli.core/missing-key,
+            :message nil}]}
+         (with-schema-forms (m/explain [:if has-user has-pass has-secret] {}))))
+  (is (= (m/tag :then {:user nil :pass nil}) (m/parse [:if has-user has-pass has-secret] {:user nil :pass nil})))
+  (is (= (m/tag :else {:secret nil}) (m/parse [:if has-user has-pass has-secret] {:secret nil})))
+  (is (= ::m/invalid (m/parse [:if has-user has-pass has-secret] {})))
   (is (= {:secret ["missing required key"]} (me/humanize (m/explain [:if has-user has-pass has-secret] {}))))
   (is (= {:pass ["missing required key"]} (me/humanize (m/explain [:if has-user has-pass has-secret] {:user nil})))))
