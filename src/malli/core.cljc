@@ -1983,14 +1983,12 @@
           (-to-ast [this _] (-entry-ast this (-entry-keyset entry-parser)))
           Schema
           (-validator [_]
-            (let [vs (-vmap (fn [[test _ then]]
-                              [(-validator test) (-validator then)])
-                            explicit-children)
-                  dv (some-> default-schema -validator)]
-              (reduce (fn [else [test then]]
-                        (fn [x] (if (test x) (then x) (else x))))
-                      (or dv (fn [_] false))
-                      vs)))
+            (reduce (fn [else [test _ then]]
+                      (let [test (-validator test)
+                            then (-validator then)]
+                        (fn [x] (if (test x) (then x) (else x)))))
+                    (or (some-> default-schema -validator) (fn [_] false))
+                    (rseq explicit-children)))
           (-explainer [this path]
             (let [es (-vmap (fn [[test {:keys [key]} then]]
                                [(-validator test) (-explainer then (conj path key))])
