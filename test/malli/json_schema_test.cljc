@@ -36,6 +36,9 @@
                                   {:type "integer", :minimum 1}]}]
    [[:or int? string?] {:anyOf [{:type "integer"} {:type "string"}]}]
    [[:orn [:i int?] [:s string?]] {:anyOf [{:type "integer"} {:type "string"}]}]
+   [[:cond [number? :int] [:string [:= "foo"]]] {:anyOf [{:type "integer"} {:type "string"}]}]
+   [[:cond [number? :int] [::m/default [:= "foo"]]] {:anyOf [{:type "integer"} {:type "string"}]}]
+   [[:if number? :int :string] {:anyOf [{:if number?, :then {:type "integer"}} {:if :any, :then {:type "string"}}]}]
    [[:map
      [:a string?]
      [:b {:optional true} string?]

@@ -3811,5 +3811,4 @@
       (testing "first successful branch is selected"
         (is (= "math_1"
                (m/decode math-string 1 math)
-               (m/decode [:if :int math-string :any] 1 math))))))
-)
+               (m/decode [:if :int math-string :any] 1 math)))))))
