@@ -1995,6 +1995,7 @@
             (let [es (-vmap (fn [[test {:keys [key]} then]]
                                [(-validator test) (-explainer then (conj path key))])
                              explicit-children)
+                  ;; TODO support :key override for default
                   de (some-> default-schema (-explainer (conj path ::default)))
                   find (fn [x]
                          (or (some (fn [[test then]] (when (test x) then)) es)
@@ -2011,6 +2012,7 @@
                                  (fn [x]
                                    (miu/-map-valid #(tag key %) (then x))))])
                             explicit-children)
+                  ;; TODO support :key override for default
                   dp (some-> default-schema -parser)
                   find (fn [x]
                          (or (some (fn [[test then]] (when (test x) then)) ps)
@@ -2023,6 +2025,7 @@
             (let [unparsers (cond-> (into {} (map (fn [[_ {:keys [key]} then]]
                                                     [key (-unparser then)]))
                                           explicit-children)
+                              ;; TODO support :key override for default
                               default-schema (assoc ::default (-unparser default-schema)))]
               (fn [x]
                 (if (tag? x)
@@ -2030,11 +2033,13 @@
                     (then (:value x))
                     ::invalid)))))
           (-transformer [this transformer method options]
-            (c/assert nil)
-            )
-          (-walk [this walker path options]
-            (c/assert nil)
-            )
+            (-or-transformer this
+                             transformer
+                             (cond-> (-vmap #(nth % 2) explicit-children)
+                               default-schema (conj default-schema))
+                             method
+                             options))
+          (-walk [this walker path options] (-walk-entries this walker path options))
           (-properties [_] properties)
           (-options [_] options)
           (-children [_] (-entry-children entry-parser))

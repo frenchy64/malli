@@ -3801,4 +3801,15 @@
   (is (= {:user nil :pass nil} (m/unparse if-user-then-pass-or-secret (m/tag :then {:user nil :pass nil}))))
   (is (= {:secret nil} (m/unparse if-user-then-pass-or-secret (m/tag :else {:secret nil}))))
   (is (= {:secret ["missing required key"]} (me/humanize (m/explain if-user-then-pass-or-secret {}))))
-  (is (= {:pass ["missing required key"]} (me/humanize (m/explain if-user-then-pass-or-secret {:user nil})))))
+  (is (= {:pass ["missing required key"]} (me/humanize (m/explain if-user-then-pass-or-secret {:user nil}))))
+  (testing "transforming :if"
+    (let [math (mt/transformer {:name :math})
+          math-string [:string {:decode/math (partial str "math_")}]
+          math-kw-string [:and math-string [:any {:decode/math keyword}]]
+          bono-string [:string {:decode/math (partial str "such_")}]]
+
+      (testing "first successful branch is selected"
+        (is (= "math_1"
+               (m/decode math-string 1 math)
+               (m/decode [:if :int math-string :any] 1 math))))))
+)
