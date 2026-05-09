@@ -1014,7 +1014,8 @@
       (let [children (-vmap #(schema % options) children)
             form (delay (-simple-form parent properties children -form options))
             cache (-create-cache options)
-            ->parser (fn [f] )]
+            ->parser (fn [f] (let [parsers (-vmap f children)]
+                               #(reduce (fn [_ parser] (miu/-map-valid reduced (parser %))) ::invalid parsers)))]
         ^{:type ::schema}
         (reify
           Schema
