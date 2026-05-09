@@ -103,6 +103,23 @@
 (defmethod accept :andn [_ _ children _] {:allOf (map last children)})
 (defmethod accept :or [_ _ children _] {:anyOf children})
 (defmethod accept :orn [_ _ children _] {:anyOf (map last children)})
+(defmethod accept :if [_ schema _ {::keys [transform] :as options}] (transform (m/deref schema) options))
+;;FIXME update -walk on :cond to walk keys
+(defmethod accept :cond [_ _ children _]
+  (let [[before-default [default]] (split-with (fn [[pre]] (not= ::m/default pre)) children)
+        clauses (into [] (map (fn [[pre _ then]]
+                                {:if pre
+                                 :then then}))
+                      before-default)
+        flatten-clauses (fn [clauses]
+                          (if (= 1 (count clauses))
+                            (first clauses)
+                            {:anyOf clauses}))]
+    (if default
+      (if (not-empty clauses)
+        (assoc-in clauses [(dec (count clauses)) :else] default)
+        default)
+      (flatten-clauses clauses))))
 
 (defmethod accept ::m/val [_ _ children _] (first children))
 
