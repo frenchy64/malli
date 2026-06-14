@@ -3697,3 +3697,10 @@
     (is (= @count-into-schemas 3)) ;; was 6
     (is (m/coerce ConsCell [1 [2 [3 [4 [1 [2 [3 [4 nil]]]]]]]]))
     (is (= @count-into-schemas 3)))) ;; was 10
+
+(deftest dmap-test
+  (is (m/validate [:dmap-of :int :string] {1 "a"}))
+  (is (not (m/validate [:dmap-of :int :string] {:1 "a"})))
+  #_ ;;TODO
+  (is (with-schema-forms (m/explain [:dmap-of :int :string] {:1 "a"})))
+  )
