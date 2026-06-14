@@ -1528,7 +1528,8 @@
              (let [explainers (into []
                                     (map-indexed
                                       (fn [i [k v]]
-                                        {:default (= i (dec (count pchildren)))
+                                        {:path-elem i
+                                         :default (= i (dec (count pchildren)))
                                          :key-explainer (-explainer k (conj path i))
                                          :value-explainer (-explainer v (conj path (inc i)))}))
                                     pchildren)]
@@ -1541,12 +1542,12 @@
                       (fn [acc key value]
                         (let [in (conj in key)]
                           (reduce
-                            (fn [acc {:keys [default key-explainer value-explainer]}]
+                            (fn [acc {:keys [path-elem default key-explainer value-explainer]}]
                               (let [acc' (key-explainer key in acc)]
                                 (if (identical? acc acc')
-                                  (reduced (value-explainer value in acc'))
+                                  (reduced (value-explainer value in acc))
                                   (if default
-                                    (reduced acc')
+                                    (reduced (conj acc (miu/-error (conj path path-elem) in this value ::extra-key)))
                                     acc))))
                             acc explainers)))
                       acc m))))))

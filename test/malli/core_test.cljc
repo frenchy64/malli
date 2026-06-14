@@ -3718,9 +3718,9 @@
           :errors
           [{:path [0],
             :in ["a"],
-            :schema :int,
-            :value "a",
-            :type nil,
+            :schema [:dmap-of :int :string],
+            :value 1,
+            :type :malli.core/extra-key,
             :message nil}]}
          (with-schema-forms (m/explain [:dmap-of :int :string] {"a" 1}))))
   (is (= {:schema [:dmap-of :int :string],
