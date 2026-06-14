@@ -3733,4 +3733,24 @@
             :type nil,
             :message nil}]}
          (with-schema-forms (m/explain [:dmap-of :int :string] {1 2}))))
+  (is (= {:schema [:dmap-of :int :string :string :int],
+          :value {1 2, "a" "a"},
+          :errors
+          [{:path [1],
+            :in [1],
+            :schema :string,
+            :value 2,
+            :type nil,
+            :message nil}
+           {:path [2],
+            :in ["a"],
+            :schema :int,
+            :value "a",
+            :type nil,
+            :message nil}]}
+         (with-schema-forms (m/explain [:dmap-of
+                                        :int :string
+                                        :string :int]
+                                       {1 2
+                                        "a" "a"}))))
   )
