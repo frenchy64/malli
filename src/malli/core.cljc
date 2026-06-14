@@ -1548,7 +1548,7 @@
                                   (if default
                                     (reduced acc')
                                     acc))))
-                            explainers)))
+                            acc explainers)))
                       acc m))))))
            (-parser [_] (->parser -parser))
            (-unparser [_] (->parser -unparser))

@@ -3700,7 +3700,37 @@
 
 (deftest dmap-test
   (is (m/validate [:dmap-of :int :string] {1 "a"}))
+  (is (not (m/validate [:dmap-of :int :string] {1 2})))
+  (is (not (m/validate [:dmap-of :int :string] {"a" 1})))
+  (is (m/validate [:dmap-of
+                   :int :string
+                   :string :int]
+                  {1 "a"}))
+  (is (m/validate [:dmap-of
+                   :int :string
+                   :string :int]
+                  {"a" 1}))
   (is (not (m/validate [:dmap-of :int :string] {:1 "a"})))
-  #_ ;;TODO
-  (is (with-schema-forms (m/explain [:dmap-of :int :string] {:1 "a"})))
+  (is (nil? (m/explain [:dmap-of :int :string] {1 "a"})))
+  ;; note: just like :map-of, we have :in == ["a"] here, even though we blame the key
+  (is (= {:schema [:dmap-of :int :string],
+          :value {"a" 1},
+          :errors
+          [{:path [0],
+            :in ["a"],
+            :schema :int,
+            :value "a",
+            :type nil,
+            :message nil}]}
+         (with-schema-forms (m/explain [:dmap-of :int :string] {"a" 1}))))
+  (is (= {:schema [:dmap-of :int :string],
+          :value {1 2},
+          :errors
+          [{:path [1],
+            :in [1],
+            :schema :string,
+            :value 2,
+            :type nil,
+            :message nil}]}
+         (with-schema-forms (m/explain [:dmap-of :int :string] {1 2}))))
   )
