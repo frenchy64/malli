@@ -3699,6 +3699,7 @@
     (is (= @count-into-schemas 3)))) ;; was 10
 
 (deftest dmap-test
+  (is (m/validate [:dmap-of :int :string] {}))
   (is (m/validate [:dmap-of :int :string] {1 "a"}))
   (is (not (m/validate [:dmap-of :int :string] {1 2})))
   (is (not (m/validate [:dmap-of :int :string] {"a" 1})))
@@ -3706,6 +3707,22 @@
                    :int :string
                    :string :int]
                   {1 "a"}))
+  (is (m/validate [:dmap-of
+                   :int :string
+                   :string :int]
+                  {"a" 1}))
+  (is (not (m/validate [:dmap-of
+                        :int :string
+                        :string :int]
+                       {1 1})))
+  (is (not (m/validate [:dmap-of
+                        :int :string
+                        :string :int]
+                       {"a" "a"})))
+  (is (not (m/validate [:dmap-of
+                        :int :string
+                        :string :int]
+                       {1.2 2.3})))
   (is (m/validate [:dmap-of
                    :int :string
                    :string :int]
