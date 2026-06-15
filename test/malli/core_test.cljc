@@ -3697,3 +3697,77 @@
     (is (= @count-into-schemas 3)) ;; was 6
     (is (m/coerce ConsCell [1 [2 [3 [4 [1 [2 [3 [4 nil]]]]]]]]))
     (is (= @count-into-schemas 3)))) ;; was 10
+
+(deftest dmap-test
+  (is (m/validate [:dmap-of :int :string] {}))
+  (is (m/validate [:dmap-of :int :string] {1 "a"}))
+  (is (not (m/validate [:dmap-of :int :string] {1 2})))
+  (is (not (m/validate [:dmap-of :int :string] {"a" 1})))
+  (is (m/validate [:dmap-of
+                   :int :string
+                   :string :int]
+                  {1 "a"}))
+  (is (m/validate [:dmap-of
+                   :int :string
+                   :string :int]
+                  {"a" 1}))
+  (is (not (m/validate [:dmap-of
+                        :int :string
+                        :string :int]
+                       {1 1})))
+  (is (not (m/validate [:dmap-of
+                        :int :string
+                        :string :int]
+                       {"a" "a"})))
+  (is (not (m/validate [:dmap-of
+                        :int :string
+                        :string :int]
+                       {1.2 2.3})))
+  (is (m/validate [:dmap-of
+                   :int :string
+                   :string :int]
+                  {"a" 1}))
+  (is (not (m/validate [:dmap-of :int :string] {:1 "a"})))
+  (is (nil? (m/explain [:dmap-of :int :string] {1 "a"})))
+  ;; note: just like :map-of, we have :in == ["a"] here, even though we blame the key
+  (is (= {:schema [:dmap-of :int :string],
+          :value {"a" 1},
+          :errors
+          [{:path [0],
+            :in ["a"],
+            :schema [:dmap-of :int :string],
+            :value 1,
+            :type :malli.core/extra-key,
+            :message nil}]}
+         (with-schema-forms (m/explain [:dmap-of :int :string] {"a" 1}))))
+  (is (= {:schema [:dmap-of :int :string],
+          :value {1 2},
+          :errors
+          [{:path [1],
+            :in [1],
+            :schema :string,
+            :value 2,
+            :type nil,
+            :message nil}]}
+         (with-schema-forms (m/explain [:dmap-of :int :string] {1 2}))))
+  (is (= {:schema [:dmap-of :int :string :string :int],
+          :value {1 2, "a" "a"},
+          :errors
+          [{:path [1],
+            :in [1],
+            :schema :string,
+            :value 2,
+            :type nil,
+            :message nil}
+           {:path [2],
+            :in ["a"],
+            :schema :int,
+            :value "a",
+            :type nil,
+            :message nil}]}
+         (with-schema-forms (m/explain [:dmap-of
+                                        :int :string
+                                        :string :int]
+                                       {1 2
+                                        "a" "a"}))))
+  )

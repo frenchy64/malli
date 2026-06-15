@@ -955,3 +955,13 @@
   (is (= ["invalid type"] (me/humanize (m/explain [:map] []))))
   (is (= [["invalid type"]] (me/humanize (m/explain [:vector [:map]] [[]]))))
   (is (= [["invalid type"]] (me/humanize (m/explain [:vector [:fn {:error/path [-1]} (comp int? :foo)]] [[]])))))
+
+(deftest humanize-map-of-test
+  (is (= {1 ["should be a string"]}
+         (-> [:map-of :string :int]
+             (m/explain {1 2})
+             (me/humanize))))
+  (is (= {1 ["should be a string"]}
+         (-> [:map-of :int :string]
+             (m/explain {1 2})
+             (me/humanize)))))
