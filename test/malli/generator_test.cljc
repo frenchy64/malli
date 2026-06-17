@@ -1140,3 +1140,35 @@
 
 (deftest empty?-generator-test
   (is (every? empty? (mg/sample empty?))))
+
+;; cljs generates 54 bits vs 64 bits, so there's platform differences
+#?(:clj
+   (deftest bounded-int-generator-test
+     (is (= {60 1582,
+             61 2357,
+             62 1139,
+             63 783,
+             64 588,
+             65 398,
+             66 11891,
+             67 23384,
+             68 11656,
+             69 11483,
+             70 11677,
+             71 11466,
+             72 11596}
+            (into (sorted-map) (frequencies (mg/sample [:int {:min 60 :max 72}] {:seed 0 :size 100000})))))
+     (is (= {60 7621,
+             61 7700,
+             62 7789,
+             63 7643,
+             64 7700,
+             65 7693,
+             66 7712,
+             67 7704,
+             68 7642,
+             69 7723,
+             70 7601,
+             71 7735,
+             72 7737}
+            (into (sorted-map) (frequencies (mg/sample (into [:enum] (range 60 73)) {:seed 0 :size 100000})))))))
