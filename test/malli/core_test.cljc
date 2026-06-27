@@ -3731,6 +3731,10 @@
   (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}} ::BAZ] 4)  ;; should be 1
   (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}} [:tuple ::BAZ ::BAZ]] 5)  ;; should be 1
   (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}} [:tuple ::BAZ ::BAZ ::BAZ]] 6)  ;; should be 1
+  ;; property registry parses all entries independently
+  (is-counting-times [:schema {:registry {::BAR ::counting}} :int] 1)  ;; should be 1
+  (is-counting-times [:schema {:registry {::FOO ::BAR ::BAR ::counting}} :int] 2)  ;; should be 1
+  (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}} :int] 3)  ;; should be 1
   ;; :ref shares pointed child with property registry
   (let [{:keys [reg counter]} (counting-registry)
         s (-> [:schema {:registry {::BAR ::counting}} [:ref ::BAR]]
