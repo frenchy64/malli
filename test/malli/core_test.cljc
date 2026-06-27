@@ -3090,7 +3090,8 @@
     (let [one-level-schema [:map {:registry {:my/string-like :string}}
                             [:entry [:my/string-like {:some "prop"}]]]]
 
-      (is (true? (m/validate one-level-schema {:entry "a"})))))
+      (is (true? (m/validate one-level-schema {:entry "a"})))
+      (is (false? (m/validate one-level-schema {:entry :a})))))
 
   (testing "testcase from #451"
     (let [opts {:registry {:string (m/-string-schema)
@@ -3692,8 +3693,92 @@
                                                                           [[] [] (m/schema :int o)])})))
         ConsCell (m/schema [:schema {:registry {::cons [:maybe [:tuple ::counting [:ref ::cons]]]}} ::cons]
                            {:registry reg})]
-    (is (= @count-into-schemas 2))
+    (is (= @count-into-schemas 2)) ;; should be 1
     (is (m/coerce ConsCell [1 [2 [3 [4 nil]]]]))
-    (is (= @count-into-schemas 3)) ;; was 6
+    (is (= @count-into-schemas 3))  ;; should be 1
     (is (m/coerce ConsCell [1 [2 [3 [4 [1 [2 [3 [4 nil]]]]]]]]))
-    (is (= @count-into-schemas 3)))) ;; was 10
+    (is (= @count-into-schemas 3))))  ;; should be 1
+
+(defn counting-registry []
+  (let [count-into-schemas (atom 0)
+        reg (mr/simple-registry (assoc (m/default-schemas)
+                                       ::counting (m/-proxy-schema {:type ::counting
+                                                                    :fn (fn [p c o]
+                                                                          (assert (empty? c))
+                                                                          (swap! count-into-schemas inc)
+                                                                          [[] [] (m/schema :int o)])})))]
+    {:reg reg :counter count-into-schemas}))
+
+(defn is-counting-times [?schema i]
+  (let [{:keys [reg counter]} (counting-registry)
+        s (m/schema ?schema {:registry reg})]
+    (is (= @counter i))))
+
+(deftest eager-registry-parse-test
+  ;; not mentioned
+  (is-counting-times :int 0)
+  ;; directly expanded
+  (is-counting-times ::counting 1)
+  ;; expanded via -property-registry, then with pointer due to unchanged dynamic scope
+  (is-counting-times [:schema {:registry {::BAR ::counting}} :int] 1)
+  (is-counting-times [:schema {:registry {::BAR ::counting}} [:ref ::BAR]] 1)
+  (is-counting-times [:schema {:registry {::BAR ::counting}} ::BAR] 2) ;; should be 1
+  (is-counting-times [:schema {:registry {::BAR ::counting}} [:tuple ::BAR ::BAR]] 3)  ;; should be 1
+  (is-counting-times [:schema {:registry {::BAR ::counting}} [:tuple ::BAR ::BAR ::BAR]] 4)  ;; should be 1
+  (is-counting-times [:schema {:registry (array-map ::FOO ::BAR ::BAR ::counting)} ::FOO] 3)  ;; should be 1
+  (is-counting-times [:schema {:registry {::FOO ::BAR ::BAR ::counting}} [:tuple ::FOO ::FOO]] 4)  ;; should be 1
+  (is-counting-times [:schema {:registry {::FOO ::BAR ::BAR ::counting}} [:tuple ::FOO ::FOO ::FOO]] 5)  ;; should be 1
+  (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}} ::BAZ] 4)  ;; should be 1
+  (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}} [:tuple ::BAZ ::BAZ]] 5)  ;; should be 1
+  (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}} [:tuple ::BAZ ::BAZ ::BAZ]] 6)  ;; should be 1
+  ;; property registry parses all entries independently
+  (is-counting-times [:schema {:registry {::BAR ::counting}} :int] 1)  ;; should be 1
+  (is-counting-times [:schema {:registry {::FOO ::BAR ::BAR ::counting}} :int] 2)  ;; should be 1
+  (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}} :int] 3)  ;; should be 1
+  ;; :ref shares pointed child with property registry
+  (let [{:keys [reg counter]} (counting-registry)
+        s (-> [:schema {:registry {::BAR ::counting}} [:ref ::BAR]]
+              (m/deref-all {:registry reg}))]
+    (is (= :int (m/form s)))
+    (is (= @counter 2)))  ;; should be 1
+  ;; since ::FOO and ::BAR are identical, ::counting is shared between the two registries and pointer
+  (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}}
+                      [:schema {:registry {::FOO ::BAR ::BAR ::counting}}
+                       ::BAZ]]
+                     6)  ;; should be 1
+  ;; since ::BAR is different in the inner schema, ::counting in each registry is not shared.
+  ;; pointer shares inner registry version (the tuple)
+  (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}}
+                      [:schema {:registry {::FOO ::BAR ::BAR [:tuple ::counting]}}
+                       ::BAZ]]
+                     6)  ;; should be 2
+  (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}}
+                      [:schema {:registry {::BAR [:tuple ::counting]}}
+                       ::BAZ]]
+                     5)  ;; should be 2
+  ;; even though ::UNRELATED doesn't change ::counting in practice, it prevents ::counting from being shared
+  ;; between the pointer and registry.
+  ;; future improvement: could be 1 in practice, because ::UNRELATED doesn't change ::BAZ so could share
+  ;; ::counting with outer registry
+  (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}}
+                      [:tuple ::BAZ
+                       [:schema {:registry {::UNRELATED :int}}
+                        ::BAZ]]]
+                     5)  ;; should be 2
+  ;; :child entry in -pointed cache allows us to update pointers.
+  (is (= [:int {:id :malli.core-test/user-id}]
+         (-> (m/schema [:schema {:registry {::user-id :int}}
+                        ::user-id]
+                       {::m/ref-key :id})
+             m/deref
+             (m/-set-children [(m/schema [:int {:id :malli.core-test/user-id}])])
+             m/deref
+             m/form)
+         (-> (m/schema [:schema {:registry {::user-id :int}}
+                        ::user-id]
+                       {::m/ref-key :id})
+             m/deref
+             (m/-set-children [(m/schema [:int {:id :malli.core-test/user-id}])])
+             m/children
+             first
+             m/form))))
