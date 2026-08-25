@@ -3704,15 +3704,18 @@
         reg (mr/simple-registry (assoc (m/default-schemas)
                                        ::counting (m/-proxy-schema {:type ::counting
                                                                     :fn (fn [p c o]
-                                                                          (assert (empty? c))
                                                                           (swap! count-into-schemas inc)
-                                                                          [[] [] (m/schema :int o)])})))]
+                                                                          [[] [] (m/schema (into [:tuple] c) o)])})
+                                       ))]
     {:reg reg :counter count-into-schemas}))
 
-(defn is-counting-times [?schema i]
-  (let [{:keys [reg counter]} (counting-registry)
-        s (m/schema ?schema {:registry reg})]
-    (is (= @counter i))))
+(defn is-counting-times
+  ([?schema i] (is-counting-times ?schema identity i))
+  ([?schema f i]
+   (let [{:keys [reg counter]} (counting-registry)
+         s (m/schema ?schema {:registry reg})]
+     (f s)
+     (is (= @counter i)))))
 
 (deftest eager-registry-parse-test
   ;; not mentioned
@@ -3732,11 +3735,15 @@
   (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}} [:tuple ::BAZ ::BAZ]] 1)
   (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}} [:tuple ::BAZ ::BAZ ::BAZ]] 1)
   ;; :ref shares pointed child with property registry
-  (let [{:keys [reg counter]} (counting-registry)
-        s (-> [:schema {:registry {::BAR ::counting}} [:ref ::BAR]]
-              (m/deref-all {:registry reg}))]
-    (is (= :int (m/form s)))
-    (is (= @counter 1)))
+  (is-counting-times [:schema {:registry {::BAR ::counting}} [:ref ::BAR]]
+                     (fn [s]
+                       (assert (m/validate s [])))
+                     1)
+  ;; :ref ties the knot
+  (is-counting-times [:schema {:registry {::rec [:maybe [::counting [:ref ::rec]]]}} [:ref ::rec]]
+                     (fn [s]
+                       (assert (m/validate s (nth (iterate vector nil) 10))))
+                     1)
   ;; since ::FOO and ::BAR are identical, ::counting is shared between the two registries and pointer
   (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}}
                       [:schema {:registry {::FOO ::BAR ::BAR ::counting}}
