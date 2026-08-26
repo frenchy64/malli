@@ -253,7 +253,7 @@
 (defn- -identify-ref-schema [schema]
   ;; different :ref instances share the same child if they represent the same schema
   ;; (perhaps with different name or metadata attached to the :ref itself).
-  (m/-deref schema))
+  (m/deref schema))
 
 (defn -ref-gen [schema options]
   (let [ref-id (-identify-ref-schema schema)]
@@ -454,7 +454,7 @@
   ([?schema options]
    (if (::rec-gen options)
      ;; if ::rec-gen exists then we're under a gen/recursive-gen.
-     ;; we disable the cache avoid pinning the generator to the the base case (scalar-ref-gen in -ref-gen).
+     ;; we disable the cache avoid pinning the generator to the base case (scalar-ref-gen in -ref-gen).
      (-create (m/schema ?schema options) options)
      (m/-cached (m/schema ?schema options) :generator #(-create % options)))))
 
