@@ -450,8 +450,9 @@
    (generator ?schema nil))
   ([?schema options]
    (if (::rec-gen options)
-     ;; if ::rec-gen exists then we're under a gen/recursive-gen.
-     ;; we disable the cache avoid pinning the generator to the base case (scalar-ref-gen in -ref-gen).
+     ;; if ::rec-gen exists then we're under a gen/recursive-gen via -ref-gen.
+     ;; we disable cache writes to avoid pinning the generator to the scalar generator,
+     ;; and disable cache reads to avoid returning the recursive case when the scalar generator is used.
      (-create (m/schema ?schema options) options)
      (m/-cached (m/schema ?schema options) :generator #(-create % options)))))
 
