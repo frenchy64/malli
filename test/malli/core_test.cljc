@@ -3744,6 +3744,36 @@
                      (fn [s]
                        (assert (m/validate s (nth (iterate vector nil) 10))))
                      1)
+  (is-counting-times [:schema {:registry {::cons [:maybe [::counting pos-int? [:ref ::cons]]]}} ::cons]
+                     (fn [s]
+                       (assert (m/validate s (nth (iterate #(do [10 %]) nil) 10))))
+                     1)
+  ;; mutual :ref's tie the knot
+  (is-counting-times [:schema
+                      {:registry {::ping [::counting [:= "ping"] [:maybe [:ref ::pong]]]
+                                  ::pong [::counting [:= "pong"] [:maybe [:ref ::ping]]]}}
+                      ::ping]
+                     (fn [s]
+                       (assert (m/validate s (nth (iterate #(do ["ping" ["pong" %]]) ["ping" nil]) 10))))
+                     2)
+  (is-counting-times [:schema {:registry {::a [:schema {:registry {::a [::counting [:= 42]]}}
+                                               [:ref ::a]]}}
+                      [:ref ::a]]
+                     #(assert (m/validate % [42]))
+                     1)
+  (is-counting-times [:schema {:registry {::a [:ref ::b]
+                                          ::b [:schema {:registry {::a [:ref ::b]
+                                                                   ::b [::counting [:= 42]]}}
+                                               [:ref ::a]]}}
+                      [:ref ::a]]
+                     #(assert (m/validate % [42]))
+                     1)
+  (is-counting-times [:schema {:registry {::a [:schema {:registry {::b [::counting :boolean]}}
+                                               [:or [:ref ::b] [:ref ::a]]]}}
+                      [:schema {:registry {::b [::counting :int]}}
+                       [:maybe [:or [:ref ::b] [:ref ::a]]]]]
+                     #(assert (m/validate % [true]))
+                     2)
   ;; since ::FOO and ::BAR are identical, ::counting is shared between the two registries and pointer
   (is-counting-times [:schema {:registry {::BAZ ::FOO ::FOO ::BAR ::BAR ::counting}}
                       [:schema {:registry {::FOO ::BAR ::BAR ::counting}}

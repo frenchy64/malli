@@ -290,10 +290,10 @@
 ;;
 ;;   [:schema {:registry {::a [:schema {:registry {::b :boolean}}
 ;;                             ;; (2)
-;;                             [:or [:ref ::a] [:ref ::b]]]}}
+;;                             [:or [:ref ::b] [:ref ::a]]]}}
 ;;    [:schema {:registry {::b :int}}
 ;;     ;; (1)
-;;     [:or [:ref ::a] [:ref ::b]]]]
+;;     [:or [:ref ::b] [:ref ::a]]]]
 
 ;; copied to malli.core
 (defn- -identify-ref-schema [schema]
