@@ -926,7 +926,7 @@ Messages can be localized:
 ;;     :age ["10, pitäisi olla > 18"]}
 ```
 
-Top-level humanized map-errors are under `:malli/error`:
+Top-level humanized map-errors are returned directly, without a wrapping map:
 
 ```clojure
 (-> [:and [:map
@@ -1538,23 +1538,56 @@ Adding optional keys too via `::mt/add-optional-keys` option:
 ;; => {:name "kikka", :description "kikka"}
 ```
 
+For nested maps, the intermediate levels need a `:default {}` or they
+will not get populated:
+
+```clojure
+(m/decode
+ [:map
+  [:ports [:map
+           [:http {:default 80} :int]
+           [:ftp :int]]]]
+ {}
+ mt/default-value-transformer)
+;; => {}
+
+(m/decode
+ [:map
+  [:ports [:map {:default {}}
+           [:http {:default 80} :int]
+           [:ftp :int]]]]
+ {}
+ mt/default-value-transformer)
+;; => {:ports {:http 80}}
+```
+
+A workaround for this is to use `:defaults {:map (constantly {})}`:
+
+```clojure
+(m/decode
+ [:map
+  [:ports [:map
+           [:http {:default 80} :int]
+           [:ftp :int]]]]
+ {}
+ (mt/default-value-transformer {:defaults {:map (constantly {})}}))
+;; => {:ports {:http 80}}
+```
+
 Single sweep of defaults & string encoding:
 
 ```clojure
 (m/encode
-  [:map {:default {}}
+  [:map
    [:a [:int {:default 1}]]
    [:b [:vector {:default [1 2 3]} :int]]
-   [:c [:map {:default {}}
-        [:x [:int {:default 42}]]
-        [:y :int]]]
-   [:d [:map
+   [:c [:map
         [:x [:int {:default 42}]]
         [:y :int]]]
    [:e :int]]
   nil
   (mt/transformer
-    mt/default-value-transformer
+    (mt/default-value-transformer {:defaults {:map (constantly {})}})
     mt/string-transformer))
 ;; => {:a "1"
 ;;     :b ["1" "2" "3"]
@@ -3192,7 +3225,71 @@ Local registries can be persisted:
 ;; => true
 ```
 
-See also [Recursive Schemas](#recursive-schemas).
+Malli optimizes parsing local registries to maximally share their results.
+Since local registries use dynamic scope,
+a naive implementation of Malli references would parse registry entries lazily at use-sites,
+causing performance issues from redundant parsing of Schemas.
+Malli instead detects when the dynamic scope is identical and
+reuses already-parsed Schemas.
+
+For example, the three `::list-of` references share an identical Schema
+since their dynamic scopes are identical,
+parsing `::list-of` and `::element` only once.
+
+```clojure
+(m/schema
+ [:schema {:registry {::list-of [:seqable ::element],
+                      ::element :string}}
+  [:tuple ::list-of
+          ::list-of
+          ::list-of]])
+```
+
+On the other hand, reusing names in overlapping registries to mean different things
+will disable this optimization.
+For example, in the following schema `::list-of` is used three times.
+The first two will share the same Schema instance, `[:seqable :string]`.
+The third is `[:seqable :int]`, and because the dynamic scope is
+different, both `::list-of` and `::element` will be entirely reparsed.
+
+```clojure
+(m/schema
+ [:schema {:registry {::list-of [:seqable ::element],
+                      ::element :string}}
+  [:tuple ::list-of ;; shared
+          ::list-of ;; shared
+          [:schema {:registry {::element :int}}
+           ;; not shared, also reparses ::list-of 
+           ::list-of]]])
+```
+
+Note that a similar result happens when a local registry overlaps with a custom/global registry:
+
+```clojure
+(def registry
+  (mr/composite-registry
+    {::list-of [:seqable ::element],
+     ::element :string}
+    m/default-registry))
+
+(m/schema
+ [:tuple ::list-of ;; shared
+         ::list-of ;; shared
+         [:schema {:registry {::element :int}}
+          ;; not shared, also reparses ::list-of 
+          ::list-of]]
+ {:registry registry})
+```
+
+This optimization currently only shares results among the transitive children
+of a schema, not between different top-level schemas. For the previous schema,
+that means a new shared schema is created for `::list-of` when the `m/schema` is
+called again, even though everything is the same as the previous call.
+A future change may introduce an API to improve sharing across unrelated `m/schema`
+calls.
+
+See also [Recursive Schemas](#recursive-schemas),
+[Mutable registries are a dev-time abstraction](#mutable-registries-are-a-dev-time-abstraction).
 
 ### Changing the default registry
 
@@ -3433,7 +3530,9 @@ For performance reasons, Malli heavily caches registry
 lookups once a schema has been created via `m/schema`.
 
 Don't rely on registry mutations to be recognized consistently
-unless all schemas are reparsed. Here's a simple example:
+unless all schemas are reparsed. Here's an illustrative example
+where the redefinition of `::node` from `:int` to `:string`
+is done _after_ the former has been cached, and hence is ineffective:
 
 ```clojure
 (def registry*
