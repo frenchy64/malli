@@ -250,16 +250,13 @@
 ;; (this is why this particular base case is so useful) and then propagate the (smaller) generator
 ;; supplied by `gen/recursive-gen` to convert recursive references.
 
-(defn- -identify-ref-schema [schema]
-  ;; different :ref instances share the same child if they represent the same schema
-  ;; (perhaps with different name or metadata attached to the :ref itself).
-  (m/deref schema))
-
 (defn -ref-gen [schema options]
-  (let [ref-id (-identify-ref-schema schema)]
+  (let [dschema (m/deref schema)
+        ;; different :ref instances share the same child if they represent the same schema
+        ;; (perhaps with different name or metadata attached to the :ref itself).
+        ref-id dschema]
     (or (force (get-in options [::rec-gen ref-id]))
-        (let [scalar-ref-gen (delay (-never-gen options))
-              dschema (m/deref schema)]
+        (let [scalar-ref-gen (delay (-never-gen options))]
           (cond->> (generator dschema (assoc-in options [::rec-gen ref-id] scalar-ref-gen))
             (realized? scalar-ref-gen) (gen/recursive-gen
                                         #(generator dschema (assoc-in options [::rec-gen ref-id] %))))))))
